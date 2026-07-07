@@ -634,6 +634,3 @@ function ShareTab({ event, publicUrl, isPreviewHost, onChange }: { event: EventR
     </div>
   );
 }
-    </div>
-  );
-}
