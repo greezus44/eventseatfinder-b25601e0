@@ -71,6 +71,7 @@ export type Database = {
           logo_url: string | null
           name: string
           owner_id: string
+          public_base_url: string | null
           schedule: Json
           slug: string
           subheadline: string | null
@@ -95,6 +96,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           owner_id: string
+          public_base_url?: string | null
           schedule?: Json
           slug: string
           subheadline?: string | null
@@ -119,6 +121,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           owner_id?: string
+          public_base_url?: string | null
           schedule?: Json
           slug?: string
           subheadline?: string | null
