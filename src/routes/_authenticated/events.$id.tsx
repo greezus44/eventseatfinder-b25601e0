@@ -44,7 +44,7 @@ function EventManager() {
     queryFn: async () => {
       const { data, error } = await supabase.from("events").select("*").eq("id", id).single();
       if (error) throw error;
-      return data as EventRow;
+      return data as unknown as EventRow;
     },
   });
 
@@ -231,7 +231,10 @@ function GuestsTab({ eventId }: { eventId: string }) {
     qc.invalidateQueries({ queryKey: ["guests", eventId] });
   };
 
-  const updateGuest = async (id: string, patch: Record<string, unknown>) => {
+  const updateGuest = async (
+    id: string,
+    patch: Partial<{ full_name: string; table_id: string | null; personal_message: string | null; meal_choice: string | null; notes: string | null }>,
+  ) => {
     const { error } = await supabase.from("guests").update(patch).eq("id", id);
     if (error) toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["guests", eventId] });
