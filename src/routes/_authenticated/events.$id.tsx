@@ -32,6 +32,7 @@ type EventRow = {
   accent_color: string; background_color: string; text_color: string; font_style: string;
   venue_name: string | null; venue_address: string | null; contact_info: string | null;
   is_published: boolean; schedule: Array<{ time: string; label: string }>;
+  public_base_url: string | null;
 };
 
 function EventManager() {
@@ -52,7 +53,10 @@ function EventManager() {
   if (eventQ.error || !eventQ.data) return <p className="p-8 text-sm">Event not found.</p>;
 
   const event = eventQ.data;
-  const publicUrl = typeof window !== "undefined" ? `${window.location.origin}/e/${event.slug}` : `/e/${event.slug}`;
+  const currentOrigin = typeof window !== "undefined" ? window.location.origin : "";
+  const isPreviewHost = /(?:^|\/\/)(?:id-preview--|preview--)/.test(currentOrigin);
+  const shareBase = (event.public_base_url?.replace(/\/+$/, "") || (isPreviewHost ? "" : currentOrigin));
+  const publicUrl = shareBase ? `${shareBase}/e/${event.slug}` : `/e/${event.slug}`;
 
   const del = async () => {
     if (!confirm("Delete this event permanently?")) return;
@@ -91,7 +95,7 @@ function EventManager() {
           <CustomizeTab event={event} onSaved={() => qc.invalidateQueries({ queryKey: ["event", id] })} />
         </TabsContent>
         <TabsContent value="share" className="mt-6">
-          <ShareTab event={event} publicUrl={publicUrl} onChange={() => qc.invalidateQueries({ queryKey: ["event", id] })} />
+          <ShareTab event={event} publicUrl={publicUrl} isPreviewHost={isPreviewHost} onChange={() => qc.invalidateQueries({ queryKey: ["event", id] })} />
         </TabsContent>
       </Tabs>
     </main>
@@ -524,9 +528,15 @@ function ImageUpload({ value, onChange, kind }: { value: string | null; onChange
 }
 
 /* ---------------- SHARE ---------------- */
-function ShareTab({ event, publicUrl, onChange }: { event: EventRow; publicUrl: string; onChange: () => void }) {
+function ShareTab({ event, publicUrl, isPreviewHost, onChange }: { event: EventRow; publicUrl: string; isPreviewHost: boolean; onChange: () => void }) {
   const [qr, setQr] = useState<string>("");
+  const [baseInput, setBaseInput] = useState(event.public_base_url ?? "");
+  const [savingBase, setSavingBase] = useState(false);
+
+  useEffect(() => setBaseInput(event.public_base_url ?? ""), [event.public_base_url]);
+
   useEffect(() => {
+    if (!publicUrl.startsWith("http")) { setQr(""); return; }
     QRCode.toDataURL(publicUrl, { width: 512, margin: 2, color: { dark: "#111111", light: "#ffffff" } }).then(setQr);
   }, [publicUrl]);
 
@@ -536,16 +546,61 @@ function ShareTab({ event, publicUrl, onChange }: { event: EventRow; publicUrl: 
     onChange();
   };
 
-  const copy = () => { navigator.clipboard.writeText(publicUrl); toast.success("Link copied"); };
+  const saveBase = async () => {
+    const normalized = baseInput.trim().replace(/\/+$/, "");
+    if (normalized && !/^https?:\/\//i.test(normalized)) {
+      return toast.error("Enter a full URL, e.g. https://your-site.lovable.app");
+    }
+    setSavingBase(true);
+    const { error } = await supabase.from("events").update({ public_base_url: normalized || null }).eq("id", event.id);
+    setSavingBase(false);
+    if (error) return toast.error(error.message);
+    toast.success("Share URL saved");
+    onChange();
+  };
+
+  const copy = () => {
+    if (!publicUrl.startsWith("http")) return toast.error("Set your public share URL first");
+    navigator.clipboard.writeText(publicUrl);
+    toast.success("Link copied");
+  };
+
+  const needsBase = isPreviewHost && !event.public_base_url;
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <div className="rounded-2xl border border-border bg-card p-6">
         <h3 className="font-display text-xl">Public link</h3>
+
+        <div className="mt-4 space-y-1.5">
+          <Label className="text-xs uppercase tracking-widest text-muted-foreground">Public share URL</Label>
+          <div className="flex gap-2">
+            <Input
+              value={baseInput}
+              onChange={(e) => setBaseInput(e.target.value)}
+              placeholder="https://your-site.lovable.app"
+              className="font-mono text-xs"
+            />
+            <Button onClick={saveBase} disabled={savingBase} variant="outline">
+              {savingBase ? "…" : "Save"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            The domain where guests will open this page. Use your published site — the editor preview URL requires sign-in and won't work for guests.
+          </p>
+        </div>
+
+        {needsBase && (
+          <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+            You're currently on the editor preview, which asks visitors to sign in. Publish your app and paste that URL above so guests can open the QR code without an account.
+          </div>
+        )}
+
         <div className="mt-4 flex items-center gap-2">
           <Input readOnly value={publicUrl} className="font-mono text-xs" />
           <Button size="icon" variant="outline" onClick={copy}><Copy className="h-4 w-4" /></Button>
         </div>
+
         <div className="mt-6 flex items-center justify-between rounded-lg border border-border p-3">
           <div>
             <p className="text-sm font-medium">Published</p>
@@ -553,20 +608,28 @@ function ShareTab({ event, publicUrl, onChange }: { event: EventRow; publicUrl: 
           </div>
           <Switch checked={event.is_published} onCheckedChange={togglePublish} />
         </div>
-        <a href={publicUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-          Open guest page <ExternalLink className="h-3 w-3" />
-        </a>
+        {publicUrl.startsWith("http") && (
+          <a href={publicUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+            Open guest page <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-6 text-center">
         <h3 className="font-display text-xl">QR code</h3>
-        {qr && <img src={qr} alt="QR code" className="mx-auto mt-4 w-64 rounded-lg border border-border" />}
-        {qr && (
-          <a href={qr} download={`${event.slug}-qr.png`}>
-            <Button variant="outline" className="mt-4"><Download className="h-4 w-4" /> Download PNG</Button>
-          </a>
+        {qr ? (
+          <>
+            <img src={qr} alt="QR code" className="mx-auto mt-4 w-64 rounded-lg border border-border" />
+            <a href={qr} download={`${event.slug}-qr.png`}>
+              <Button variant="outline" className="mt-4"><Download className="h-4 w-4" /> Download PNG</Button>
+            </a>
+            <p className="mt-3 text-xs text-muted-foreground">Print and place at the entrance — anyone can scan without signing in.</p>
+          </>
+        ) : (
+          <p className="mt-6 text-sm text-muted-foreground">
+            Set your public share URL to generate a QR code guests can scan.
+          </p>
         )}
-        <p className="mt-3 text-xs text-muted-foreground">Print and place at the entrance.</p>
       </div>
     </div>
   );
