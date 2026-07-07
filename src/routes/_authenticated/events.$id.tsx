@@ -32,6 +32,7 @@ type EventRow = {
   accent_color: string; background_color: string; text_color: string; font_style: string;
   venue_name: string | null; venue_address: string | null; contact_info: string | null;
   is_published: boolean; schedule: Array<{ time: string; label: string }>;
+  public_base_url: string | null;
 };
 
 function EventManager() {
