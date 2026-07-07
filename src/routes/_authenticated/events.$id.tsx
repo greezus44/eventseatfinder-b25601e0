@@ -53,7 +53,10 @@ function EventManager() {
   if (eventQ.error || !eventQ.data) return <p className="p-8 text-sm">Event not found.</p>;
 
   const event = eventQ.data;
-  const publicUrl = typeof window !== "undefined" ? `${window.location.origin}/e/${event.slug}` : `/e/${event.slug}`;
+  const currentOrigin = typeof window !== "undefined" ? window.location.origin : "";
+  const isPreviewHost = /(?:^|\/\/)(?:id-preview--|preview--)/.test(currentOrigin);
+  const shareBase = (event.public_base_url?.replace(/\/+$/, "") || (isPreviewHost ? "" : currentOrigin));
+  const publicUrl = shareBase ? `${shareBase}/e/${event.slug}` : `/e/${event.slug}`;
 
   const del = async () => {
     if (!confirm("Delete this event permanently?")) return;
