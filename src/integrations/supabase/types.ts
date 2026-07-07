@@ -14,7 +14,173 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      event_tables: {
+        Row: {
+          capacity: number | null
+          created_at: string
+          event_id: string
+          id: string
+          location_note: string | null
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          capacity?: number | null
+          created_at?: string
+          event_id: string
+          id?: string
+          location_note?: string | null
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          capacity?: number | null
+          created_at?: string
+          event_id?: string
+          id?: string
+          location_note?: string | null
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_tables_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events: {
+        Row: {
+          accent_color: string
+          background_color: string
+          contact_info: string | null
+          created_at: string
+          event_date: string | null
+          font_style: string
+          footer_note: string | null
+          headline: string | null
+          hero_image_url: string | null
+          id: string
+          is_published: boolean
+          logo_url: string | null
+          name: string
+          owner_id: string
+          schedule: Json
+          slug: string
+          subheadline: string | null
+          text_color: string
+          updated_at: string
+          venue_address: string | null
+          venue_name: string | null
+          welcome_message: string | null
+        }
+        Insert: {
+          accent_color?: string
+          background_color?: string
+          contact_info?: string | null
+          created_at?: string
+          event_date?: string | null
+          font_style?: string
+          footer_note?: string | null
+          headline?: string | null
+          hero_image_url?: string | null
+          id?: string
+          is_published?: boolean
+          logo_url?: string | null
+          name: string
+          owner_id: string
+          schedule?: Json
+          slug: string
+          subheadline?: string | null
+          text_color?: string
+          updated_at?: string
+          venue_address?: string | null
+          venue_name?: string | null
+          welcome_message?: string | null
+        }
+        Update: {
+          accent_color?: string
+          background_color?: string
+          contact_info?: string | null
+          created_at?: string
+          event_date?: string | null
+          font_style?: string
+          footer_note?: string | null
+          headline?: string | null
+          hero_image_url?: string | null
+          id?: string
+          is_published?: boolean
+          logo_url?: string | null
+          name?: string
+          owner_id?: string
+          schedule?: Json
+          slug?: string
+          subheadline?: string | null
+          text_color?: string
+          updated_at?: string
+          venue_address?: string | null
+          venue_name?: string | null
+          welcome_message?: string | null
+        }
+        Relationships: []
+      }
+      guests: {
+        Row: {
+          created_at: string
+          event_id: string
+          full_name: string
+          id: string
+          meal_choice: string | null
+          notes: string | null
+          personal_message: string | null
+          table_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          full_name: string
+          id?: string
+          meal_choice?: string | null
+          notes?: string | null
+          personal_message?: string | null
+          table_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          full_name?: string
+          id?: string
+          meal_choice?: string | null
+          notes?: string | null
+          personal_message?: string | null
+          table_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guests_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "guests_table_id_fkey"
+            columns: ["table_id"]
+            isOneToOne: false
+            referencedRelation: "event_tables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
