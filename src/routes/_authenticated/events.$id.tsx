@@ -419,8 +419,12 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Hero image URL"><Input value={form.hero_image_url ?? ""} onChange={(e) => set("hero_image_url", e.target.value)} placeholder="https://…" /></Field>
-          <Field label="Logo image URL"><Input value={form.logo_url ?? ""} onChange={(e) => set("logo_url", e.target.value)} placeholder="https://…" /></Field>
+          <Field label="Logo (shown top-middle on the guest page)">
+            <ImageUpload value={form.logo_url} onChange={(url) => set("logo_url", url)} kind="logo" />
+          </Field>
+          <Field label="Hero image">
+            <ImageUpload value={form.hero_image_url} onChange={(url) => set("hero_image_url", url)} kind="hero" />
+          </Field>
         </Section>
 
         <div className="sticky bottom-4 flex justify-end">
