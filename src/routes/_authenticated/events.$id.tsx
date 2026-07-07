@@ -477,6 +477,52 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div className="space-y-1.5"><Label>{label}</Label>{children}</div>;
 }
 
+function ImageUpload({ value, onChange, kind }: { value: string | null; onChange: (url: string | null) => void; kind: "logo" | "hero" }) {
+  const [uploading, setUploading] = useState(false);
+  const handle = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) return toast.error("Image must be under 5 MB");
+    setUploading(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id;
+      if (!uid) throw new Error("Not signed in");
+      const ext = (file.name.split(".").pop() ?? "png").toLowerCase();
+      const path = `${uid}/${kind}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("event-assets").upload(path, file, { upsert: true, contentType: file.type });
+      if (upErr) throw upErr;
+      const { data: signed, error: sErr } = await supabase.storage
+        .from("event-assets")
+        .createSignedUrl(path, 60 * 60 * 24 * 365 * 10);
+      if (sErr) throw sErr;
+      onChange(signed.signedUrl);
+      toast.success("Image uploaded");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+  return (
+    <div className="space-y-2">
+      {value && (
+        <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-2">
+          <img src={value} alt="" className={kind === "logo" ? "h-12 object-contain" : "h-16 w-24 rounded object-cover"} />
+          <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)}>
+            <Trash2 className="h-4 w-4" /> Remove
+          </Button>
+        </div>
+      )}
+      <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-accent">
+        <input type="file" accept="image/*" className="hidden" onChange={handle} disabled={uploading} />
+        {uploading ? "Uploading…" : value ? "Replace image" : "Upload image"}
+      </label>
+    </div>
+  );
+}
+
 /* ---------------- SHARE ---------------- */
 function ShareTab({ event, publicUrl, onChange }: { event: EventRow; publicUrl: string; onChange: () => void }) {
   const [qr, setQr] = useState<string>("");
