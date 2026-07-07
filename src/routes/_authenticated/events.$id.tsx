@@ -408,20 +408,75 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
         </Section>
 
         <Section title="Design">
+          <Field label="Color theme">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {COLOR_PRESETS.map((p) => {
+                const active =
+                  form.background_color.toLowerCase() === p.bg.toLowerCase() &&
+                  form.text_color.toLowerCase() === p.text.toLowerCase() &&
+                  form.accent_color.toLowerCase() === p.accent.toLowerCase();
+                return (
+                  <button
+                    key={p.name}
+                    type="button"
+                    onClick={() => {
+                      set("background_color", p.bg);
+                      set("text_color", p.text);
+                      set("accent_color", p.accent);
+                    }}
+                    className={`group flex flex-col items-center gap-1.5 rounded-xl border p-2 text-left transition ${active ? "border-foreground ring-2 ring-foreground/10" : "border-border hover:border-foreground/40"}`}
+                    title={p.name}
+                  >
+                    <div className="flex h-10 w-full items-center justify-center rounded-lg" style={{ background: p.bg }}>
+                      <span className="text-xs" style={{ fontFamily: fontFor(form.font_style), color: p.text }}>Aa</span>
+                      <span className="ml-1 h-3 w-3 rounded-full" style={{ background: p.accent }} />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">{p.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+
           <div className="grid grid-cols-3 gap-3">
-            <Field label="Background"><Input type="color" value={form.background_color} onChange={(e) => set("background_color", e.target.value)} className="h-10 p-1" /></Field>
-            <Field label="Text"><Input type="color" value={form.text_color} onChange={(e) => set("text_color", e.target.value)} className="h-10 p-1" /></Field>
-            <Field label="Accent"><Input type="color" value={form.accent_color} onChange={(e) => set("accent_color", e.target.value)} className="h-10 p-1" /></Field>
+            <Field label="Background">
+              <div className="flex items-center gap-2">
+                <Input type="color" value={form.background_color} onChange={(e) => set("background_color", e.target.value)} className="h-10 w-14 p-1" />
+                <Input value={form.background_color} onChange={(e) => set("background_color", e.target.value)} className="h-10 font-mono text-xs" />
+              </div>
+            </Field>
+            <Field label="Text">
+              <div className="flex items-center gap-2">
+                <Input type="color" value={form.text_color} onChange={(e) => set("text_color", e.target.value)} className="h-10 w-14 p-1" />
+                <Input value={form.text_color} onChange={(e) => set("text_color", e.target.value)} className="h-10 font-mono text-xs" />
+              </div>
+            </Field>
+            <Field label="Accent">
+              <div className="flex items-center gap-2">
+                <Input type="color" value={form.accent_color} onChange={(e) => set("accent_color", e.target.value)} className="h-10 w-14 p-1" />
+                <Input value={form.accent_color} onChange={(e) => set("accent_color", e.target.value)} className="h-10 font-mono text-xs" />
+              </div>
+            </Field>
           </div>
+
           <Field label="Font style">
-            <Select value={form.font_style} onValueChange={(v) => set("font_style", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sans">Modern sans</SelectItem>
-                <SelectItem value="serif">Elegant serif</SelectItem>
-                <SelectItem value="display">Display serif</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {FONT_PRESETS.map((f) => {
+                const active = form.font_style === f.value;
+                return (
+                  <button
+                    key={f.value}
+                    type="button"
+                    onClick={() => set("font_style", f.value)}
+                    className={`rounded-xl border p-3 text-left transition ${active ? "border-foreground ring-2 ring-foreground/10" : "border-border hover:border-foreground/40"}`}
+                  >
+                    <div className="text-2xl leading-none" style={{ fontFamily: fontFor(f.value) }}>Aa</div>
+                    <div className="mt-2 text-xs text-muted-foreground">{f.label}</div>
+                    <div className="text-[11px]" style={{ fontFamily: fontFor(f.value) }}>{f.sample}</div>
+                  </button>
+                );
+              })}
+            </div>
           </Field>
           <Field label="Logo (shown top-middle on the guest page)">
             <ImageUpload value={form.logo_url} onChange={(url) => set("logo_url", url)} kind="logo" />
