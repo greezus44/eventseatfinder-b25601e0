@@ -524,6 +524,28 @@ function fontFor(style: string) {
   return "'Inter', ui-sans-serif, system-ui, sans-serif";
 }
 
+const COLOR_PRESETS: Array<{ name: string; bg: string; text: string; accent: string }> = [
+  { name: "Ivory",     bg: "#faf7f2", text: "#1a1a1a", accent: "#b08b5b" },
+  { name: "Bone",      bg: "#ffffff", text: "#111111", accent: "#111111" },
+  { name: "Sage",      bg: "#eef1ea", text: "#22301f", accent: "#5c7a4a" },
+  { name: "Blush",     bg: "#f7ecec", text: "#2a1a1a", accent: "#b25c67" },
+  { name: "Midnight",  bg: "#0f1220", text: "#f2f2f2", accent: "#c9a86b" },
+  { name: "Burgundy",  bg: "#2a0f13", text: "#f4e9d8", accent: "#c58a5f" },
+  { name: "Ocean",     bg: "#eaf1f6", text: "#0d2a3a", accent: "#1f6f8b" },
+  { name: "Sand",      bg: "#f3ead9", text: "#3a2a10", accent: "#8a5a2b" },
+  { name: "Forest",    bg: "#0f1a14", text: "#e9efe4", accent: "#a3c48c" },
+  { name: "Lilac",     bg: "#f2eef7", text: "#2b1f3a", accent: "#7a5cc0" },
+  { name: "Charcoal",  bg: "#1a1a1a", text: "#f5f5f5", accent: "#e2b04a" },
+  { name: "Mint",      bg: "#eaf6f0", text: "#0f2a1e", accent: "#2fa06f" },
+];
+
+const FONT_PRESETS: Array<{ value: string; label: string; sample: string }> = [
+  { value: "sans",    label: "Modern sans",   sample: "Clean & contemporary" },
+  { value: "serif",   label: "Elegant serif", sample: "Timeless & refined" },
+  { value: "display", label: "Display serif", sample: "Dramatic & editorial" },
+];
+
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-6">
