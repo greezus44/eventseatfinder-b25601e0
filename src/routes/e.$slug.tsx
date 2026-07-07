@@ -155,7 +155,7 @@ function GuestPage() {
               ))}
             </div>
           )}
-          {query.length >= 2 && matches.length === 0 && guestsQ.data && (
+          {q.length >= 2 && !searchQ.isLoading && matches.length === 0 && (
             <p className="mt-3 text-sm opacity-70">No match. Try a different spelling or ask the host.</p>
           )}
         </div>
