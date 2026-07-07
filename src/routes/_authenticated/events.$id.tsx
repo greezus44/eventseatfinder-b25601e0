@@ -95,7 +95,7 @@ function EventManager() {
           <CustomizeTab event={event} onSaved={() => qc.invalidateQueries({ queryKey: ["event", id] })} />
         </TabsContent>
         <TabsContent value="share" className="mt-6">
-          <ShareTab event={event} publicUrl={publicUrl} onChange={() => qc.invalidateQueries({ queryKey: ["event", id] })} />
+          <ShareTab event={event} publicUrl={publicUrl} isPreviewHost={isPreviewHost} onChange={() => qc.invalidateQueries({ queryKey: ["event", id] })} />
         </TabsContent>
       </Tabs>
     </main>
