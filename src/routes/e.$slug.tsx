@@ -36,15 +36,18 @@ type EventTable = { id: string; name: string; location_note: string | null };
 
 function GuestPage() {
   const { event } = Route.useLoaderData();
+  const { slug } = Route.useParams();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Guest | null>(null);
 
-  const guestsQ = useQuery({
-    queryKey: ["public-guests", event.id],
+  const q = query.trim();
+  const searchQ = useQuery({
+    queryKey: ["guest-search", slug, q.toLowerCase()],
+    enabled: q.length >= 2,
     queryFn: async () => {
-      const { data, error } = await supabase.from("guests").select("id, full_name, table_id, personal_message, meal_choice").eq("event_id", event.id);
+      const { data, error } = await supabase.rpc("search_event_guests", { _slug: slug, _q: q });
       if (error) throw error;
-      return data as Guest[];
+      return (data ?? []) as Guest[];
     },
   });
   const tablesQ = useQuery({
@@ -56,13 +59,7 @@ function GuestPage() {
     },
   });
 
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q || q.length < 2) return [];
-    return (guestsQ.data ?? [])
-      .filter((g) => g.full_name.toLowerCase().includes(q))
-      .slice(0, 8);
-  }, [query, guestsQ.data]);
+  const matches = searchQ.data ?? [];
 
   const tableFor = (id: string | null) => tablesQ.data?.find((t) => t.id === id);
   const displayFont =
