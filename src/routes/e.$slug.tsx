@@ -46,6 +46,8 @@ const T: Record<Lang, Record<string, string>> = {
     no_match: "No match. Try a different spelling or ask the host.",
     venue: "Venue",
     schedule: "Schedule",
+    tab_seat: "Find seat",
+    tab_layout: "Venue layout",
   },
   ms: {
     default_sub: "Sila cari tempat duduk anda",
@@ -58,6 +60,8 @@ const T: Record<Lang, Record<string, string>> = {
     no_match: "Tiada padanan. Cuba ejaan lain atau tanya tuan rumah.",
     venue: "Tempat",
     schedule: "Aturcara",
+    tab_seat: "Cari tempat",
+    tab_layout: "Pelan tempat",
   },
 };
 
