@@ -117,6 +117,12 @@ function TablesTab({ eventId }: { eventId: string }) {
   const [capacity, setCapacity] = useState("");
   const [note, setNote] = useState("");
 
+  // Bulk add
+  const [bulkCount, setBulkCount] = useState("15");
+  const [bulkCapacity, setBulkCapacity] = useState("10");
+  const [bulkPrefix, setBulkPrefix] = useState("Table");
+  const [bulkStart, setBulkStart] = useState("1");
+
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
     const { error } = await supabase.from("event_tables").insert({
@@ -125,6 +131,26 @@ function TablesTab({ eventId }: { eventId: string }) {
     });
     if (error) return toast.error(error.message);
     setName(""); setCapacity(""); setNote("");
+    qc.invalidateQueries({ queryKey: ["tables", eventId] });
+  };
+
+  const bulkAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const count = Number(bulkCount);
+    const cap = bulkCapacity ? Number(bulkCapacity) : null;
+    const start = Number(bulkStart) || 1;
+    if (!count || count < 1 || count > 200) return toast.error("Enter a count between 1 and 200");
+    const base = q.data?.length ?? 0;
+    const rows = Array.from({ length: count }, (_, i) => ({
+      event_id: eventId,
+      name: `${bulkPrefix.trim() || "Table"} ${start + i}`,
+      capacity: cap,
+      location_note: null,
+      sort_order: base + i + 1,
+    }));
+    const { error } = await supabase.from("event_tables").insert(rows);
+    if (error) return toast.error(error.message);
+    toast.success(`Added ${count} tables`);
     qc.invalidateQueries({ queryKey: ["tables", eventId] });
   };
 
@@ -177,25 +203,52 @@ function TablesTab({ eventId }: { eventId: string }) {
         </Table>
       </div>
 
-      <form onSubmit={add} className="h-fit space-y-3 rounded-2xl border border-border bg-card p-5">
-        <h3 className="font-display text-xl">Add a table</h3>
-        <div className="space-y-1.5">
-          <Label>Name</Label>
-          <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Table 1" />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Capacity</Label>
-          <Input type="number" value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="8" />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Location note (optional)</Label>
-          <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Near the garden" />
-        </div>
-        <Button type="submit" className="w-full"><Plus className="h-4 w-4" /> Add</Button>
-      </form>
+      <div className="space-y-4">
+        <form onSubmit={bulkAdd} className="h-fit space-y-3 rounded-2xl border border-border bg-card p-5">
+          <h3 className="font-display text-xl">Add multiple tables</h3>
+          <p className="text-xs text-muted-foreground">e.g. add 15 tables of 10 capacity in one go</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>How many</Label>
+              <Input type="number" min={1} max={200} value={bulkCount} onChange={(e) => setBulkCount(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Capacity each</Label>
+              <Input type="number" value={bulkCapacity} onChange={(e) => setBulkCapacity(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Name prefix</Label>
+              <Input value={bulkPrefix} onChange={(e) => setBulkPrefix(e.target.value)} placeholder="Table" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Start number</Label>
+              <Input type="number" value={bulkStart} onChange={(e) => setBulkStart(e.target.value)} />
+            </div>
+          </div>
+          <Button type="submit" className="w-full" variant="secondary"><Plus className="h-4 w-4" /> Add {bulkCount || 0} tables</Button>
+        </form>
+
+        <form onSubmit={add} className="h-fit space-y-3 rounded-2xl border border-border bg-card p-5">
+          <h3 className="font-display text-xl">Add a single table</h3>
+          <div className="space-y-1.5">
+            <Label>Name</Label>
+            <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Table 1" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Capacity</Label>
+            <Input type="number" value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="8" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Location note (optional)</Label>
+            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Near the garden" />
+          </div>
+          <Button type="submit" className="w-full"><Plus className="h-4 w-4" /> Add</Button>
+        </form>
+      </div>
     </div>
   );
 }
+
 
 /* ---------------- GUESTS ---------------- */
 function GuestsTab({ eventId }: { eventId: string }) {
