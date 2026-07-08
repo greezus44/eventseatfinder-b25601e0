@@ -437,10 +437,16 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
       <div className="space-y-6">
         <Section title="Content">
           <Field label="Event name"><Input value={form.name} onChange={(e) => set("name", e.target.value)} /></Field>
-          <Field label="Headline (large text)"><Input value={form.headline ?? ""} onChange={(e) => set("headline", e.target.value)} /></Field>
-          <Field label="Subheadline"><Input value={form.subheadline ?? ""} onChange={(e) => set("subheadline", e.target.value)} /></Field>
-          <Field label="Welcome message"><Textarea rows={3} value={form.welcome_message ?? ""} onChange={(e) => set("welcome_message", e.target.value)} /></Field>
-          <Field label="Footer note"><Input value={form.footer_note ?? ""} onChange={(e) => set("footer_note", e.target.value)} placeholder="With love, A + N" /></Field>
+          <Field label="Headline (large text — press Enter for line breaks)">
+            <Textarea rows={2} value={form.headline ?? ""} onChange={(e) => set("headline", e.target.value)} />
+          </Field>
+          <Field label="Subheadline (press Enter for line breaks)">
+            <Textarea rows={2} value={form.subheadline ?? ""} onChange={(e) => set("subheadline", e.target.value)} />
+          </Field>
+          <Field label="Welcome message"><Textarea rows={4} value={form.welcome_message ?? ""} onChange={(e) => set("welcome_message", e.target.value)} /></Field>
+          <Field label="Footer note (press Enter for line breaks)">
+            <Textarea rows={2} value={form.footer_note ?? ""} onChange={(e) => set("footer_note", e.target.value)} placeholder="With love, A + N" />
+          </Field>
         </Section>
 
         <Section title="Venue">
