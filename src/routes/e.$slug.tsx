@@ -149,7 +149,7 @@ function GuestPage() {
             {LangToggle}
           </div>
           {event.logo_url && (
-            <img src={event.logo_url} alt="" className="mx-auto mb-8 h-14 object-contain" />
+            <img src={event.logo_url} alt="" className={`mx-auto mb-8 ${logoSelectedClass} object-contain`} />
           )}
           <p className="text-xs uppercase tracking-[0.2em] opacity-70">{t.welcome}</p>
           <h1 className="mt-3 text-4xl leading-tight" style={{ fontFamily: displayFont }}>
