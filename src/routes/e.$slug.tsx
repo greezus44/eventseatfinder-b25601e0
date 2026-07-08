@@ -186,92 +186,119 @@ function GuestPage() {
       <div className="mx-auto max-w-2xl px-6 py-16 text-center">
         <div className="mb-6 flex justify-end">{LangToggle}</div>
         {event.logo_url && (
-          <img src={event.logo_url} alt="" className="mx-auto mb-8 h-16 object-contain md:h-20" />
+          <img src={event.logo_url} alt="" className={`mx-auto mb-8 ${logoClass} object-contain`} />
         )}
-        <p className="text-xs uppercase tracking-[0.25em] opacity-70">{event.subheadline ?? t.default_sub}</p>
-        <h1 className="mt-4 text-5xl leading-[1.05] md:text-6xl" style={{ fontFamily: displayFont }}>
+        <p className="whitespace-pre-line text-xs uppercase tracking-[0.25em] opacity-70">{event.subheadline ?? t.default_sub}</p>
+        <h1 className="mt-4 whitespace-pre-line text-5xl leading-[1.05] md:text-6xl" style={{ fontFamily: displayFont }}>
           {event.headline ?? event.name}
         </h1>
         {event.welcome_message && (
-          <p className="mx-auto mt-6 max-w-lg text-base leading-relaxed opacity-80">
+          <p className="mx-auto mt-6 max-w-lg whitespace-pre-line text-base leading-relaxed opacity-80">
             {event.welcome_message}
           </p>
         )}
 
-        {event.hero_image_url && (
-          <img src={event.hero_image_url} alt="" className="mx-auto mt-10 max-h-72 w-full rounded-2xl object-cover" />
+        {hasLayout && (
+          <div className="mx-auto mt-10 inline-flex overflow-hidden rounded-full border text-sm font-medium" style={{ borderColor: accent + "60" }}>
+            {([
+              { id: "seat" as const, label: t.tab_seat },
+              { id: "layout" as const, label: t.tab_layout },
+            ]).map((it) => (
+              <button
+                key={it.id}
+                onClick={() => setTab(it.id)}
+                className="px-5 py-2 transition-colors"
+                style={tab === it.id ? { background: accent, color: event.background_color } : { opacity: 0.7 }}
+              >
+                {it.label}
+              </button>
+            ))}
+          </div>
         )}
 
-        <div className="mx-auto mt-10 max-w-md">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60" />
-            <Input
-              autoFocus
-              placeholder={t.placeholder}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="h-14 rounded-full border-2 pl-10 text-center text-lg"
-              style={{ borderColor: accent }}
+        {tab === "layout" && hasLayout ? (
+          <div className="mx-auto mt-8 max-w-2xl">
+            <img
+              src={event.layout_image_url!}
+              alt="Event space layout"
+              className="w-full rounded-2xl border object-contain"
+              style={{ borderColor: accent + "40" }}
             />
           </div>
-          {matches.length > 0 && (
-            <div className="mt-3 divide-y overflow-hidden rounded-2xl border text-left" style={{ borderColor: accent + "40" }}>
-              {matches.map((g) => {
-                const tbl = tableFor(g.table_id);
-                return (
-                  <button
-                    key={g.id}
-                    onClick={() => setSelected(g)}
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-black/5"
-                  >
-                    <span>{g.full_name}</span>
-                    <span
-                      className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium"
-                      style={
-                        tbl
-                          ? { background: accent + "18", color: accent }
-                          : { opacity: 0.55 }
-                      }
-                    >
-                      {tbl ? tbl.name : "—"}
-                    </span>
-                  </button>
-                );
-              })}
+        ) : (
+          <>
+            <div className="mx-auto mt-10 max-w-md">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60" />
+                <Input
+                  autoFocus
+                  placeholder={t.placeholder}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="h-14 rounded-full border-2 pl-10 text-center text-lg"
+                  style={{ borderColor: accent }}
+                />
+              </div>
+              {matches.length > 0 && (
+                <div className="mt-3 divide-y overflow-hidden rounded-2xl border text-left" style={{ borderColor: accent + "40" }}>
+                  {matches.map((g) => {
+                    const tbl = tableFor(g.table_id);
+                    return (
+                      <button
+                        key={g.id}
+                        onClick={() => setSelected(g)}
+                        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-black/5"
+                      >
+                        <span>{g.full_name}</span>
+                        <span
+                          className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                          style={
+                            tbl
+                              ? { background: accent + "18", color: accent }
+                              : { opacity: 0.55 }
+                          }
+                        >
+                          {tbl ? tbl.name : "—"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {q.length >= 2 && !searchQ.isLoading && matches.length === 0 && (
+                <p className="mt-3 text-sm opacity-70">{t.no_match}</p>
+              )}
             </div>
-          )}
-          {q.length >= 2 && !searchQ.isLoading && matches.length === 0 && (
-            <p className="mt-3 text-sm opacity-70">{t.no_match}</p>
-          )}
-        </div>
 
-        {(event.venue_name || event.venue_address || (event.schedule && event.schedule.length > 0)) && (
-          <div className="mx-auto mt-16 grid max-w-lg gap-6 text-left">
-            {(event.venue_name || event.venue_address) && (
-              <div>
-                <p className="text-xs uppercase tracking-widest opacity-70">{t.venue}</p>
-                {event.venue_name && <p className="mt-1 text-lg" style={{ fontFamily: displayFont }}>{event.venue_name}</p>}
-                {event.venue_address && <p className="text-sm opacity-80">{event.venue_address}</p>}
+            {(event.venue_name || event.venue_address || (event.schedule && event.schedule.length > 0)) && (
+              <div className="mx-auto mt-16 grid max-w-lg gap-6 text-left">
+                {(event.venue_name || event.venue_address) && (
+                  <div>
+                    <p className="text-xs uppercase tracking-widest opacity-70">{t.venue}</p>
+                    {event.venue_name && <p className="mt-1 text-lg" style={{ fontFamily: displayFont }}>{event.venue_name}</p>}
+                    {event.venue_address && <p className="text-sm opacity-80">{event.venue_address}</p>}
+                  </div>
+                )}
+                {event.schedule && event.schedule.length > 0 && (
+                  <div>
+                    <p className="text-xs uppercase tracking-widest opacity-70">{t.schedule}</p>
+                    <ul className="mt-2 space-y-1.5">
+                      {(event.schedule as Array<{ time: string; label: string }>).map((s, i) => (
+                        <li key={i} className="flex gap-4 text-sm">
+                          <span className="w-20 opacity-70">{s.time}</span>
+                          <span>{s.label}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
-            {event.schedule && event.schedule.length > 0 && (
-              <div>
-                <p className="text-xs uppercase tracking-widest opacity-70">{t.schedule}</p>
-                <ul className="mt-2 space-y-1.5">
-                  {(event.schedule as Array<{ time: string; label: string }>).map((s, i) => (
-                    <li key={i} className="flex gap-4 text-sm">
-                      <span className="w-20 opacity-70">{s.time}</span>
-                      <span>{s.label}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
+          </>
         )}
 
         {event.footer_note && (
-          <p className="mt-16 text-sm opacity-70" style={{ fontFamily: displayFont, fontStyle: "italic" }}>
+          <p className="mt-16 whitespace-pre-line text-sm opacity-70" style={{ fontFamily: displayFont, fontStyle: "italic" }}>
             {event.footer_note}
           </p>
         )}
