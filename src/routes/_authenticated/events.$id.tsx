@@ -539,11 +539,32 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
               })}
             </div>
           </Field>
-          <Field label="Logo (shown top-middle on the guest page)">
+          <Field label="Logo">
             <ImageUpload value={form.logo_url} onChange={(url) => set("logo_url", url)} kind="logo" />
           </Field>
-          <Field label="Hero image">
-            <ImageUpload value={form.hero_image_url} onChange={(url) => set("hero_image_url", url)} kind="hero" />
+          {form.logo_url && (
+            <Field label="Logo size">
+              <div className="grid grid-cols-3 gap-2">
+                {(["small", "medium", "large"] as const).map((s) => {
+                  const active = (form.logo_size || "medium") === s;
+                  const h = s === "small" ? "h-6" : s === "medium" ? "h-10" : "h-14";
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => set("logo_size", s)}
+                      className={`flex flex-col items-center gap-2 rounded-xl border p-3 transition ${active ? "border-foreground ring-2 ring-foreground/10" : "border-border hover:border-foreground/40"}`}
+                    >
+                      <img src={form.logo_url!} alt="" className={`${h} object-contain`} />
+                      <span className="text-xs capitalize text-muted-foreground">{s}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+          )}
+          <Field label="Event space layout (shown to guests in a separate tab)">
+            <ImageUpload value={form.layout_image_url} onChange={(url) => set("layout_image_url", url)} kind="hero" />
           </Field>
         </Section>
 
