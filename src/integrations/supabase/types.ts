@@ -68,6 +68,8 @@ export type Database = {
           hero_image_url: string | null
           id: string
           is_published: boolean
+          layout_image_url: string | null
+          logo_size: string
           logo_url: string | null
           name: string
           owner_id: string
@@ -93,6 +95,8 @@ export type Database = {
           hero_image_url?: string | null
           id?: string
           is_published?: boolean
+          layout_image_url?: string | null
+          logo_size?: string
           logo_url?: string | null
           name: string
           owner_id: string
@@ -118,6 +122,8 @@ export type Database = {
           hero_image_url?: string | null
           id?: string
           is_published?: boolean
+          layout_image_url?: string | null
+          logo_size?: string
           logo_url?: string | null
           name?: string
           owner_id?: string
