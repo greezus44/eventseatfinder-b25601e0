@@ -71,6 +71,7 @@ function GuestPage() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Guest | null>(null);
   const [lang, setLang] = useState<Lang>("en");
+  const [tab, setTab] = useState<"seat" | "layout">("seat");
   const t = T[lang];
 
   const q = query.trim();
@@ -99,6 +100,13 @@ function GuestPage() {
     event.font_style === "serif" || event.font_style === "display"
       ? "'Instrument Serif', Georgia, serif"
       : "'Inter', ui-sans-serif, system-ui, sans-serif";
+
+  const logoSize = event.logo_size || "medium";
+  const logoClass =
+    logoSize === "small" ? "h-10 md:h-12" : logoSize === "large" ? "h-24 md:h-32" : "h-16 md:h-20";
+  const logoSelectedClass =
+    logoSize === "small" ? "h-8" : logoSize === "large" ? "h-20" : "h-14";
+  const hasLayout = !!event.layout_image_url;
 
   const bodyStyle: React.CSSProperties = {
     background: event.background_color,
