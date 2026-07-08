@@ -204,15 +204,28 @@ function GuestPage() {
           </div>
           {matches.length > 0 && (
             <div className="mt-3 divide-y overflow-hidden rounded-2xl border text-left" style={{ borderColor: accent + "40" }}>
-              {matches.map((g) => (
-                <button
-                  key={g.id}
-                  onClick={() => setSelected(g)}
-                  className="block w-full px-4 py-3 text-left transition-colors hover:bg-black/5"
-                >
-                  {g.full_name}
-                </button>
-              ))}
+              {matches.map((g) => {
+                const tbl = tableFor(g.table_id);
+                return (
+                  <button
+                    key={g.id}
+                    onClick={() => setSelected(g)}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-black/5"
+                  >
+                    <span>{g.full_name}</span>
+                    <span
+                      className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                      style={
+                        tbl
+                          ? { background: accent + "18", color: accent }
+                          : { opacity: 0.55 }
+                      }
+                    >
+                      {tbl ? tbl.name : "—"}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
           {q.length >= 2 && !searchQ.isLoading && matches.length === 0 && (

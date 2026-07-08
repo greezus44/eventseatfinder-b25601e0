@@ -612,6 +612,19 @@ function ShareTab({ event, publicUrl, isPreviewHost, onChange }: { event: EventR
 
   useEffect(() => setBaseInput(event.public_base_url ?? ""), [event.public_base_url]);
 
+  // Auto-save the current origin as the public share URL when an admin opens
+  // this page from the published site — so guests scanning the QR never land
+  // on the preview host (which requires Lovable sign-in).
+  useEffect(() => {
+    if (event.public_base_url || isPreviewHost) return;
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    if (!origin) return;
+    supabase.from("events").update({ public_base_url: origin }).eq("id", event.id).then(({ error }) => {
+      if (!error) onChange();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event.id, event.public_base_url, isPreviewHost]);
+
   useEffect(() => {
     if (!publicUrl.startsWith("http")) { setQr(""); return; }
     QRCode.toDataURL(publicUrl, { width: 512, margin: 2, color: { dark: "#111111", light: "#ffffff" } }).then(setQr);
