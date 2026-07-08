@@ -29,6 +29,7 @@ type EventRow = {
   id: string; slug: string; name: string; event_date: string | null;
   headline: string | null; subheadline: string | null; welcome_message: string | null;
   footer_note: string | null; hero_image_url: string | null; logo_url: string | null;
+  logo_size: string; layout_image_url: string | null;
   accent_color: string; background_color: string; text_color: string; font_style: string;
   venue_name: string | null; venue_address: string | null; contact_info: string | null;
   is_published: boolean; schedule: Array<{ time: string; label: string }>;
@@ -403,8 +404,9 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
         subheadline: form.subheadline,
         welcome_message: form.welcome_message,
         footer_note: form.footer_note,
-        hero_image_url: form.hero_image_url,
         logo_url: form.logo_url,
+        logo_size: form.logo_size,
+        layout_image_url: form.layout_image_url,
         accent_color: form.accent_color,
         background_color: form.background_color,
         text_color: form.text_color,
@@ -435,10 +437,16 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
       <div className="space-y-6">
         <Section title="Content">
           <Field label="Event name"><Input value={form.name} onChange={(e) => set("name", e.target.value)} /></Field>
-          <Field label="Headline (large text)"><Input value={form.headline ?? ""} onChange={(e) => set("headline", e.target.value)} /></Field>
-          <Field label="Subheadline"><Input value={form.subheadline ?? ""} onChange={(e) => set("subheadline", e.target.value)} /></Field>
-          <Field label="Welcome message"><Textarea rows={3} value={form.welcome_message ?? ""} onChange={(e) => set("welcome_message", e.target.value)} /></Field>
-          <Field label="Footer note"><Input value={form.footer_note ?? ""} onChange={(e) => set("footer_note", e.target.value)} placeholder="With love, A + N" /></Field>
+          <Field label="Headline (large text — press Enter for line breaks)">
+            <Textarea rows={2} value={form.headline ?? ""} onChange={(e) => set("headline", e.target.value)} />
+          </Field>
+          <Field label="Subheadline (press Enter for line breaks)">
+            <Textarea rows={2} value={form.subheadline ?? ""} onChange={(e) => set("subheadline", e.target.value)} />
+          </Field>
+          <Field label="Welcome message"><Textarea rows={4} value={form.welcome_message ?? ""} onChange={(e) => set("welcome_message", e.target.value)} /></Field>
+          <Field label="Footer note (press Enter for line breaks)">
+            <Textarea rows={2} value={form.footer_note ?? ""} onChange={(e) => set("footer_note", e.target.value)} placeholder="With love, A + N" />
+          </Field>
         </Section>
 
         <Section title="Venue">
@@ -531,11 +539,32 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
               })}
             </div>
           </Field>
-          <Field label="Logo (shown top-middle on the guest page)">
+          <Field label="Logo">
             <ImageUpload value={form.logo_url} onChange={(url) => set("logo_url", url)} kind="logo" />
           </Field>
-          <Field label="Hero image">
-            <ImageUpload value={form.hero_image_url} onChange={(url) => set("hero_image_url", url)} kind="hero" />
+          {form.logo_url && (
+            <Field label="Logo size">
+              <div className="grid grid-cols-3 gap-2">
+                {(["small", "medium", "large"] as const).map((s) => {
+                  const active = (form.logo_size || "medium") === s;
+                  const h = s === "small" ? "h-6" : s === "medium" ? "h-10" : "h-14";
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => set("logo_size", s)}
+                      className={`flex flex-col items-center gap-2 rounded-xl border p-3 transition ${active ? "border-foreground ring-2 ring-foreground/10" : "border-border hover:border-foreground/40"}`}
+                    >
+                      <img src={form.logo_url!} alt="" className={`${h} object-contain`} />
+                      <span className="text-xs capitalize text-muted-foreground">{s}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+          )}
+          <Field label="Event space layout (shown to guests in a separate tab)">
+            <ImageUpload value={form.layout_image_url} onChange={(url) => set("layout_image_url", url)} kind="hero" />
           </Field>
         </Section>
 
