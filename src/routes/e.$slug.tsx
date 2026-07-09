@@ -4,6 +4,9 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Search, MapPin, ArrowLeft } from "lucide-react";
+import { T, type Lang, type BilingualContent, pickBilingual } from "@/lib/i18n";
+import { LangSwitch } from "@/routes/index";
+import { fontFor } from "@/lib/font";
 
 export const Route = createFileRoute("/e/$slug")({
   loader: async ({ params }) => {
@@ -23,56 +26,48 @@ export const Route = createFileRoute("/e/$slug")({
           { title: `${loaderData.event.name} — Find your seat` },
           { name: "description", content: loaderData.event.welcome_message ?? "Find your seat" },
           { property: "og:title", content: loaderData.event.name },
-          ...(loaderData.event.hero_image_url ? [{ property: "og:image", content: loaderData.event.hero_image_url }] : []),
+          ...(loaderData.event.hero_image_url
+            ? [{ property: "og:image", content: loaderData.event.hero_image_url }]
+            : []),
         ]
       : [{ title: "Find your seat" }],
   }),
   component: GuestPage,
 });
 
-type Guest = { id: string; full_name: string; table_id: string | null; personal_message: string | null; meal_choice: string | null };
-type EventTable = { id: string; name: string; location_note: string | null };
-
-type Lang = "en" | "ms";
-const T: Record<Lang, Record<string, string>> = {
-  en: {
-    default_sub: "Please find your seat",
-    search_again: "Search again",
-    welcome: "Welcome",
-    seated_at: "You're seated at",
-    no_table: "Your table hasn't been assigned yet — please ask a host.",
-    meal: "Meal",
-    placeholder: "Type your name…",
-    no_match: "No match. Try a different spelling or ask the host.",
-    venue: "Venue",
-    schedule: "Schedule",
-    tab_seat: "Find seat",
-    tab_layout: "Venue layout",
-  },
-  ms: {
-    default_sub: "Sila cari tempat duduk anda",
-    search_again: "Cari semula",
-    welcome: "Selamat datang",
-    seated_at: "Anda duduk di",
-    no_table: "Meja anda belum ditetapkan — sila bertanya kepada tuan rumah.",
-    meal: "Hidangan",
-    placeholder: "Taip nama anda…",
-    no_match: "Tiada padanan. Cuba ejaan lain atau tanya tuan rumah.",
-    venue: "Tempat",
-    schedule: "Aturcara",
-    tab_seat: "Cari tempat",
-    tab_layout: "Pelan tempat",
-  },
+type Guest = {
+  id: string;
+  full_name: string;
+  table_id: string | null;
+  personal_message: string | null;
+  meal_choice: string | null;
 };
+type EventTable = { id: string; name: string; location_note: string | null };
 
 function GuestPage() {
   const { event } = Route.useLoaderData();
   const { slug } = Route.useParams();
+  const defaultLang = ((event as { default_language?: string }).default_language as Lang) ?? "en";
+  const [lang, setLang] = useState<Lang>(defaultLang === "ms" ? "ms" : "en");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Guest | null>(null);
-  const [lang, setLang] = useState<Lang>("en");
   const [tab, setTab] = useState<"seat" | "layout">("seat");
   const t = T[lang];
+
+  const ms: BilingualContent = ((event as { content_ms?: BilingualContent }).content_ms ?? {}) as BilingualContent;
+  const headline = pickBilingual(event.headline ?? event.name, ms.headline, lang);
+  const subheadline = pickBilingual(event.subheadline ?? t.default_sub, ms.subheadline, lang);
+  const welcome = pickBilingual(event.welcome_message ?? "", ms.welcome_message, lang);
+  const footer = pickBilingual(event.footer_note ?? "", ms.footer_note, lang);
+  const venueName = pickBilingual(event.venue_name ?? "", ms.venue_name, lang);
+  const venueAddress = pickBilingual(event.venue_address ?? "", ms.venue_address, lang);
+  const contact = pickBilingual(event.contact_info ?? "", ms.contact_info, lang);
+  const scheduleRaw = (event.schedule ?? []) as Array<{ time: string; label: string }>;
+  const scheduleMs = ms.schedule ?? [];
+  const schedule = scheduleRaw.map((s, i) => ({
+    time: s.time,
+    label: pickBilingual(s.label, scheduleMs[i]?.label, lang),
+  }));
 
   const q = query.trim();
   const searchQ = useQuery({
@@ -87,25 +82,24 @@ function GuestPage() {
   const tablesQ = useQuery({
     queryKey: ["public-tables", event.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("event_tables").select("id, name, location_note").eq("event_id", event.id);
+      const { data, error } = await supabase
+        .from("event_tables")
+        .select("id, name, location_note")
+        .eq("event_id", event.id);
       if (error) throw error;
       return data as EventTable[];
     },
   });
 
   const matches = searchQ.data ?? [];
-
-  const tableFor = (id: string | null) => tablesQ.data?.find((t) => t.id === id);
-  const displayFont =
-    event.font_style === "serif" || event.font_style === "display"
-      ? "'Instrument Serif', Georgia, serif"
-      : "'Inter', ui-sans-serif, system-ui, sans-serif";
+  const tableFor = (id: string | null) => tablesQ.data?.find((tb) => tb.id === id);
+  const displayFont = fontFor(event.font_style);
 
   const logoSize = event.logo_size || "medium";
   const logoClass =
-    logoSize === "small" ? "h-10 md:h-12" : logoSize === "large" ? "h-24 md:h-32" : "h-16 md:h-20";
+    logoSize === "small" ? "h-16 md:h-20" : logoSize === "large" ? "h-40 md:h-56" : "h-24 md:h-32";
   const logoSelectedClass =
-    logoSize === "small" ? "h-8" : logoSize === "large" ? "h-20" : "h-14";
+    logoSize === "small" ? "h-14" : logoSize === "large" ? "h-32" : "h-20";
   const hasLayout = !!event.layout_image_url;
 
   const bodyStyle: React.CSSProperties = {
@@ -115,27 +109,18 @@ function GuestPage() {
   };
   const accent = event.accent_color;
 
-  const LangToggle = (
-    <div
-      className="inline-flex overflow-hidden rounded-full border text-xs font-medium"
-      style={{ borderColor: accent + "60" }}
-    >
-      {(["en", "ms"] as Lang[]).map((l) => (
-        <button
-          key={l}
-          onClick={() => setLang(l)}
-          className="px-3 py-1 transition-colors"
-          style={
-            lang === l
-              ? { background: accent, color: event.background_color }
-              : { opacity: 0.7 }
-          }
-        >
-          {l === "en" ? "EN" : "BM"}
-        </button>
-      ))}
-    </div>
+  const langSwitch = (
+    <LangSwitch lang={lang} onChange={setLang} accent={accent} bg={event.background_color} />
   );
+
+  const eventDateStr = event.event_date
+    ? new Date(event.event_date).toLocaleDateString(lang === "ms" ? "ms-MY" : "en-GB", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    : null;
 
   if (selected) {
     const tbl = tableFor(selected.table_id);
@@ -143,10 +128,13 @@ function GuestPage() {
       <div style={bodyStyle} className="flex items-center justify-center px-6">
         <div className="w-full max-w-md py-16 text-center">
           <div className="mb-6 flex items-center justify-between">
-            <button onClick={() => setSelected(null)} className="inline-flex items-center gap-1 text-sm opacity-70 hover:opacity-100">
+            <button
+              onClick={() => setSelected(null)}
+              className="inline-flex items-center gap-1 text-sm opacity-70 hover:opacity-100"
+            >
               <ArrowLeft className="h-4 w-4" /> {t.search_again}
             </button>
-            {LangToggle}
+            {langSwitch}
           </div>
           {event.logo_url && (
             <img src={event.logo_url} alt="" className={`mx-auto mb-8 ${logoSelectedClass} object-contain`} />
@@ -158,7 +146,9 @@ function GuestPage() {
           {tbl ? (
             <>
               <p className="mt-10 text-xs uppercase tracking-[0.2em] opacity-70">{t.seated_at}</p>
-              <p className="mt-2 text-6xl" style={{ fontFamily: displayFont, color: accent }}>{tbl.name}</p>
+              <p className="mt-2 text-6xl" style={{ fontFamily: displayFont, color: accent }}>
+                {tbl.name}
+              </p>
               {tbl.location_note && (
                 <p className="mt-3 inline-flex items-center gap-1 text-sm opacity-80">
                   <MapPin className="h-3.5 w-3.5" /> {tbl.location_note}
@@ -169,12 +159,17 @@ function GuestPage() {
             <p className="mt-10 opacity-70">{t.no_table}</p>
           )}
           {selected.personal_message && (
-            <div className="mt-10 rounded-2xl border p-5 text-left text-sm opacity-90" style={{ borderColor: accent + "40" }}>
+            <div
+              className="mt-10 rounded-2xl border p-5 text-left text-sm opacity-90"
+              style={{ borderColor: accent + "40" }}
+            >
               {selected.personal_message}
             </div>
           )}
           {selected.meal_choice && (
-            <p className="mt-6 text-xs uppercase tracking-widest opacity-70">{t.meal} · {selected.meal_choice}</p>
+            <p className="mt-6 text-xs uppercase tracking-widest opacity-70">
+              {t.meal} · {selected.meal_choice}
+            </p>
           )}
         </div>
       </div>
@@ -183,32 +178,64 @@ function GuestPage() {
 
   return (
     <div style={bodyStyle}>
-      <div className="mx-auto max-w-2xl px-6 py-16 text-center">
-        <div className="mb-6 flex justify-end">{LangToggle}</div>
+      <div className="mx-auto max-w-2xl px-6 py-12 text-center">
+        <div className="mb-6 flex justify-end">{langSwitch}</div>
+
+        {/* Logo + title + date/venue block */}
         {event.logo_url && (
           <img src={event.logo_url} alt="" className={`mx-auto mb-8 ${logoClass} object-contain`} />
         )}
-        <p className="whitespace-pre-line text-xs uppercase tracking-[0.25em] opacity-70">{event.subheadline ?? t.default_sub}</p>
-        <h1 className="mt-4 whitespace-pre-line text-5xl leading-[1.05] md:text-6xl" style={{ fontFamily: displayFont }}>
-          {event.headline ?? event.name}
+        <h1
+          className="whitespace-pre-line text-5xl leading-[1.05] md:text-6xl"
+          style={{ fontFamily: displayFont }}
+        >
+          {headline}
         </h1>
-        {event.welcome_message && (
-          <p className="mx-auto mt-6 max-w-lg whitespace-pre-line text-base leading-relaxed opacity-80">
-            {event.welcome_message}
+        <p className="mt-4 whitespace-pre-line text-xs uppercase tracking-[0.25em] opacity-70">
+          {subheadline}
+        </p>
+
+        {/* Date + venue right under the title */}
+        {(eventDateStr || venueName || venueAddress) && (
+          <div className="mt-6 space-y-1 text-sm">
+            {eventDateStr && (
+              <p className="uppercase tracking-[0.2em] opacity-80">{eventDateStr}</p>
+            )}
+            {venueName && (
+              <p style={{ fontFamily: displayFont }} className="text-lg">
+                {venueName}
+              </p>
+            )}
+            {venueAddress && <p className="whitespace-pre-line opacity-80">{venueAddress}</p>}
+          </div>
+        )}
+
+        {welcome && (
+          <p className="mx-auto mt-8 max-w-lg whitespace-pre-line text-base leading-relaxed opacity-80">
+            {welcome}
           </p>
         )}
 
         {hasLayout && (
-          <div className="mx-auto mt-10 inline-flex overflow-hidden rounded-full border text-sm font-medium" style={{ borderColor: accent + "60" }}>
-            {([
-              { id: "seat" as const, label: t.tab_seat },
-              { id: "layout" as const, label: t.tab_layout },
-            ]).map((it) => (
+          <div
+            className="mx-auto mt-10 inline-flex overflow-hidden rounded-full border text-sm font-medium"
+            style={{ borderColor: accent + "60" }}
+          >
+            {(
+              [
+                { id: "seat" as const, label: t.tab_seat },
+                { id: "layout" as const, label: t.tab_layout },
+              ]
+            ).map((it) => (
               <button
                 key={it.id}
                 onClick={() => setTab(it.id)}
                 className="px-5 py-2 transition-colors"
-                style={tab === it.id ? { background: accent, color: event.background_color } : { opacity: 0.7 }}
+                style={
+                  tab === it.id
+                    ? { background: accent, color: event.background_color }
+                    : { opacity: 0.7 }
+                }
               >
                 {it.label}
               </button>
@@ -229,18 +256,28 @@ function GuestPage() {
           <>
             <div className="mx-auto mt-10 max-w-md">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60" />
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
+                  style={{ color: event.text_color, opacity: 0.55 }}
+                />
                 <Input
                   autoFocus
                   placeholder={t.placeholder}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  className="h-14 rounded-full border-2 pl-10 text-center text-lg"
-                  style={{ borderColor: accent }}
+                  className="h-14 rounded-full border-2 bg-transparent pl-10 text-center text-lg placeholder:opacity-60"
+                  style={{
+                    borderColor: accent,
+                    background: "transparent",
+                    color: event.text_color,
+                  }}
                 />
               </div>
               {matches.length > 0 && (
-                <div className="mt-3 divide-y overflow-hidden rounded-2xl border text-left" style={{ borderColor: accent + "40" }}>
+                <div
+                  className="mt-3 divide-y overflow-hidden rounded-2xl border text-left"
+                  style={{ borderColor: accent + "40" }}
+                >
                   {matches.map((g) => {
                     const tbl = tableFor(g.table_id);
                     return (
@@ -270,39 +307,31 @@ function GuestPage() {
               )}
             </div>
 
-            {(event.venue_name || event.venue_address || (event.schedule && event.schedule.length > 0)) && (
-              <div className="mx-auto mt-16 grid max-w-lg gap-6 text-left">
-                {(event.venue_name || event.venue_address) && (
-                  <div>
-                    <p className="text-xs uppercase tracking-widest opacity-70">{t.venue}</p>
-                    {event.venue_name && <p className="mt-1 text-lg" style={{ fontFamily: displayFont }}>{event.venue_name}</p>}
-                    {event.venue_address && <p className="text-sm opacity-80">{event.venue_address}</p>}
-                  </div>
-                )}
-                {event.schedule && event.schedule.length > 0 && (
-                  <div>
-                    <p className="text-xs uppercase tracking-widest opacity-70">{t.schedule}</p>
-                    <ul className="mt-2 space-y-1.5">
-                      {(event.schedule as Array<{ time: string; label: string }>).map((s, i) => (
-                        <li key={i} className="flex gap-4 text-sm">
-                          <span className="w-20 opacity-70">{s.time}</span>
-                          <span>{s.label}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+            {schedule.length > 0 && (
+              <div className="mx-auto mt-16 max-w-lg text-left">
+                <p className="text-xs uppercase tracking-widest opacity-70">{t.schedule}</p>
+                <ul className="mt-2 space-y-1.5">
+                  {schedule.map((s, i) => (
+                    <li key={i} className="flex gap-4 text-sm">
+                      <span className="w-20 opacity-70">{s.time}</span>
+                      <span>{s.label}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
           </>
         )}
 
-        {event.footer_note && (
-          <p className="mt-16 whitespace-pre-line text-sm opacity-70" style={{ fontFamily: displayFont, fontStyle: "italic" }}>
-            {event.footer_note}
+        {footer && (
+          <p
+            className="mt-16 whitespace-pre-line text-sm opacity-70"
+            style={{ fontFamily: displayFont, fontStyle: "italic" }}
+          >
+            {footer}
           </p>
         )}
-        {event.contact_info && <p className="mt-2 text-xs opacity-60">{event.contact_info}</p>}
+        {contact && <p className="mt-2 text-xs opacity-60">{contact}</p>}
       </div>
     </div>
   );
