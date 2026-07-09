@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      event_collaborators: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          event_id: string
+          id: string
+          invite_token: string
+          invited_by: string
+          invited_email: string
+          role: string
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          event_id: string
+          id?: string
+          invite_token?: string
+          invited_by: string
+          invited_email: string
+          role?: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          event_id?: string
+          id?: string
+          invite_token?: string
+          invited_by?: string
+          invited_email?: string
+          role?: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_collaborators_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_tables: {
         Row: {
           capacity: number | null
@@ -60,7 +110,9 @@ export type Database = {
           accent_color: string
           background_color: string
           contact_info: string | null
+          content_ms: Json
           created_at: string
+          default_language: string
           event_date: string | null
           font_style: string
           footer_note: string | null
@@ -87,7 +139,9 @@ export type Database = {
           accent_color?: string
           background_color?: string
           contact_info?: string | null
+          content_ms?: Json
           created_at?: string
+          default_language?: string
           event_date?: string | null
           font_style?: string
           footer_note?: string | null
@@ -114,7 +168,9 @@ export type Database = {
           accent_color?: string
           background_color?: string
           contact_info?: string | null
+          content_ms?: Json
           created_at?: string
+          default_language?: string
           event_date?: string | null
           font_style?: string
           footer_note?: string | null
