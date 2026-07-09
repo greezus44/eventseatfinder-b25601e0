@@ -16,10 +16,13 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { ArrowLeft, Copy, Download, ExternalLink, Plus, Trash2, MessageSquare } from "lucide-react";
+import { ArrowLeft, Copy, Download, ExternalLink, Plus, Trash2, MessageSquare, Mail } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
 } from "@/components/ui/dialog";
+import { FONT_PRESETS, fontFor } from "@/lib/font";
+import { T, type Lang, type BilingualContent, LANG_LABEL, pickBilingual } from "@/lib/i18n";
+import { slugify } from "@/lib/slug";
 
 export const Route = createFileRoute("/_authenticated/events/$id")({
   component: EventManager,
@@ -34,6 +37,9 @@ type EventRow = {
   venue_name: string | null; venue_address: string | null; contact_info: string | null;
   is_published: boolean; schedule: Array<{ time: string; label: string }>;
   public_base_url: string | null;
+  content_ms: BilingualContent;
+  default_language: string;
+  owner_id: string;
 };
 
 function EventManager() {
@@ -88,6 +94,7 @@ function EventManager() {
           <TabsTrigger value="tables">Tables</TabsTrigger>
           <TabsTrigger value="customize">Customize</TabsTrigger>
           <TabsTrigger value="share">Share</TabsTrigger>
+          <TabsTrigger value="team">Team</TabsTrigger>
         </TabsList>
 
         <TabsContent value="guests" className="mt-6"><GuestsTab eventId={id} /></TabsContent>
@@ -97,6 +104,9 @@ function EventManager() {
         </TabsContent>
         <TabsContent value="share" className="mt-6">
           <ShareTab event={event} publicUrl={publicUrl} isPreviewHost={isPreviewHost} onChange={() => qc.invalidateQueries({ queryKey: ["event", id] })} />
+        </TabsContent>
+        <TabsContent value="team" className="mt-6">
+          <TeamTab event={event} />
         </TabsContent>
       </Tabs>
     </main>
@@ -118,7 +128,6 @@ function TablesTab({ eventId }: { eventId: string }) {
   const [capacity, setCapacity] = useState("");
   const [note, setNote] = useState("");
 
-  // Bulk add
   const [bulkCount, setBulkCount] = useState("15");
   const [bulkCapacity, setBulkCapacity] = useState("10");
   const [bulkPrefix, setBulkPrefix] = useState("Table");
@@ -190,7 +199,7 @@ function TablesTab({ eventId }: { eventId: string }) {
                   <Input type="number" defaultValue={t.capacity ?? ""} onBlur={(e) => updateTable(t.id, { capacity: e.target.value ? Number(e.target.value) : null })} className="h-8" />
                 </TableCell>
                 <TableCell>
-                  <Input defaultValue={t.location_note ?? ""} onBlur={(e) => updateTable(t.id, { location_note: e.target.value || null })} className="h-8" placeholder="e.g. near the window" />
+                  <Input defaultValue={t.location_note ?? ""} onBlur={(e) => updateTable(t.id, { location_note: e.target.value || null })} className="h-8" placeholder="Near the window" />
                 </TableCell>
                 <TableCell>
                   <Button variant="ghost" size="icon" onClick={() => remove(t.id)}><Trash2 className="h-4 w-4" /></Button>
@@ -207,7 +216,6 @@ function TablesTab({ eventId }: { eventId: string }) {
       <div className="space-y-4">
         <form onSubmit={bulkAdd} className="h-fit space-y-3 rounded-2xl border border-border bg-card p-5">
           <h3 className="font-display text-xl">Add multiple tables</h3>
-          <p className="text-xs text-muted-foreground">e.g. add 15 tables of 10 capacity in one go</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>How many</Label>
@@ -240,7 +248,7 @@ function TablesTab({ eventId }: { eventId: string }) {
             <Input type="number" value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="8" />
           </div>
           <div className="space-y-1.5">
-            <Label>Location note (optional)</Label>
+            <Label>Location note</Label>
             <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Near the garden" />
           </div>
           <Button type="submit" className="w-full"><Plus className="h-4 w-4" /> Add</Button>
@@ -256,11 +264,12 @@ function GuestsTab({ eventId }: { eventId: string }) {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [bulk, setBulk] = useState("");
+  const [sortBy, setSortBy] = useState<"name" | "table">("name");
 
   const tablesQ = useQuery({
     queryKey: ["tables", eventId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("event_tables").select("id, name").eq("event_id", eventId).order("sort_order");
+      const { data, error } = await supabase.from("event_tables").select("id, name, sort_order").eq("event_id", eventId).order("sort_order");
       if (error) throw error;
       return data;
     },
@@ -276,8 +285,18 @@ function GuestsTab({ eventId }: { eventId: string }) {
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return guestsQ.data?.filter((g) => !term || g.full_name.toLowerCase().includes(term)) ?? [];
-  }, [guestsQ.data, search]);
+    const list = guestsQ.data?.filter((g) => !term || g.full_name.toLowerCase().includes(term)) ?? [];
+    if (sortBy === "table") {
+      const orderById = new Map(tablesQ.data?.map((t, i) => [t.id, i]));
+      return [...list].sort((a, b) => {
+        const ai = a.table_id ? orderById.get(a.table_id) ?? 999 : 1000;
+        const bi = b.table_id ? orderById.get(b.table_id) ?? 999 : 1000;
+        if (ai !== bi) return ai - bi;
+        return a.full_name.localeCompare(b.full_name);
+      });
+    }
+    return [...list].sort((a, b) => a.full_name.localeCompare(b.full_name));
+  }, [guestsQ.data, tablesQ.data, search, sortBy]);
 
   const addBulk = async () => {
     const names = bulk.split("\n").map((s) => s.trim()).filter(Boolean);
@@ -307,9 +326,19 @@ function GuestsTab({ eventId }: { eventId: string }) {
   return (
     <div className="grid gap-6 md:grid-cols-[1fr_320px]">
       <div>
-        <div className="mb-3 flex items-center gap-2">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           <Input placeholder="Search guests…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
-          <span className="text-sm text-muted-foreground">{filtered.length} guest{filtered.length !== 1 ? "s" : ""}</span>
+          <div className="ml-auto flex items-center gap-2">
+            <Label className="text-xs text-muted-foreground">Group by</Label>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as "name" | "table")}>
+              <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name">Name</SelectItem>
+                <SelectItem value="table">Table</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground">{filtered.length} guest{filtered.length !== 1 ? "s" : ""}</span>
+          </div>
         </div>
         <div className="rounded-2xl border border-border bg-card">
           <Table>
@@ -358,7 +387,7 @@ function GuestsTab({ eventId }: { eventId: string }) {
 
       <div className="h-fit space-y-3 rounded-2xl border border-border bg-card p-5">
         <h3 className="font-display text-xl">Add guests</h3>
-        <p className="text-xs text-muted-foreground">One name per line — paste from a list.</p>
+        <p className="text-xs text-muted-foreground">One name per line.</p>
         <Textarea rows={8} value={bulk} onChange={(e) => setBulk(e.target.value)} placeholder={"Amelia Chen\nNoah Patel\nJordan Lee"} />
         <Button onClick={addBulk} className="w-full"><Plus className="h-4 w-4" /> Add all</Button>
       </div>
@@ -392,12 +421,14 @@ function PersonalMessageDialog({ guestName, value, onSave }: { guestName: string
 
 /* ---------------- CUSTOMIZE ---------------- */
 function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void }) {
-  const [form, setForm] = useState(event);
+  const [form, setForm] = useState<EventRow>(event);
+  const [contentLang, setContentLang] = useState<Lang>("en");
+  const [previewLang, setPreviewLang] = useState<Lang>((event.default_language as Lang) ?? "en");
   useEffect(() => setForm(event), [event]);
 
   const mut = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("events").update({
+      const payload = {
         name: form.name,
         event_date: form.event_date,
         headline: form.headline,
@@ -415,7 +446,10 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
         venue_address: form.venue_address,
         contact_info: form.contact_info,
         schedule: form.schedule ?? [],
-      }).eq("id", event.id);
+        content_ms: form.content_ms ?? {},
+        default_language: form.default_language,
+      } as never;
+      const { error } = await supabase.from("events").update(payload).eq("id", event.id);
       if (error) throw error;
     },
     onSuccess: () => { toast.success("Saved"); onSaved(); },
@@ -423,6 +457,8 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
   });
 
   const set = <K extends keyof EventRow>(k: K, v: EventRow[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const setMs = (patch: Partial<BilingualContent>) =>
+    setForm((f) => ({ ...f, content_ms: { ...(f.content_ms ?? {}), ...patch } }));
 
   const updateSchedule = (i: number, patch: Partial<{ time: string; label: string }>) => {
     const next = [...(form.schedule ?? [])];
@@ -432,27 +468,109 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
   const addSchedule = () => set("schedule", [...(form.schedule ?? []), { time: "", label: "" }]);
   const removeSchedule = (i: number) => set("schedule", (form.schedule ?? []).filter((_, idx) => idx !== i));
 
+  const updateScheduleMs = (i: number, label: string) => {
+    const next = [...(form.content_ms?.schedule ?? [])];
+    while (next.length < i + 1) next.push({ time: "", label: "" });
+    next[i] = { time: form.schedule?.[i]?.time ?? "", label };
+    setMs({ schedule: next });
+  };
+
+  const ms = form.content_ms ?? {};
+  const isMs = contentLang === "ms";
+
   return (
     <div className="grid gap-6 md:grid-cols-[1fr_360px]">
       <div className="space-y-6">
         <Section title="Content">
-          <Field label="Event name"><Input value={form.name} onChange={(e) => set("name", e.target.value)} /></Field>
-          <Field label="Headline (large text — press Enter for line breaks)">
-            <Textarea rows={2} value={form.headline ?? ""} onChange={(e) => set("headline", e.target.value)} />
+          <div className="flex items-center justify-between gap-3">
+            <Label className="text-xs text-muted-foreground">Editing language</Label>
+            <div className="inline-flex overflow-hidden rounded-full border border-border text-xs">
+              {(["en", "ms"] as Lang[]).map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  onClick={() => setContentLang(l)}
+                  className={`px-3 py-1.5 transition ${contentLang === l ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {LANG_LABEL[l]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Field label="Event name">
+            <Input value={form.name} onChange={(e) => set("name", e.target.value)} />
           </Field>
-          <Field label="Subheadline (press Enter for line breaks)">
-            <Textarea rows={2} value={form.subheadline ?? ""} onChange={(e) => set("subheadline", e.target.value)} />
+
+          <Field label={isMs ? "Headline (BM)" : "Headline"}>
+            <Textarea
+              rows={2}
+              value={isMs ? ms.headline ?? "" : form.headline ?? ""}
+              onChange={(e) => isMs ? setMs({ headline: e.target.value }) : set("headline", e.target.value)}
+            />
           </Field>
-          <Field label="Welcome message"><Textarea rows={4} value={form.welcome_message ?? ""} onChange={(e) => set("welcome_message", e.target.value)} /></Field>
-          <Field label="Footer note (press Enter for line breaks)">
-            <Textarea rows={2} value={form.footer_note ?? ""} onChange={(e) => set("footer_note", e.target.value)} placeholder="With love, A + N" />
+          <Field label={isMs ? "Subheadline (BM)" : "Subheadline"}>
+            <Textarea
+              rows={2}
+              value={isMs ? ms.subheadline ?? "" : form.subheadline ?? ""}
+              onChange={(e) => isMs ? setMs({ subheadline: e.target.value }) : set("subheadline", e.target.value)}
+            />
+          </Field>
+          <Field label={isMs ? "Welcome message (BM)" : "Welcome message"}>
+            <Textarea
+              rows={4}
+              value={isMs ? ms.welcome_message ?? "" : form.welcome_message ?? ""}
+              onChange={(e) => isMs ? setMs({ welcome_message: e.target.value }) : set("welcome_message", e.target.value)}
+            />
+          </Field>
+          <Field label={isMs ? "Footer note (BM)" : "Footer note"}>
+            <Textarea
+              rows={2}
+              value={isMs ? ms.footer_note ?? "" : form.footer_note ?? ""}
+              onChange={(e) => isMs ? setMs({ footer_note: e.target.value }) : set("footer_note", e.target.value)}
+              placeholder="With love, A + N"
+            />
+          </Field>
+
+          <Field label="Default language shown to guests">
+            <Select
+              value={form.default_language}
+              onValueChange={(v) => set("default_language", v)}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="en">{LANG_LABEL.en}</SelectItem>
+                <SelectItem value="ms">{LANG_LABEL.ms}</SelectItem>
+              </SelectContent>
+            </Select>
           </Field>
         </Section>
 
         <Section title="Venue">
-          <Field label="Venue name"><Input value={form.venue_name ?? ""} onChange={(e) => set("venue_name", e.target.value)} /></Field>
-          <Field label="Address"><Input value={form.venue_address ?? ""} onChange={(e) => set("venue_address", e.target.value)} /></Field>
-          <Field label="Contact / help text"><Input value={form.contact_info ?? ""} onChange={(e) => set("contact_info", e.target.value)} placeholder="Ask the host if you need help" /></Field>
+          <Field label="Event date">
+            <Input type="date" value={form.event_date ?? ""} onChange={(e) => set("event_date", e.target.value || null)} />
+          </Field>
+          <Field label={isMs ? "Venue name (BM)" : "Venue name"}>
+            <Input
+              value={isMs ? ms.venue_name ?? "" : form.venue_name ?? ""}
+              onChange={(e) => isMs ? setMs({ venue_name: e.target.value }) : set("venue_name", e.target.value)}
+            />
+          </Field>
+          <Field label={isMs ? "Address (BM)" : "Address"}>
+            <Textarea
+              rows={2}
+              value={isMs ? ms.venue_address ?? "" : form.venue_address ?? ""}
+              onChange={(e) => isMs ? setMs({ venue_address: e.target.value }) : set("venue_address", e.target.value)}
+              placeholder="Line 1&#10;Line 2"
+            />
+          </Field>
+          <Field label={isMs ? "Contact / help text (BM)" : "Contact / help text"}>
+            <Input
+              value={isMs ? ms.contact_info ?? "" : form.contact_info ?? ""}
+              onChange={(e) => isMs ? setMs({ contact_info: e.target.value }) : set("contact_info", e.target.value)}
+              placeholder="Ask the host if you need help"
+            />
+          </Field>
         </Section>
 
         <Section title="Schedule">
@@ -460,7 +578,11 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
             {(form.schedule ?? []).map((s, i) => (
               <div key={i} className="flex gap-2">
                 <Input className="w-32" placeholder="5:00 pm" value={s.time} onChange={(e) => updateSchedule(i, { time: e.target.value })} />
-                <Input placeholder="Ceremony" value={s.label} onChange={(e) => updateSchedule(i, { label: e.target.value })} />
+                <Input
+                  placeholder={isMs ? "Majlis" : "Ceremony"}
+                  value={isMs ? ms.schedule?.[i]?.label ?? "" : s.label}
+                  onChange={(e) => isMs ? updateScheduleMs(i, e.target.value) : updateSchedule(i, { label: e.target.value })}
+                />
                 <Button variant="ghost" size="icon" onClick={() => removeSchedule(i)}><Trash2 className="h-4 w-4" /></Button>
               </div>
             ))}
@@ -521,7 +643,7 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
           </div>
 
           <Field label="Font style">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {FONT_PRESETS.map((f) => {
                 const active = form.font_style === f.value;
                 return (
@@ -547,7 +669,7 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
               <div className="grid grid-cols-3 gap-2">
                 {(["small", "medium", "large"] as const).map((s) => {
                   const active = (form.logo_size || "medium") === s;
-                  const h = s === "small" ? "h-6" : s === "medium" ? "h-10" : "h-14";
+                  const h = s === "small" ? "h-10" : s === "medium" ? "h-16" : "h-24";
                   return (
                     <button
                       key={s}
@@ -563,7 +685,7 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
               </div>
             </Field>
           )}
-          <Field label="Event space layout (shown to guests in a separate tab)">
+          <Field label="Event space layout">
             <ImageUpload value={form.layout_image_url} onChange={(url) => set("layout_image_url", url)} kind="hero" />
           </Field>
         </Section>
@@ -575,35 +697,89 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
         </div>
       </div>
 
-      <div className="h-fit rounded-2xl border border-border bg-card p-2">
-        <p className="px-3 pt-2 text-xs uppercase tracking-widest text-muted-foreground">Live preview</p>
-        <div
-          className="mt-2 aspect-[9/16] w-full overflow-hidden rounded-xl border border-border"
-          style={{ background: form.background_color, color: form.text_color }}
-        >
-          <div className="flex h-full flex-col items-center justify-center p-6 text-center">
-            {form.logo_url && <img src={form.logo_url} alt="" className="mb-4 h-10 object-contain" />}
-            <p className="text-xs uppercase tracking-[0.2em] opacity-70">{form.subheadline}</p>
-            <h2
-              className="mt-3 text-3xl leading-tight"
-              style={{ fontFamily: fontFor(form.font_style) }}
-            >
-              {form.headline || form.name}
-            </h2>
-            <p className="mt-3 max-w-[24ch] text-xs opacity-80">{form.welcome_message}</p>
-            <div className="mt-4 h-8 w-32 rounded" style={{ background: form.accent_color }} />
-            <p className="mt-4 text-[10px] opacity-60">{form.footer_note}</p>
+      {/* Live preview mirrors the guest page */}
+      <div className="h-fit space-y-2">
+        <div className="flex items-center justify-between px-1">
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">Live preview</p>
+          <div className="inline-flex overflow-hidden rounded-full border border-border text-[10px]">
+            {(["en", "ms"] as Lang[]).map((l) => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => setPreviewLang(l)}
+                className={`px-2 py-1 transition ${previewLang === l ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                {LANG_LABEL[l]}
+              </button>
+            ))}
           </div>
+        </div>
+        <div className="overflow-hidden rounded-2xl border border-border">
+          <GuestPreview form={form} lang={previewLang} />
         </div>
       </div>
     </div>
   );
 }
 
-function fontFor(style: string) {
-  if (style === "serif") return "'Instrument Serif', Georgia, serif";
-  if (style === "display") return "'Instrument Serif', Georgia, serif";
-  return "'Inter', ui-sans-serif, system-ui, sans-serif";
+function GuestPreview({ form, lang }: { form: EventRow; lang: Lang }) {
+  const t = T[lang];
+  const ms = form.content_ms ?? {};
+  const headline = pickBilingual(form.headline ?? form.name, ms.headline, lang);
+  const subheadline = pickBilingual(form.subheadline ?? t.default_sub, ms.subheadline, lang);
+  const welcome = pickBilingual(form.welcome_message ?? "", ms.welcome_message, lang);
+  const footer = pickBilingual(form.footer_note ?? "", ms.footer_note, lang);
+  const venueName = pickBilingual(form.venue_name ?? "", ms.venue_name, lang);
+  const venueAddress = pickBilingual(form.venue_address ?? "", ms.venue_address, lang);
+  const displayFont = fontFor(form.font_style);
+  const accent = form.accent_color;
+  const logoClass =
+    form.logo_size === "small" ? "h-12" : form.logo_size === "large" ? "h-28" : "h-20";
+
+  const eventDateStr = form.event_date
+    ? new Date(form.event_date).toLocaleDateString(lang === "ms" ? "ms-MY" : "en-GB", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    : null;
+
+  return (
+    <div
+      className="aspect-[9/16] w-full overflow-auto"
+      style={{ background: form.background_color, color: form.text_color }}
+    >
+      <div className="flex min-h-full flex-col items-center px-5 py-8 text-center">
+        {form.logo_url && <img src={form.logo_url} alt="" className={`mb-5 ${logoClass} object-contain`} />}
+        <h2 className="whitespace-pre-line text-2xl leading-tight" style={{ fontFamily: displayFont }}>
+          {headline}
+        </h2>
+        <p className="mt-2 whitespace-pre-line text-[10px] uppercase tracking-[0.2em] opacity-70">
+          {subheadline}
+        </p>
+        {(eventDateStr || venueName || venueAddress) && (
+          <div className="mt-3 space-y-0.5 text-[11px]">
+            {eventDateStr && <p className="uppercase tracking-[0.15em] opacity-80">{eventDateStr}</p>}
+            {venueName && <p style={{ fontFamily: displayFont }} className="text-sm">{venueName}</p>}
+            {venueAddress && <p className="whitespace-pre-line opacity-80">{venueAddress}</p>}
+          </div>
+        )}
+        {welcome && <p className="mt-4 max-w-[28ch] whitespace-pre-line text-[11px] opacity-80">{welcome}</p>}
+        <div
+          className="mt-5 flex h-9 w-full max-w-[220px] items-center rounded-full border-2 px-3 text-[11px]"
+          style={{ borderColor: accent, background: "transparent", color: form.text_color, opacity: 0.85 }}
+        >
+          <span className="opacity-60">{t.placeholder}</span>
+        </div>
+        {footer && (
+          <p className="mt-auto pt-6 text-[10px] italic opacity-70" style={{ fontFamily: displayFont }}>
+            {footer}
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 const COLOR_PRESETS: Array<{ name: string; bg: string; text: string; accent: string }> = [
@@ -620,13 +796,6 @@ const COLOR_PRESETS: Array<{ name: string; bg: string; text: string; accent: str
   { name: "Charcoal",  bg: "#1a1a1a", text: "#f5f5f5", accent: "#e2b04a" },
   { name: "Mint",      bg: "#eaf6f0", text: "#0f2a1e", accent: "#2fa06f" },
 ];
-
-const FONT_PRESETS: Array<{ value: string; label: string; sample: string }> = [
-  { value: "sans",    label: "Modern sans",   sample: "Clean & contemporary" },
-  { value: "serif",   label: "Elegant serif", sample: "Timeless & refined" },
-  { value: "display", label: "Display serif", sample: "Dramatic & editorial" },
-];
-
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -689,14 +858,12 @@ function ImageUpload({ value, onChange, kind }: { value: string | null; onChange
 /* ---------------- SHARE ---------------- */
 function ShareTab({ event, publicUrl, isPreviewHost, onChange }: { event: EventRow; publicUrl: string; isPreviewHost: boolean; onChange: () => void }) {
   const [qr, setQr] = useState<string>("");
-  const [baseInput, setBaseInput] = useState(event.public_base_url ?? "");
-  const [savingBase, setSavingBase] = useState(false);
+  const [slugInput, setSlugInput] = useState(event.slug);
+  const [savingSlug, setSavingSlug] = useState(false);
 
-  useEffect(() => setBaseInput(event.public_base_url ?? ""), [event.public_base_url]);
+  useEffect(() => setSlugInput(event.slug), [event.slug]);
 
-  // Auto-save the current origin as the public share URL when an admin opens
-  // this page from the published site — so guests scanning the QR never land
-  // on the preview host (which requires Lovable sign-in).
+  // Auto-save current origin as the share URL when opened from the published site
   useEffect(() => {
     if (event.public_base_url || isPreviewHost) return;
     const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -718,26 +885,23 @@ function ShareTab({ event, publicUrl, isPreviewHost, onChange }: { event: EventR
     onChange();
   };
 
-  const saveBase = async () => {
-    const normalized = baseInput.trim().replace(/\/+$/, "");
-    if (normalized && !/^https?:\/\//i.test(normalized)) {
-      return toast.error("Enter a full URL, e.g. https://your-site.lovable.app");
-    }
-    setSavingBase(true);
-    const { error } = await supabase.from("events").update({ public_base_url: normalized || null }).eq("id", event.id);
-    setSavingBase(false);
-    if (error) return toast.error(error.message);
-    toast.success("Share URL saved");
+  const saveSlug = async () => {
+    const cleaned = slugInput.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
+    if (!cleaned) return toast.error("Enter a slug");
+    if (cleaned === event.slug) return;
+    setSavingSlug(true);
+    const { error } = await supabase.from("events").update({ slug: cleaned }).eq("id", event.id);
+    setSavingSlug(false);
+    if (error) return toast.error(error.message.includes("duplicate") ? "That link is already taken" : error.message);
+    toast.success("Share link updated");
     onChange();
   };
 
   const copy = () => {
-    if (!publicUrl.startsWith("http")) return toast.error("Set your public share URL first");
+    if (!publicUrl.startsWith("http")) return toast.error("Publish your app first");
     navigator.clipboard.writeText(publicUrl);
     toast.success("Link copied");
   };
-
-  const needsBase = isPreviewHost && !event.public_base_url;
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
@@ -745,30 +909,25 @@ function ShareTab({ event, publicUrl, isPreviewHost, onChange }: { event: EventR
         <h3 className="font-display text-xl">Public link</h3>
 
         <div className="mt-4 space-y-1.5">
-          <Label className="text-xs uppercase tracking-widest text-muted-foreground">Public share URL</Label>
-          <div className="flex gap-2">
+          <Label className="text-xs uppercase tracking-widest text-muted-foreground">Custom link name</Label>
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 rounded-l-md border border-r-0 border-input bg-muted px-3 py-2 font-mono text-xs text-muted-foreground">
+              /e/
+            </span>
             <Input
-              value={baseInput}
-              onChange={(e) => setBaseInput(e.target.value)}
-              placeholder="https://your-site.lovable.app"
-              className="font-mono text-xs"
+              value={slugInput}
+              onChange={(e) => setSlugInput(e.target.value)}
+              placeholder="my-wedding"
+              className="-ml-2 rounded-l-none font-mono text-xs"
             />
-            <Button onClick={saveBase} disabled={savingBase} variant="outline">
-              {savingBase ? "…" : "Save"}
+            <Button onClick={saveSlug} disabled={savingSlug || slugInput === event.slug} variant="outline">
+              {savingSlug ? "…" : "Save"}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            The domain where guests will open this page. Use your published site — the editor preview URL requires sign-in and won't work for guests.
-          </p>
+          <p className="text-xs text-muted-foreground">Lowercase letters, numbers and hyphens.</p>
         </div>
 
-        {needsBase && (
-          <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-            You're currently on the editor preview, which asks visitors to sign in. Publish your app and paste that URL above so guests can open the QR code without an account.
-          </div>
-        )}
-
-        <div className="mt-4 flex items-center gap-2">
+        <div className="mt-6 flex items-center gap-2">
           <Input readOnly value={publicUrl} className="font-mono text-xs" />
           <Button size="icon" variant="outline" onClick={copy}><Copy className="h-4 w-4" /></Button>
         </div>
@@ -795,14 +954,132 @@ function ShareTab({ event, publicUrl, isPreviewHost, onChange }: { event: EventR
             <a href={qr} download={`${event.slug}-qr.png`}>
               <Button variant="outline" className="mt-4"><Download className="h-4 w-4" /> Download PNG</Button>
             </a>
-            <p className="mt-3 text-xs text-muted-foreground">Print and place at the entrance — anyone can scan without signing in.</p>
+            <p className="mt-3 text-xs text-muted-foreground">Print and place at the entrance — guests scan without signing in.</p>
           </>
         ) : (
-          <p className="mt-6 text-sm text-muted-foreground">
-            Set your public share URL to generate a QR code guests can scan.
-          </p>
+          <p className="mt-6 text-sm text-muted-foreground">Publish your app to generate a QR code.</p>
         )}
       </div>
     </div>
   );
 }
+
+/* ---------------- TEAM (Collaborators) ---------------- */
+function TeamTab({ event }: { event: EventRow }) {
+  const qc = useQueryClient();
+  const [email, setEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+  const collabQ = useQuery({
+    queryKey: ["collaborators", event.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("event_collaborators")
+        .select("*")
+        .eq("event_id", event.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as Array<{
+        id: string; invited_email: string; status: string; invite_token: string; role: string;
+      }>;
+    },
+  });
+
+  const invite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return toast.error("Enter a valid email");
+    setInviting(true);
+    const { data: userData } = await supabase.auth.getUser();
+    const { error } = await supabase.from("event_collaborators").insert({
+      event_id: event.id,
+      invited_email: clean,
+      role: "editor",
+      status: "pending",
+      invited_by: userData.user!.id,
+    });
+    setInviting(false);
+    if (error) return toast.error(error.message.includes("duplicate") ? "That email is already invited" : error.message);
+    setEmail("");
+    toast.success("Invite created — copy the link to share");
+    qc.invalidateQueries({ queryKey: ["collaborators", event.id] });
+  };
+
+  const remove = async (id: string) => {
+    const { error } = await supabase.from("event_collaborators").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["collaborators", event.id] });
+  };
+
+  const linkFor = (token: string) => `${origin}/invite/${token}`;
+
+  const copyLink = (token: string, email: string) => {
+    navigator.clipboard.writeText(linkFor(token));
+    toast.success(`Invite link for ${email} copied`);
+  };
+
+  const mailto = (token: string, email: string) => {
+    const subject = encodeURIComponent(`Co-manage "${event.name}" with me on Seatly`);
+    const body = encodeURIComponent(
+      `Hi,\n\nI've invited you as an editor on "${event.name}". Accept your invite here:\n\n${linkFor(token)}\n\nThanks!`,
+    );
+    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+  };
+
+  return (
+    <div className="grid gap-6 md:grid-cols-[1fr_320px]">
+      <div className="rounded-2xl border border-border bg-card p-6">
+        <h3 className="font-display text-xl">Collaborators</h3>
+        <p className="mt-1 text-sm text-muted-foreground">Invite others to co-edit this event.</p>
+
+        <div className="mt-4 divide-y">
+          {collabQ.data?.length === 0 && (
+            <p className="py-8 text-center text-sm text-muted-foreground">No collaborators yet.</p>
+          )}
+          {collabQ.data?.map((c) => (
+            <div key={c.id} className="flex flex-wrap items-center gap-3 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{c.invited_email}</p>
+                <p className="text-xs text-muted-foreground capitalize">{c.role} · {c.status}</p>
+              </div>
+              {c.status === "pending" && (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => copyLink(c.invite_token, c.invited_email)}>
+                    <Copy className="h-3.5 w-3.5" /> Copy link
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => mailto(c.invite_token, c.invited_email)}>
+                    <Mail className="h-3.5 w-3.5" /> Email
+                  </Button>
+                </>
+              )}
+              <Button variant="ghost" size="icon" onClick={() => remove(c.id)}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <form onSubmit={invite} className="h-fit space-y-3 rounded-2xl border border-border bg-card p-5">
+        <h3 className="font-display text-xl">Invite by email</h3>
+        <Input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="friend@example.com"
+        />
+        <Button type="submit" className="w-full" disabled={inviting}>
+          <Plus className="h-4 w-4" /> {inviting ? "Creating…" : "Send invite"}
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Creates a private invite link — send it via the Email button or copy it to share any way you like. The invitee signs in with this email to accept.
+        </p>
+      </form>
+    </div>
+  );
+}
+
+// keep default suffix util for future use
+void slugify;
