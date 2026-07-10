@@ -95,6 +95,12 @@ function GuestPage() {
   const tableFor = (id: string | null) => tablesQ.data?.find((tb) => tb.id === id);
   const displayFont = fontFor(event.font_style);
 
+  const evAny = event as unknown as Record<string, unknown>;
+  const eventTime = (evAny.event_time as string | null) ?? null;
+  const titleScale = Number(evAny.title_scale ?? 1) || 1;
+  const subtitleScale = Number(evAny.subtitle_scale ?? 1) || 1;
+  const bodyScale = Number(evAny.body_scale ?? 1) || 1;
+
   const logoSize = event.logo_size || "medium";
   const logoClass =
     logoSize === "small" ? "h-16 md:h-20" : logoSize === "large" ? "h-40 md:h-56" : "h-24 md:h-32";
