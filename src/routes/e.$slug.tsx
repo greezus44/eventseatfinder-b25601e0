@@ -192,32 +192,40 @@ function GuestPage() {
           <img src={event.logo_url} alt="" className={`mx-auto mb-8 ${logoClass} object-contain`} />
         )}
         <h1
-          className="whitespace-pre-line text-5xl leading-[1.05] md:text-6xl"
-          style={{ fontFamily: displayFont }}
+          className="whitespace-pre-line leading-[1.05]"
+          style={{ fontFamily: displayFont, fontSize: `${3 * titleScale}rem` }}
         >
           {headline}
         </h1>
-        <p className="mt-4 whitespace-pre-line text-xs uppercase tracking-[0.25em] opacity-70">
+        <p
+          className="mt-4 whitespace-pre-line uppercase tracking-[0.25em] opacity-70"
+          style={{ fontSize: `${0.75 * subtitleScale}rem` }}
+        >
           {subheadline}
         </p>
 
-        {/* Date + venue right under the title */}
-        {(eventDateStr || venueName || venueAddress) && (
+        {/* Date, time, venue name under the title */}
+        {(eventDateStr || eventTime || venueName) && (
           <div className="mt-6 space-y-1 text-sm">
             {eventDateStr && (
               <p className="uppercase tracking-[0.2em] opacity-80">{eventDateStr}</p>
+            )}
+            {eventTime && (
+              <p className="uppercase tracking-[0.2em] opacity-80">{eventTime}</p>
             )}
             {venueName && (
               <p style={{ fontFamily: displayFont }} className="text-lg">
                 {venueName}
               </p>
             )}
-            {venueAddress && <p className="whitespace-pre-line opacity-80">{venueAddress}</p>}
           </div>
         )}
 
         {welcome && (
-          <p className="mx-auto mt-8 max-w-lg whitespace-pre-line text-base leading-relaxed opacity-80">
+          <p
+            className="mx-auto mt-8 max-w-lg whitespace-pre-line leading-relaxed opacity-80"
+            style={{ fontSize: `${1 * bodyScale}rem` }}
+          >
             {welcome}
           </p>
         )}
