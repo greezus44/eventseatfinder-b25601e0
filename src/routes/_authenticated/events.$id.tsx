@@ -23,6 +23,7 @@ import {
 import { FONT_PRESETS, fontFor } from "@/lib/font";
 import { T, type Lang, type BilingualContent, LANG_LABEL, pickBilingual } from "@/lib/i18n";
 import { slugify } from "@/lib/slug";
+import { translateFields } from "@/lib/translate.functions";
 
 export const Route = createFileRoute("/_authenticated/events/$id")({
   component: EventManager,
