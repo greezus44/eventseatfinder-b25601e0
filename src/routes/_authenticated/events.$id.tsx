@@ -433,6 +433,10 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
       const payload = {
         name: form.name,
         event_date: form.event_date,
+        event_time: form.event_time,
+        title_scale: form.title_scale,
+        subtitle_scale: form.subtitle_scale,
+        body_scale: form.body_scale,
         headline: form.headline,
         subheadline: form.subheadline,
         welcome_message: form.welcome_message,
