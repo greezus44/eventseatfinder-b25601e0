@@ -488,21 +488,34 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
     <div className="grid gap-6 md:grid-cols-[1fr_360px]">
       <div className="space-y-6">
         <Section title="Content">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <Label className="text-xs text-muted-foreground">Editing language</Label>
-            <div className="inline-flex overflow-hidden rounded-full border border-border text-xs">
-              {(["en", "ms"] as Lang[]).map((l) => (
-                <button
-                  key={l}
-                  type="button"
-                  onClick={() => setContentLang(l)}
-                  className={`px-3 py-1.5 transition ${contentLang === l ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
-                >
-                  {LANG_LABEL[l]}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={translating}
+                onClick={autoTranslate}
+                title="Translate all English fields to Bahasa Melayu using AI"
+              >
+                {translating ? "Translating…" : "Auto-translate → BM"}
+              </Button>
+              <div className="inline-flex overflow-hidden rounded-md border border-border text-xs">
+                {(["en", "ms"] as Lang[]).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => setContentLang(l)}
+                    className={`px-3 py-1.5 transition ${contentLang === l ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    {LANG_LABEL[l]}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
+
 
           <Field label="Event name">
             <Input value={form.name} onChange={(e) => set("name", e.target.value)} />
