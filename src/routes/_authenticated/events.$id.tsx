@@ -426,6 +426,7 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
   const [form, setForm] = useState<EventRow>(event);
   const [contentLang, setContentLang] = useState<Lang>("en");
   const [previewLang, setPreviewLang] = useState<Lang>((event.default_language as Lang) ?? "en");
+  const [translating, setTranslating] = useState(false);
   useEffect(() => setForm(event), [event]);
 
   const mut = useMutation({
