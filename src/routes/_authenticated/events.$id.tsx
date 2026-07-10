@@ -30,6 +30,8 @@ export const Route = createFileRoute("/_authenticated/events/$id")({
 
 type EventRow = {
   id: string; slug: string; name: string; event_date: string | null;
+  event_time: string | null;
+  title_scale: number; subtitle_scale: number; body_scale: number;
   headline: string | null; subheadline: string | null; welcome_message: string | null;
   footer_note: string | null; hero_image_url: string | null; logo_url: string | null;
   logo_size: string; layout_image_url: string | null;
