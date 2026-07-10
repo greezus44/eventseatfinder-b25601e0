@@ -268,6 +268,8 @@ function GuestsTab({ eventId }: { eventId: string }) {
   const [search, setSearch] = useState("");
   const [bulk, setBulk] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "table">("name");
+  const [activeTable, setActiveTable] = useState<string>("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const tablesQ = useQuery({
     queryKey: ["tables", eventId],
@@ -280,15 +282,21 @@ function GuestsTab({ eventId }: { eventId: string }) {
   const guestsQ = useQuery({
     queryKey: ["guests", eventId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("guests").select("*").eq("event_id", eventId).order("full_name");
+      const { data, error } = await supabase.from("guests").select("*").eq("event_id", eventId).order("full_name").limit(1500);
       if (error) throw error;
       return data;
     },
   });
 
+  const totalGuests = guestsQ.data?.length ?? 0;
+  const GUEST_LIMIT = 1400;
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    const list = guestsQ.data?.filter((g) => !term || g.full_name.toLowerCase().includes(term)) ?? [];
+    let list = guestsQ.data ?? [];
+    if (activeTable === "unassigned") list = list.filter((g) => !g.table_id);
+    else if (activeTable !== "all") list = list.filter((g) => g.table_id === activeTable);
+    if (term) list = list.filter((g) => g.full_name.toLowerCase().includes(term));
     if (sortBy === "table") {
       const orderById = new Map(tablesQ.data?.map((t, i) => [t.id, i]));
       return [...list].sort((a, b) => {
@@ -299,11 +307,23 @@ function GuestsTab({ eventId }: { eventId: string }) {
       });
     }
     return [...list].sort((a, b) => a.full_name.localeCompare(b.full_name));
-  }, [guestsQ.data, tablesQ.data, search, sortBy]);
+  }, [guestsQ.data, tablesQ.data, search, sortBy, activeTable]);
+
+  const tableByName = useMemo(() => {
+    const m = new Map<string, string>();
+    tablesQ.data?.forEach((t) => m.set(t.name.trim().toLowerCase(), t.id));
+    return m;
+  }, [tablesQ.data]);
+  const tableById = useMemo(() => {
+    const m = new Map<string, string>();
+    tablesQ.data?.forEach((t) => m.set(t.id, t.name));
+    return m;
+  }, [tablesQ.data]);
 
   const addBulk = async () => {
     const names = bulk.split("\n").map((s) => s.trim()).filter(Boolean);
     if (!names.length) return;
+    if (totalGuests + names.length > GUEST_LIMIT) return toast.error(`Guest limit is ${GUEST_LIMIT}`);
     const { error } = await supabase.from("guests").insert(names.map((n) => ({ event_id: eventId, full_name: n })));
     if (error) return toast.error(error.message);
     setBulk("");
@@ -323,30 +343,201 @@ function GuestsTab({ eventId }: { eventId: string }) {
   const remove = async (id: string) => {
     const { error } = await supabase.from("guests").delete().eq("id", id);
     if (error) return toast.error(error.message);
+    setSelected((s) => { const n = new Set(s); n.delete(id); return n; });
     qc.invalidateQueries({ queryKey: ["guests", eventId] });
   };
+
+  const removeSelected = async () => {
+    if (selected.size === 0) return;
+    if (!confirm(`Remove ${selected.size} guest${selected.size > 1 ? "s" : ""}?`)) return;
+    const ids = Array.from(selected);
+    const { error } = await supabase.from("guests").delete().in("id", ids);
+    if (error) return toast.error(error.message);
+    toast.success(`Removed ${ids.length}`);
+    setSelected(new Set());
+    qc.invalidateQueries({ queryKey: ["guests", eventId] });
+  };
+
+  const toggleOne = (id: string) => setSelected((s) => {
+    const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n;
+  });
+  const toggleAllVisible = () => {
+    const visibleIds = filtered.map((g) => g.id);
+    const allSelected = visibleIds.every((id) => selected.has(id));
+    setSelected((s) => {
+      const n = new Set(s);
+      if (allSelected) visibleIds.forEach((id) => n.delete(id));
+      else visibleIds.forEach((id) => n.add(id));
+      return n;
+    });
+  };
+
+  const parseCsv = (text: string): string[][] => {
+    const rows: string[][] = [];
+    let cur = "", inQuotes = false, row: string[] = [];
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"' && text[i + 1] === '"') { cur += '"'; i++; }
+        else if (c === '"') inQuotes = false;
+        else cur += c;
+      } else {
+        if (c === '"') inQuotes = true;
+        else if (c === ",") { row.push(cur); cur = ""; }
+        else if (c === "\n" || c === "\r") {
+          if (c === "\r" && text[i + 1] === "\n") i++;
+          row.push(cur); cur = "";
+          if (row.some((v) => v.trim())) rows.push(row);
+          row = [];
+        } else cur += c;
+      }
+    }
+    if (cur || row.length) { row.push(cur); if (row.some((v) => v.trim())) rows.push(row); }
+    return rows;
+  };
+
+  const importCsv = async (file: File) => {
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text);
+      if (rows.length === 0) return toast.error("CSV is empty");
+      const header = rows[0].map((h) => h.trim().toLowerCase());
+      const nameIdx = header.findIndex((h) => ["name", "full_name", "guest", "guest name"].includes(h));
+      const tableIdx = header.findIndex((h) => ["table", "table name", "table_name", "seat"].includes(h));
+      const mealIdx = header.findIndex((h) => ["meal", "meal_choice", "diet"].includes(h));
+      const noteIdx = header.findIndex((h) => ["message", "personal_message", "note"].includes(h));
+      const hasHeader = nameIdx >= 0 || tableIdx >= 0;
+      const data = hasHeader ? rows.slice(1) : rows;
+      const rawTableFor = (r: string[]) => (tableIdx >= 0 ? r[tableIdx] : r[1] ?? "").trim();
+      const missingTables = new Set<string>();
+      type Row = { event_id: string; full_name: string; table_id: string | null; meal_choice: string | null; personal_message: string | null; __rawTable: string };
+      const toInsert: Row[] = [];
+      for (const r of data) {
+        const name = (nameIdx >= 0 ? r[nameIdx] : r[0])?.trim();
+        if (!name) continue;
+        const rawTable = rawTableFor(r);
+        let tid: string | null = null;
+        if (rawTable) {
+          const found = tableByName.get(rawTable.toLowerCase());
+          if (found) tid = found;
+          else missingTables.add(rawTable);
+        }
+        toInsert.push({
+          event_id: eventId,
+          full_name: name,
+          table_id: tid,
+          meal_choice: mealIdx >= 0 ? (r[mealIdx]?.trim() || null) : null,
+          personal_message: noteIdx >= 0 ? (r[noteIdx]?.trim() || null) : null,
+          __rawTable: rawTable,
+        });
+      }
+      if (!toInsert.length) return toast.error("No rows found");
+      if (totalGuests + toInsert.length > GUEST_LIMIT) return toast.error(`Guest limit is ${GUEST_LIMIT}`);
+
+      if (missingTables.size) {
+        const base = tablesQ.data?.length ?? 0;
+        const newTables = Array.from(missingTables).map((n, i) => ({
+          event_id: eventId, name: n, capacity: null, location_note: null, sort_order: base + i + 1,
+        }));
+        const { data: created, error: tErr } = await supabase.from("event_tables").insert(newTables).select("id, name");
+        if (tErr) throw tErr;
+        const lookup = new Map(created?.map((t) => [t.name.trim().toLowerCase(), t.id]));
+        toInsert.forEach((row) => {
+          if (row.table_id || !row.__rawTable) return;
+          row.table_id = lookup.get(row.__rawTable.toLowerCase()) ?? null;
+        });
+        qc.invalidateQueries({ queryKey: ["tables", eventId] });
+      }
+
+      const finalRows = toInsert.map(({ __rawTable, ...rest }) => { void __rawTable; return rest; });
+      const { error } = await supabase.from("guests").insert(finalRows);
+      if (error) throw error;
+      toast.success(`Imported ${finalRows.length} guest${finalRows.length > 1 ? "s" : ""}${missingTables.size ? ` and ${missingTables.size} new table${missingTables.size > 1 ? "s" : ""}` : ""}`);
+      qc.invalidateQueries({ queryKey: ["guests", eventId] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "CSV import failed");
+    }
+  };
+
+  const downloadCsv = () => {
+    const rows = filtered;
+    if (!rows.length) return toast.error("Nothing to export");
+    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const header = ["Name", "Table", "Meal", "Personal message"];
+    const body = rows.map((g) => [
+      esc(g.full_name),
+      esc(g.table_id ? tableById.get(g.table_id) ?? "" : ""),
+      esc(g.meal_choice ?? ""),
+      esc(g.personal_message ?? ""),
+    ].join(","));
+    const blob = new Blob(["\uFEFF" + [header.join(","), ...body].join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `guests-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const allVisibleSelected = filtered.length > 0 && filtered.every((g) => selected.has(g.id));
+
+  const tabList = [
+    { id: "all", label: `All (${guestsQ.data?.length ?? 0})` },
+    ...(tablesQ.data ?? []).map((t) => ({
+      id: t.id,
+      label: `${t.name} (${guestsQ.data?.filter((g) => g.table_id === t.id).length ?? 0})`,
+    })),
+    { id: "unassigned", label: `Unassigned (${guestsQ.data?.filter((g) => !g.table_id).length ?? 0})` },
+  ];
 
   return (
     <div className="grid gap-6 md:grid-cols-[1fr_320px]">
       <div>
+        <div className="mb-3 flex flex-wrap gap-1">
+          {tabList.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => { setActiveTable(t.id); setSelected(new Set()); }}
+              className={`rounded-md border px-3 py-1 text-xs transition ${activeTable === t.id ? "border-foreground bg-foreground text-background" : "border-border hover:border-foreground/40"}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Input placeholder="Search guests…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
           <div className="ml-auto flex items-center gap-2">
-            <Label className="text-xs text-muted-foreground">Group by</Label>
+            {selected.size > 0 && (
+              <Button size="sm" variant="destructive" onClick={removeSelected}>
+                <Trash2 className="h-3.5 w-3.5" /> Remove {selected.size}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={downloadCsv}>
+              <Download className="h-3.5 w-3.5" /> Export CSV
+            </Button>
+            <Label className="text-xs text-muted-foreground">Sort</Label>
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as "name" | "table")}>
-              <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="name">Name</SelectItem>
                 <SelectItem value="table">Table</SelectItem>
               </SelectContent>
             </Select>
-            <span className="text-sm text-muted-foreground">{filtered.length} guest{filtered.length !== 1 ? "s" : ""}</span>
+            <span className="text-xs text-muted-foreground">{filtered.length} / {totalGuests}</span>
           </div>
         </div>
-        <div className="rounded-2xl border border-border bg-card">
+        <div className="rounded-lg border border-border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleAllVisible}
+                    aria-label="Select all"
+                  />
+                </TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead className="w-40">Table</TableHead>
                 <TableHead className="w-10"></TableHead>
@@ -356,6 +547,13 @@ function GuestsTab({ eventId }: { eventId: string }) {
             <TableBody>
               {filtered.map((g) => (
                 <TableRow key={g.id}>
+                  <TableCell>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(g.id)}
+                      onChange={() => toggleOne(g.id)}
+                    />
+                  </TableCell>
                   <TableCell>
                     <Input defaultValue={g.full_name} className="h-8" onBlur={(e) => e.target.value !== g.full_name && updateGuest(g.id, { full_name: e.target.value })} />
                   </TableCell>
@@ -381,18 +579,38 @@ function GuestsTab({ eventId }: { eventId: string }) {
                 </TableRow>
               ))}
               {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">No guests</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">No guests</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
         </div>
       </div>
 
-      <div className="h-fit space-y-3 rounded-2xl border border-border bg-card p-5">
-        <h3 className="font-display text-xl">Add guests</h3>
-        <p className="text-xs text-muted-foreground">One name per line.</p>
-        <Textarea rows={8} value={bulk} onChange={(e) => setBulk(e.target.value)} placeholder={"Amelia Chen\nNoah Patel\nJordan Lee"} />
-        <Button onClick={addBulk} className="w-full"><Plus className="h-4 w-4" /> Add all</Button>
+      <div className="space-y-4">
+        <div className="h-fit space-y-3 rounded-lg border border-border bg-card p-5">
+          <h3 className="font-display text-xl">Import from CSV</h3>
+          <p className="text-xs text-muted-foreground">
+            Columns: <span className="font-mono">name</span>, <span className="font-mono">table</span> (optional).
+            Missing tables are created automatically.
+          </p>
+          <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-accent">
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) importCsv(f); e.target.value = ""; }}
+            />
+            Upload CSV
+          </label>
+        </div>
+
+        <div className="h-fit space-y-3 rounded-lg border border-border bg-card p-5">
+          <h3 className="font-display text-xl">Add guests</h3>
+          <p className="text-xs text-muted-foreground">One name per line.</p>
+          <Textarea rows={8} value={bulk} onChange={(e) => setBulk(e.target.value)} placeholder={"Amelia Chen\nNoah Patel\nJordan Lee"} />
+          <Button onClick={addBulk} className="w-full"><Plus className="h-4 w-4" /> Add all</Button>
+          <p className="text-[11px] text-muted-foreground">{totalGuests} / {GUEST_LIMIT} guests</p>
+        </div>
       </div>
     </div>
   );
