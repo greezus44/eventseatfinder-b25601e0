@@ -232,7 +232,7 @@ function GuestPage() {
 
         {hasLayout && (
           <div
-            className="mx-auto mt-10 inline-flex overflow-hidden rounded-full border text-sm font-medium"
+            className="mx-auto mt-10 inline-flex overflow-hidden rounded-lg border text-sm font-medium"
             style={{ borderColor: accent + "60" }}
           >
             {(
@@ -262,7 +262,7 @@ function GuestPage() {
             <img
               src={event.layout_image_url!}
               alt="Event space layout"
-              className="w-full rounded-2xl border object-contain"
+              className="w-full rounded-lg border object-contain"
               style={{ borderColor: accent + "40" }}
             />
           </div>
