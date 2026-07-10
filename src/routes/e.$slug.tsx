@@ -279,17 +279,21 @@ function GuestPage() {
                   placeholder={t.placeholder}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  className="h-14 rounded-full border-2 bg-transparent pl-10 text-center text-lg placeholder:opacity-60"
+                  className="h-14 rounded-lg border-2 bg-transparent pl-10 text-center text-lg"
                   style={{
                     borderColor: accent,
                     background: "transparent",
                     color: event.text_color,
+                    ["--tw-placeholder-color" as string]: event.text_color,
                   }}
                 />
+                <style>{`
+                  input::placeholder { color: ${event.text_color}; opacity: 0.55; }
+                `}</style>
               </div>
               {matches.length > 0 && (
                 <div
-                  className="mt-3 divide-y overflow-hidden rounded-2xl border text-left"
+                  className="mt-3 divide-y overflow-hidden rounded-lg border text-left"
                   style={{ borderColor: accent + "40" }}
                 >
                   {matches.map((g) => {
@@ -302,7 +306,7 @@ function GuestPage() {
                       >
                         <span>{g.full_name}</span>
                         <span
-                          className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                          className="shrink-0 rounded-md px-2.5 py-0.5 text-xs font-medium"
                           style={
                             tbl
                               ? { background: accent + "18", color: accent }
@@ -332,6 +336,13 @@ function GuestPage() {
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {venueAddress && (
+              <div className="mx-auto mt-10 max-w-lg text-left">
+                <p className="text-xs uppercase tracking-widest opacity-70">{t.venue}</p>
+                <p className="mt-2 whitespace-pre-line text-sm opacity-80">{venueAddress}</p>
               </div>
             )}
           </>
