@@ -109,11 +109,13 @@ export type Database = {
         Row: {
           accent_color: string
           background_color: string
+          body_scale: number
           contact_info: string | null
           content_ms: Json
           created_at: string
           default_language: string
           event_date: string | null
+          event_time: string | null
           font_style: string
           footer_note: string | null
           headline: string | null
@@ -129,7 +131,9 @@ export type Database = {
           schedule: Json
           slug: string
           subheadline: string | null
+          subtitle_scale: number
           text_color: string
+          title_scale: number
           updated_at: string
           venue_address: string | null
           venue_name: string | null
@@ -138,11 +142,13 @@ export type Database = {
         Insert: {
           accent_color?: string
           background_color?: string
+          body_scale?: number
           contact_info?: string | null
           content_ms?: Json
           created_at?: string
           default_language?: string
           event_date?: string | null
+          event_time?: string | null
           font_style?: string
           footer_note?: string | null
           headline?: string | null
@@ -158,7 +164,9 @@ export type Database = {
           schedule?: Json
           slug: string
           subheadline?: string | null
+          subtitle_scale?: number
           text_color?: string
+          title_scale?: number
           updated_at?: string
           venue_address?: string | null
           venue_name?: string | null
@@ -167,11 +175,13 @@ export type Database = {
         Update: {
           accent_color?: string
           background_color?: string
+          body_scale?: number
           contact_info?: string | null
           content_ms?: Json
           created_at?: string
           default_language?: string
           event_date?: string | null
+          event_time?: string | null
           font_style?: string
           footer_note?: string | null
           headline?: string | null
@@ -187,7 +197,9 @@ export type Database = {
           schedule?: Json
           slug?: string
           subheadline?: string | null
+          subtitle_scale?: number
           text_color?: string
+          title_scale?: number
           updated_at?: string
           venue_address?: string | null
           venue_name?: string | null

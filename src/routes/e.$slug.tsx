@@ -95,6 +95,12 @@ function GuestPage() {
   const tableFor = (id: string | null) => tablesQ.data?.find((tb) => tb.id === id);
   const displayFont = fontFor(event.font_style);
 
+  const evAny = event as unknown as Record<string, unknown>;
+  const eventTime = (evAny.event_time as string | null) ?? null;
+  const titleScale = Number(evAny.title_scale ?? 1) || 1;
+  const subtitleScale = Number(evAny.subtitle_scale ?? 1) || 1;
+  const bodyScale = Number(evAny.body_scale ?? 1) || 1;
+
   const logoSize = event.logo_size || "medium";
   const logoClass =
     logoSize === "small" ? "h-16 md:h-20" : logoSize === "large" ? "h-40 md:h-56" : "h-24 md:h-32";
@@ -186,39 +192,47 @@ function GuestPage() {
           <img src={event.logo_url} alt="" className={`mx-auto mb-8 ${logoClass} object-contain`} />
         )}
         <h1
-          className="whitespace-pre-line text-5xl leading-[1.05] md:text-6xl"
-          style={{ fontFamily: displayFont }}
+          className="whitespace-pre-line leading-[1.05]"
+          style={{ fontFamily: displayFont, fontSize: `${3 * titleScale}rem` }}
         >
           {headline}
         </h1>
-        <p className="mt-4 whitespace-pre-line text-xs uppercase tracking-[0.25em] opacity-70">
+        <p
+          className="mt-4 whitespace-pre-line uppercase tracking-[0.25em] opacity-70"
+          style={{ fontSize: `${0.75 * subtitleScale}rem` }}
+        >
           {subheadline}
         </p>
 
-        {/* Date + venue right under the title */}
-        {(eventDateStr || venueName || venueAddress) && (
+        {/* Date, time, venue name under the title */}
+        {(eventDateStr || eventTime || venueName) && (
           <div className="mt-6 space-y-1 text-sm">
             {eventDateStr && (
               <p className="uppercase tracking-[0.2em] opacity-80">{eventDateStr}</p>
+            )}
+            {eventTime && (
+              <p className="uppercase tracking-[0.2em] opacity-80">{eventTime}</p>
             )}
             {venueName && (
               <p style={{ fontFamily: displayFont }} className="text-lg">
                 {venueName}
               </p>
             )}
-            {venueAddress && <p className="whitespace-pre-line opacity-80">{venueAddress}</p>}
           </div>
         )}
 
         {welcome && (
-          <p className="mx-auto mt-8 max-w-lg whitespace-pre-line text-base leading-relaxed opacity-80">
+          <p
+            className="mx-auto mt-8 max-w-lg whitespace-pre-line leading-relaxed opacity-80"
+            style={{ fontSize: `${1 * bodyScale}rem` }}
+          >
             {welcome}
           </p>
         )}
 
         {hasLayout && (
           <div
-            className="mx-auto mt-10 inline-flex overflow-hidden rounded-full border text-sm font-medium"
+            className="mx-auto mt-10 inline-flex overflow-hidden rounded-lg border text-sm font-medium"
             style={{ borderColor: accent + "60" }}
           >
             {(
@@ -248,7 +262,7 @@ function GuestPage() {
             <img
               src={event.layout_image_url!}
               alt="Event space layout"
-              className="w-full rounded-2xl border object-contain"
+              className="w-full rounded-lg border object-contain"
               style={{ borderColor: accent + "40" }}
             />
           </div>
@@ -265,17 +279,21 @@ function GuestPage() {
                   placeholder={t.placeholder}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  className="h-14 rounded-full border-2 bg-transparent pl-10 text-center text-lg placeholder:opacity-60"
+                  className="h-14 rounded-lg border-2 bg-transparent pl-10 text-center text-lg"
                   style={{
                     borderColor: accent,
                     background: "transparent",
                     color: event.text_color,
+                    ["--tw-placeholder-color" as string]: event.text_color,
                   }}
                 />
+                <style>{`
+                  input::placeholder { color: ${event.text_color}; opacity: 0.55; }
+                `}</style>
               </div>
               {matches.length > 0 && (
                 <div
-                  className="mt-3 divide-y overflow-hidden rounded-2xl border text-left"
+                  className="mt-3 divide-y overflow-hidden rounded-lg border text-left"
                   style={{ borderColor: accent + "40" }}
                 >
                   {matches.map((g) => {
@@ -288,7 +306,7 @@ function GuestPage() {
                       >
                         <span>{g.full_name}</span>
                         <span
-                          className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                          className="shrink-0 rounded-md px-2.5 py-0.5 text-xs font-medium"
                           style={
                             tbl
                               ? { background: accent + "18", color: accent }
@@ -318,6 +336,13 @@ function GuestPage() {
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {venueAddress && (
+              <div className="mx-auto mt-10 max-w-lg text-left">
+                <p className="text-xs uppercase tracking-widest opacity-70">{t.venue}</p>
+                <p className="mt-2 whitespace-pre-line text-sm opacity-80">{venueAddress}</p>
               </div>
             )}
           </>
