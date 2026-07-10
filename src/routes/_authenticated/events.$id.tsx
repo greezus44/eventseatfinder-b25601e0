@@ -619,12 +619,12 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
                       set("text_color", p.text);
                       set("accent_color", p.accent);
                     }}
-                    className={`group flex flex-col items-center gap-1.5 rounded-xl border p-2 text-left transition ${active ? "border-foreground ring-2 ring-foreground/10" : "border-border hover:border-foreground/40"}`}
+                    className={`group flex flex-col items-center gap-1.5 rounded-md border p-2 text-left transition ${active ? "border-foreground ring-2 ring-foreground/10" : "border-border hover:border-foreground/40"}`}
                     title={p.name}
                   >
-                    <div className="flex h-10 w-full items-center justify-center rounded-lg" style={{ background: p.bg }}>
+                    <div className="flex h-10 w-full items-center justify-center rounded-md" style={{ background: p.bg }}>
                       <span className="text-xs" style={{ fontFamily: fontFor(form.font_style), color: p.text }}>Aa</span>
-                      <span className="ml-1 h-3 w-3 rounded-full" style={{ background: p.accent }} />
+                      <span className="ml-1 h-3 w-3 rounded-sm" style={{ background: p.accent }} />
                     </div>
                     <span className="text-[10px] text-muted-foreground">{p.name}</span>
                   </button>
@@ -655,24 +655,39 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
           </div>
 
           <Field label="Font style">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {FONT_PRESETS.map((f) => {
-                const active = form.font_style === f.value;
-                return (
-                  <button
-                    key={f.value}
-                    type="button"
-                    onClick={() => set("font_style", f.value)}
-                    className={`rounded-xl border p-3 text-left transition ${active ? "border-foreground ring-2 ring-foreground/10" : "border-border hover:border-foreground/40"}`}
-                  >
-                    <div className="text-2xl leading-none" style={{ fontFamily: fontFor(f.value) }}>Aa</div>
-                    <div className="mt-2 text-xs text-muted-foreground">{f.label}</div>
-                    <div className="text-[11px]" style={{ fontFamily: fontFor(f.value) }}>{f.sample}</div>
-                  </button>
-                );
-              })}
-            </div>
+            <Select value={form.font_style} onValueChange={(v) => set("font_style", v)}>
+              <SelectTrigger className="h-12">
+                <SelectValue>
+                  <span style={{ fontFamily: fontFor(form.font_style) }} className="text-lg">
+                    {FONT_PRESETS.find((f) => f.value === form.font_style)?.label ?? "Choose a font"}
+                  </span>
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {FONT_PRESETS.map((f) => (
+                  <SelectItem key={f.value} value={f.value}>
+                    <span style={{ fontFamily: fontFor(f.value) }} className="text-base">{f.label}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
+
+          <div className="grid grid-cols-3 gap-3">
+            <Field label={`Title size (${Math.round(form.title_scale * 100)}%)`}>
+              <input type="range" min={0.7} max={1.6} step={0.05} value={form.title_scale}
+                onChange={(e) => set("title_scale", Number(e.target.value))} className="w-full" />
+            </Field>
+            <Field label={`Subtitle size (${Math.round(form.subtitle_scale * 100)}%)`}>
+              <input type="range" min={0.7} max={1.6} step={0.05} value={form.subtitle_scale}
+                onChange={(e) => set("subtitle_scale", Number(e.target.value))} className="w-full" />
+            </Field>
+            <Field label={`Body size (${Math.round(form.body_scale * 100)}%)`}>
+              <input type="range" min={0.7} max={1.6} step={0.05} value={form.body_scale}
+                onChange={(e) => set("body_scale", Number(e.target.value))} className="w-full" />
+            </Field>
+          </div>
+
           <Field label="Logo">
             <ImageUpload value={form.logo_url} onChange={(url) => set("logo_url", url)} kind="logo" />
           </Field>
