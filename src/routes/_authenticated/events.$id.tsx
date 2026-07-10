@@ -485,6 +485,49 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
   const ms = form.content_ms ?? {};
   const isMs = contentLang === "ms";
 
+  const autoTranslate = async () => {
+    setTranslating(true);
+    try {
+      const fields: Record<string, string> = {};
+      if (form.headline) fields.headline = form.headline;
+      if (form.subheadline) fields.subheadline = form.subheadline;
+      if (form.welcome_message) fields.welcome_message = form.welcome_message;
+      if (form.footer_note) fields.footer_note = form.footer_note;
+      if (form.venue_name) fields.venue_name = form.venue_name;
+      if (form.venue_address) fields.venue_address = form.venue_address;
+      if (form.contact_info) fields.contact_info = form.contact_info;
+      const scheduleLabels = (form.schedule ?? []).map((s) => s.label).filter(Boolean);
+      scheduleLabels.forEach((lbl, i) => { fields[`__schedule_${i}`] = lbl; });
+      if (Object.keys(fields).length === 0) {
+        toast.error("Nothing to translate yet");
+        setTranslating(false);
+        return;
+      }
+      const res = await translateFields({ data: { fields, target: "ms" } });
+      const nextMs: BilingualContent = { ...(form.content_ms ?? {}) };
+      const scheduleMs = [...(form.content_ms?.schedule ?? [])];
+      for (const [k, v] of Object.entries(res ?? {})) {
+        if (typeof v !== "string") continue;
+        if (k.startsWith("__schedule_")) {
+          const i = Number(k.replace("__schedule_", ""));
+          while (scheduleMs.length < i + 1) scheduleMs.push({ time: "", label: "" });
+          scheduleMs[i] = { time: form.schedule?.[i]?.time ?? "", label: v };
+        } else {
+          (nextMs as Record<string, unknown>)[k] = v;
+        }
+      }
+      nextMs.schedule = scheduleMs;
+      setForm((f) => ({ ...f, content_ms: nextMs }));
+      toast.success("Translated — review the BM fields");
+      setContentLang("ms");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Translation failed");
+    } finally {
+      setTranslating(false);
+    }
+  };
+
+
   return (
     <div className="grid gap-6 md:grid-cols-[1fr_360px]">
       <div className="space-y-6">
