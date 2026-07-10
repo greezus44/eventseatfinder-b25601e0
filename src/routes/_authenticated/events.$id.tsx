@@ -556,6 +556,13 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
           <Field label="Event date">
             <Input type="date" value={form.event_date ?? ""} onChange={(e) => set("event_date", e.target.value || null)} />
           </Field>
+          <Field label="Event time">
+            <Input
+              value={form.event_time ?? ""}
+              onChange={(e) => set("event_time", e.target.value || null)}
+              placeholder="2:00 PM"
+            />
+          </Field>
           <Field label={isMs ? "Venue name (BM)" : "Venue name"}>
             <Input
               value={isMs ? ms.venue_name ?? "" : form.venue_name ?? ""}
@@ -564,17 +571,16 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
           </Field>
           <Field label={isMs ? "Address (BM)" : "Address"}>
             <Textarea
-              rows={2}
+              rows={3}
               value={isMs ? ms.venue_address ?? "" : form.venue_address ?? ""}
               onChange={(e) => isMs ? setMs({ venue_address: e.target.value }) : set("venue_address", e.target.value)}
-              placeholder="Line 1&#10;Line 2"
+              placeholder={"Line 1\nLine 2"}
             />
           </Field>
           <Field label={isMs ? "Contact / help text (BM)" : "Contact / help text"}>
             <Input
               value={isMs ? ms.contact_info ?? "" : form.contact_info ?? ""}
               onChange={(e) => isMs ? setMs({ contact_info: e.target.value }) : set("contact_info", e.target.value)}
-              placeholder="Ask the host if you need help"
             />
           </Field>
         </Section>
