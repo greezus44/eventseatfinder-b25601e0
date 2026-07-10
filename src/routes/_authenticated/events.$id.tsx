@@ -724,25 +724,27 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
         </div>
       </div>
 
-      {/* Live preview mirrors the guest page */}
-      <div className="h-fit space-y-2">
-        <div className="flex items-center justify-between px-1">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">Live preview</p>
-          <div className="inline-flex overflow-hidden rounded-full border border-border text-[10px]">
-            {(["en", "ms"] as Lang[]).map((l) => (
-              <button
-                key={l}
-                type="button"
-                onClick={() => setPreviewLang(l)}
-                className={`px-2 py-1 transition ${previewLang === l ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                {LANG_LABEL[l]}
-              </button>
-            ))}
+      {/* Live preview mirrors the guest page, sticky while scrolling */}
+      <div className="space-y-2">
+        <div className="sticky top-4">
+          <div className="flex items-center justify-between px-1 pb-2">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground">Live preview</p>
+            <div className="inline-flex overflow-hidden rounded-md border border-border text-[10px]">
+              {(["en", "ms"] as Lang[]).map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  onClick={() => setPreviewLang(l)}
+                  className={`px-2 py-1 transition ${previewLang === l ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {LANG_LABEL[l]}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-        <div className="overflow-hidden rounded-2xl border border-border">
-          <GuestPreview form={form} lang={previewLang} />
+          <div className="overflow-hidden rounded-lg border border-border">
+            <GuestPreview form={form} lang={previewLang} />
+          </div>
         </div>
       </div>
     </div>
@@ -758,10 +760,19 @@ function GuestPreview({ form, lang }: { form: EventRow; lang: Lang }) {
   const footer = pickBilingual(form.footer_note ?? "", ms.footer_note, lang);
   const venueName = pickBilingual(form.venue_name ?? "", ms.venue_name, lang);
   const venueAddress = pickBilingual(form.venue_address ?? "", ms.venue_address, lang);
+  const scheduleRaw = form.schedule ?? [];
+  const scheduleMs = ms.schedule ?? [];
+  const schedule = scheduleRaw.map((s, i) => ({
+    time: s.time,
+    label: pickBilingual(s.label, scheduleMs[i]?.label, lang),
+  }));
   const displayFont = fontFor(form.font_style);
   const accent = form.accent_color;
   const logoClass =
     form.logo_size === "small" ? "h-12" : form.logo_size === "large" ? "h-28" : "h-20";
+  const ts = form.title_scale || 1;
+  const ss = form.subtitle_scale || 1;
+  const bs = form.body_scale || 1;
 
   const eventDateStr = form.event_date
     ? new Date(form.event_date).toLocaleDateString(lang === "ms" ? "ms-MY" : "en-GB", {
@@ -779,26 +790,45 @@ function GuestPreview({ form, lang }: { form: EventRow; lang: Lang }) {
     >
       <div className="flex min-h-full flex-col items-center px-5 py-8 text-center">
         {form.logo_url && <img src={form.logo_url} alt="" className={`mb-5 ${logoClass} object-contain`} />}
-        <h2 className="whitespace-pre-line text-2xl leading-tight" style={{ fontFamily: displayFont }}>
+        <h2 className="whitespace-pre-line leading-tight" style={{ fontFamily: displayFont, fontSize: `${1.5 * ts}rem` }}>
           {headline}
         </h2>
-        <p className="mt-2 whitespace-pre-line text-[10px] uppercase tracking-[0.2em] opacity-70">
+        <p className="mt-2 whitespace-pre-line uppercase tracking-[0.2em] opacity-70" style={{ fontSize: `${0.625 * ss}rem` }}>
           {subheadline}
         </p>
-        {(eventDateStr || venueName || venueAddress) && (
+        {(eventDateStr || form.event_time || venueName) && (
           <div className="mt-3 space-y-0.5 text-[11px]">
             {eventDateStr && <p className="uppercase tracking-[0.15em] opacity-80">{eventDateStr}</p>}
+            {form.event_time && <p className="uppercase tracking-[0.15em] opacity-80">{form.event_time}</p>}
             {venueName && <p style={{ fontFamily: displayFont }} className="text-sm">{venueName}</p>}
-            {venueAddress && <p className="whitespace-pre-line opacity-80">{venueAddress}</p>}
           </div>
         )}
-        {welcome && <p className="mt-4 max-w-[28ch] whitespace-pre-line text-[11px] opacity-80">{welcome}</p>}
+        {welcome && <p className="mt-4 max-w-[28ch] whitespace-pre-line opacity-80" style={{ fontSize: `${0.7 * bs}rem` }}>{welcome}</p>}
         <div
-          className="mt-5 flex h-9 w-full max-w-[220px] items-center rounded-full border-2 px-3 text-[11px]"
-          style={{ borderColor: accent, background: "transparent", color: form.text_color, opacity: 0.85 }}
+          className="mt-5 flex h-9 w-full max-w-[220px] items-center rounded-lg border-2 px-3 text-[11px]"
+          style={{ borderColor: accent, background: "transparent", color: form.text_color }}
         >
-          <span className="opacity-60">{t.placeholder}</span>
+          <span style={{ color: form.text_color, opacity: 0.55 }}>{t.placeholder}</span>
         </div>
+        {schedule.length > 0 && (
+          <div className="mt-6 w-full max-w-[240px] text-left">
+            <p className="text-[9px] uppercase tracking-widest opacity-70">{t.schedule}</p>
+            <ul className="mt-1 space-y-0.5">
+              {schedule.map((s, i) => (
+                <li key={i} className="flex gap-2 text-[10px]">
+                  <span className="w-14 opacity-70">{s.time}</span>
+                  <span>{s.label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {venueAddress && (
+          <div className="mt-4 w-full max-w-[240px] text-left">
+            <p className="text-[9px] uppercase tracking-widest opacity-70">{t.venue}</p>
+            <p className="mt-1 whitespace-pre-line text-[10px] opacity-80">{venueAddress}</p>
+          </div>
+        )}
         {footer && (
           <p className="mt-auto pt-6 text-[10px] italic opacity-70" style={{ fontFamily: displayFont }}>
             {footer}
