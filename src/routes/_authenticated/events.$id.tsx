@@ -180,40 +180,76 @@ function TablesTab({ eventId }: { eventId: string }) {
     qc.invalidateQueries({ queryKey: ["tables", eventId] });
   };
 
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const toggleOne = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const rows = q.data ?? [];
+  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const toggleAll = () => setSelected((s) => {
+    const n = new Set(s);
+    if (allSelected) rows.forEach((r) => n.delete(r.id));
+    else rows.forEach((r) => n.add(r.id));
+    return n;
+  });
+  const removeSelected = async () => {
+    if (selected.size === 0) return;
+    if (!confirm(`Remove ${selected.size} table${selected.size > 1 ? "s" : ""}? Guests will be unassigned.`)) return;
+    const { error } = await supabase.from("event_tables").delete().in("id", Array.from(selected));
+    if (error) return toast.error(error.message);
+    toast.success(`Removed ${selected.size}`);
+    setSelected(new Set());
+    qc.invalidateQueries({ queryKey: ["tables", eventId] });
+    qc.invalidateQueries({ queryKey: ["guests", eventId] });
+  };
+
   return (
     <div className="grid gap-6 md:grid-cols-[1fr_320px]">
-      <div className="rounded-2xl border border-border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead className="w-24">Seats</TableHead>
-              <TableHead>Location note</TableHead>
-              <TableHead className="w-12"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {q.data?.map((t) => (
-              <TableRow key={t.id}>
-                <TableCell>
-                  <Input defaultValue={t.name} onBlur={(e) => e.target.value !== t.name && updateTable(t.id, { name: e.target.value })} className="h-8" />
-                </TableCell>
-                <TableCell>
-                  <Input type="number" defaultValue={t.capacity ?? ""} onBlur={(e) => updateTable(t.id, { capacity: e.target.value ? Number(e.target.value) : null })} className="h-8" />
-                </TableCell>
-                <TableCell>
-                  <Input defaultValue={t.location_note ?? ""} onBlur={(e) => updateTable(t.id, { location_note: e.target.value || null })} className="h-8" placeholder="Near the window" />
-                </TableCell>
-                <TableCell>
-                  <Button variant="ghost" size="icon" onClick={() => remove(t.id)}><Trash2 className="h-4 w-4" /></Button>
-                </TableCell>
+      <div>
+        {selected.size > 0 && (
+          <div className="mb-2 flex justify-end">
+            <Button size="sm" variant="destructive" onClick={removeSelected}>
+              <Trash2 className="h-3.5 w-3.5" /> Remove {selected.size}
+            </Button>
+          </div>
+        )}
+        <div className="rounded-lg border border-border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-10">
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all tables" />
+                </TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead className="w-24">Seats</TableHead>
+                <TableHead>Location note</TableHead>
+                <TableHead className="w-12"></TableHead>
               </TableRow>
-            ))}
-            {q.data?.length === 0 && (
-              <TableRow><TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">No tables yet</TableCell></TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {rows.map((t) => (
+                <TableRow key={t.id}>
+                  <TableCell>
+                    <input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleOne(t.id)} />
+                  </TableCell>
+                  <TableCell>
+                    <Input defaultValue={t.name} onBlur={(e) => e.target.value !== t.name && updateTable(t.id, { name: e.target.value })} className="h-8" />
+                  </TableCell>
+                  <TableCell>
+                    <Input type="number" defaultValue={t.capacity ?? ""} onBlur={(e) => updateTable(t.id, { capacity: e.target.value ? Number(e.target.value) : null })} className="h-8" />
+                  </TableCell>
+                  <TableCell>
+                    <Input defaultValue={t.location_note ?? ""} onBlur={(e) => updateTable(t.id, { location_note: e.target.value || null })} className="h-8" placeholder="Near the window" />
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="icon" onClick={() => remove(t.id)}><Trash2 className="h-4 w-4" /></Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {rows.length === 0 && (
+                <TableRow><TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">No tables yet</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       <div className="space-y-4">
