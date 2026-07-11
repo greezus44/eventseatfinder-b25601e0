@@ -91,7 +91,7 @@ export function LangSwitch({
   const borderColor = accent ? accent + "60" : undefined;
   return (
     <div
-      className="inline-flex overflow-hidden rounded-full border text-xs font-medium"
+      className="inline-flex overflow-hidden rounded-lg border text-xs font-medium"
       style={{ borderColor }}
     >
       {(["en", "ms"] as Lang[]).map((l) => (
