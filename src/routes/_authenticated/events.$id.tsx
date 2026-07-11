@@ -37,6 +37,7 @@ type EventRow = {
   footer_note: string | null; hero_image_url: string | null; logo_url: string | null;
   logo_size: string; layout_image_url: string | null;
   accent_color: string; background_color: string; text_color: string; font_style: string;
+  font_title: string | null; font_subtitle: string | null; font_body: string | null;
   venue_name: string | null; venue_address: string | null; contact_info: string | null;
   is_published: boolean; schedule: Array<{ time: string; label: string }>;
   public_base_url: string | null;
