@@ -116,7 +116,10 @@ export type Database = {
           default_language: string
           event_date: string | null
           event_time: string | null
+          font_body: string | null
           font_style: string
+          font_subtitle: string | null
+          font_title: string | null
           footer_note: string | null
           headline: string | null
           hero_image_url: string | null
@@ -149,7 +152,10 @@ export type Database = {
           default_language?: string
           event_date?: string | null
           event_time?: string | null
+          font_body?: string | null
           font_style?: string
+          font_subtitle?: string | null
+          font_title?: string | null
           footer_note?: string | null
           headline?: string | null
           hero_image_url?: string | null
@@ -182,7 +188,10 @@ export type Database = {
           default_language?: string
           event_date?: string | null
           event_time?: string | null
+          font_body?: string | null
           font_style?: string
+          font_subtitle?: string | null
+          font_title?: string | null
           footer_note?: string | null
           headline?: string | null
           hero_image_url?: string | null
@@ -263,6 +272,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_collaborator_invite: { Args: { _token: string }; Returns: string }
+      get_collaborator_invite: {
+        Args: { _token: string }
+        Returns: {
+          event_id: string
+          event_name: string
+          event_slug: string
+          id: string
+          invited_email: string
+          status: string
+        }[]
+      }
       search_event_guests: {
         Args: { _q: string; _slug: string }
         Returns: {
