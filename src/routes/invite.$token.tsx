@@ -19,19 +19,17 @@ function InvitePage() {
   const inviteQ = useQuery({
     queryKey: ["invite", token],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("event_collaborators")
-        .select("id, event_id, invited_email, status, events(name, slug)")
-        .eq("invite_token", token)
-        .maybeSingle();
+      const { data, error } = await supabase.rpc("get_collaborator_invite", { _token: token });
       if (error) throw error;
-      return data as {
-        id: string;
-        event_id: string;
-        invited_email: string;
-        status: string;
-        events: { name: string; slug: string } | null;
-      } | null;
+      const row = (data ?? [])[0];
+      if (!row) return null;
+      return {
+        id: row.id as string,
+        event_id: row.event_id as string,
+        invited_email: row.invited_email as string,
+        status: row.status as string,
+        events: { name: row.event_name as string, slug: row.event_slug as string },
+      };
     },
   });
 
@@ -42,14 +40,11 @@ function InvitePage() {
       return;
     }
     setAccepting(true);
-    const { error } = await supabase
-      .from("event_collaborators")
-      .update({ status: "accepted", user_id: session.user.id, accepted_at: new Date().toISOString() })
-      .eq("id", inviteQ.data.id);
+    const { data, error } = await supabase.rpc("accept_collaborator_invite", { _token: token });
     setAccepting(false);
     if (error) return toast.error(error.message);
     toast.success("You're now a collaborator");
-    navigate({ to: "/events/$id", params: { id: inviteQ.data.event_id } });
+    navigate({ to: "/events/$id", params: { id: (data as string) ?? inviteQ.data.event_id } });
   };
 
   if (inviteQ.isLoading) {

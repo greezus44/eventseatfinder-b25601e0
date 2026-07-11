@@ -37,6 +37,7 @@ type EventRow = {
   footer_note: string | null; hero_image_url: string | null; logo_url: string | null;
   logo_size: string; layout_image_url: string | null;
   accent_color: string; background_color: string; text_color: string; font_style: string;
+  font_title: string | null; font_subtitle: string | null; font_body: string | null;
   venue_name: string | null; venue_address: string | null; contact_info: string | null;
   is_published: boolean; schedule: Array<{ time: string; label: string }>;
   public_base_url: string | null;
@@ -542,6 +543,15 @@ function GuestsTab({ eventId }: { eventId: string }) {
         </div>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Input placeholder="Search guests…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+          <Label className="text-xs text-muted-foreground">Table</Label>
+          <Select value={activeTable} onValueChange={(v) => { setActiveTable(v); setSelected(new Set()); }}>
+            <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {tabList.map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="ml-auto flex items-center gap-2">
             {selected.size > 0 && (
               <Button size="sm" variant="destructive" onClick={removeSelected}>
@@ -704,6 +714,9 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
         background_color: form.background_color,
         text_color: form.text_color,
         font_style: form.font_style,
+        font_title: form.font_title,
+        font_subtitle: form.font_subtitle,
+        font_body: form.font_body,
         venue_name: form.venue_name,
         venue_address: form.venue_address,
         contact_info: form.contact_info,
@@ -966,7 +979,7 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
             </Field>
           </div>
 
-          <Field label="Font style">
+          <Field label="Default font (fallback for all text)">
             <Select value={form.font_style} onValueChange={(v) => set("font_style", v)}>
               <SelectTrigger className="h-12">
                 <SelectValue>
@@ -984,6 +997,40 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
               </SelectContent>
             </Select>
           </Field>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {([
+              ["font_title", "Title font"],
+              ["font_subtitle", "Subtitle font"],
+              ["font_body", "Body font"],
+            ] as const).map(([key, label]) => {
+              const value = (form[key] as string | null) ?? "";
+              return (
+                <Field key={key} label={label}>
+                  <Select
+                    value={value || "__default__"}
+                    onValueChange={(v) => set(key, v === "__default__" ? null : v)}
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue>
+                        <span style={{ fontFamily: fontFor(value || form.font_style) }} className="text-sm">
+                          {value ? (FONT_PRESETS.find((f) => f.value === value)?.label ?? value) : "Use default"}
+                        </span>
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__default__">Use default</SelectItem>
+                      {FONT_PRESETS.map((f) => (
+                        <SelectItem key={f.value} value={f.value}>
+                          <span style={{ fontFamily: fontFor(f.value) }} className="text-sm">{f.label}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              );
+            })}
+          </div>
 
           <div className="grid grid-cols-3 gap-3">
             <Field label={`Title size (${Math.round(form.title_scale * 100)}%)`}>
@@ -1079,6 +1126,9 @@ function GuestPreview({ form, lang }: { form: EventRow; lang: Lang }) {
     label: pickBilingual(s.label, scheduleMs[i]?.label, lang),
   }));
   const displayFont = fontFor(form.font_style);
+  const titleFont = fontFor(form.font_title || form.font_style);
+  const subtitleFont = fontFor(form.font_subtitle || form.font_style);
+  const bodyFont = fontFor(form.font_body || form.font_style);
   const accent = form.accent_color;
   const logoClass =
     form.logo_size === "small" ? "h-12" : form.logo_size === "large" ? "h-28" : "h-20";
@@ -1102,20 +1152,20 @@ function GuestPreview({ form, lang }: { form: EventRow; lang: Lang }) {
     >
       <div className="flex min-h-full flex-col items-center px-5 py-8 text-center">
         {form.logo_url && <img src={form.logo_url} alt="" className={`mb-5 ${logoClass} object-contain`} />}
-        <h2 className="whitespace-pre-line leading-tight" style={{ fontFamily: displayFont, fontSize: `${1.5 * ts}rem` }}>
+        <h2 className="whitespace-pre-line leading-tight" style={{ fontFamily: titleFont, fontSize: `${1.5 * ts}rem` }}>
           {headline}
         </h2>
-        <p className="mt-2 whitespace-pre-line uppercase tracking-[0.2em] opacity-70" style={{ fontSize: `${0.625 * ss}rem` }}>
+        <p className="mt-2 whitespace-pre-line uppercase tracking-[0.2em] opacity-70" style={{ fontFamily: subtitleFont, fontSize: `${0.625 * ss}rem` }}>
           {subheadline}
         </p>
         {(eventDateStr || form.event_time || venueName) && (
           <div className="mt-3 space-y-0.5 text-[11px]">
             {eventDateStr && <p className="uppercase tracking-[0.15em] opacity-80">{eventDateStr}</p>}
             {form.event_time && <p className="uppercase tracking-[0.15em] opacity-80">{form.event_time}</p>}
-            {venueName && <p style={{ fontFamily: displayFont }} className="text-sm">{venueName}</p>}
+            {venueName && <p style={{ fontFamily: subtitleFont }} className="text-sm">{venueName}</p>}
           </div>
         )}
-        {welcome && <p className="mt-4 max-w-[28ch] whitespace-pre-line opacity-80" style={{ fontSize: `${0.7 * bs}rem` }}>{welcome}</p>}
+        {welcome && <p className="mt-4 max-w-[28ch] whitespace-pre-line opacity-80" style={{ fontFamily: bodyFont, fontSize: `${0.7 * bs}rem` }}>{welcome}</p>}
         <div
           className="mt-5 flex h-9 w-full max-w-[220px] items-center rounded-lg border-2 px-3 text-[11px]"
           style={{ borderColor: accent, background: "transparent", color: form.text_color }}
