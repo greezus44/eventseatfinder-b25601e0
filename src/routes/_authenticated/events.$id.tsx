@@ -970,7 +970,7 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
             </Field>
           </div>
 
-          <Field label="Font style">
+          <Field label="Default font (fallback for all text)">
             <Select value={form.font_style} onValueChange={(v) => set("font_style", v)}>
               <SelectTrigger className="h-12">
                 <SelectValue>
@@ -988,6 +988,40 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
               </SelectContent>
             </Select>
           </Field>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {([
+              ["font_title", "Title font"],
+              ["font_subtitle", "Subtitle font"],
+              ["font_body", "Body font"],
+            ] as const).map(([key, label]) => {
+              const value = (form[key] as string | null) ?? "";
+              return (
+                <Field key={key} label={label}>
+                  <Select
+                    value={value || "__default__"}
+                    onValueChange={(v) => set(key, v === "__default__" ? null : v)}
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue>
+                        <span style={{ fontFamily: fontFor(value || form.font_style) }} className="text-sm">
+                          {value ? (FONT_PRESETS.find((f) => f.value === value)?.label ?? value) : "Use default"}
+                        </span>
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__default__">Use default</SelectItem>
+                      {FONT_PRESETS.map((f) => (
+                        <SelectItem key={f.value} value={f.value}>
+                          <span style={{ fontFamily: fontFor(f.value) }} className="text-sm">{f.label}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              );
+            })}
+          </div>
 
           <div className="grid grid-cols-3 gap-3">
             <Field label={`Title size (${Math.round(form.title_scale * 100)}%)`}>
