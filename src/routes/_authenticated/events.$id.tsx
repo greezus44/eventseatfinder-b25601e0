@@ -1146,17 +1146,20 @@ function GuestPreview({ form, lang }: { form: EventRow; lang: Lang }) {
         <h2 className="whitespace-pre-line leading-tight" style={{ fontFamily: displayFont, fontSize: `${1.5 * ts}rem` }}>
           {headline}
         </h2>
-        <p className="mt-2 whitespace-pre-line uppercase tracking-[0.2em] opacity-70" style={{ fontSize: `${0.625 * ss}rem` }}>
+        <h2 className="whitespace-pre-line leading-tight" style={{ fontFamily: titleFont, fontSize: `${1.5 * ts}rem` }}>
+          {headline}
+        </h2>
+        <p className="mt-2 whitespace-pre-line uppercase tracking-[0.2em] opacity-70" style={{ fontFamily: subtitleFont, fontSize: `${0.625 * ss}rem` }}>
           {subheadline}
         </p>
         {(eventDateStr || form.event_time || venueName) && (
           <div className="mt-3 space-y-0.5 text-[11px]">
             {eventDateStr && <p className="uppercase tracking-[0.15em] opacity-80">{eventDateStr}</p>}
             {form.event_time && <p className="uppercase tracking-[0.15em] opacity-80">{form.event_time}</p>}
-            {venueName && <p style={{ fontFamily: displayFont }} className="text-sm">{venueName}</p>}
+            {venueName && <p style={{ fontFamily: subtitleFont }} className="text-sm">{venueName}</p>}
           </div>
         )}
-        {welcome && <p className="mt-4 max-w-[28ch] whitespace-pre-line opacity-80" style={{ fontSize: `${0.7 * bs}rem` }}>{welcome}</p>}
+        {welcome && <p className="mt-4 max-w-[28ch] whitespace-pre-line opacity-80" style={{ fontFamily: bodyFont, fontSize: `${0.7 * bs}rem` }}>{welcome}</p>}
         <div
           className="mt-5 flex h-9 w-full max-w-[220px] items-center rounded-lg border-2 px-3 text-[11px]"
           style={{ borderColor: accent, background: "transparent", color: form.text_color }}
