@@ -93,16 +93,15 @@ function GuestPage() {
 
   const matches = searchQ.data ?? [];
   const tableFor = (id: string | null) => tablesQ.data?.find((tb) => tb.id === id);
-  const displayFont = fontFor(event.font_style);
-  const titleFont = fontFor(((evAnyF: Record<string, unknown>) => (evAnyF.font_title as string) || event.font_style)(event as unknown as Record<string, unknown>));
-  const subtitleFont = fontFor(((evAnyF: Record<string, unknown>) => (evAnyF.font_subtitle as string) || event.font_style)(event as unknown as Record<string, unknown>));
-  const bodyFont = fontFor(((evAnyF: Record<string, unknown>) => (evAnyF.font_body as string) || event.font_style)(event as unknown as Record<string, unknown>));
-
   const evAny = event as unknown as Record<string, unknown>;
   const eventTime = (evAny.event_time as string | null) ?? null;
   const titleScale = Number(evAny.title_scale ?? 1) || 1;
   const subtitleScale = Number(evAny.subtitle_scale ?? 1) || 1;
   const bodyScale = Number(evAny.body_scale ?? 1) || 1;
+  const displayFont = fontFor(event.font_style);
+  const titleFont = fontFor((evAny.font_title as string) || event.font_style);
+  const subtitleFont = fontFor((evAny.font_subtitle as string) || event.font_style);
+  const bodyFont = fontFor((evAny.font_body as string) || event.font_style);
 
   const logoSize = event.logo_size || "medium";
   const logoClass =
