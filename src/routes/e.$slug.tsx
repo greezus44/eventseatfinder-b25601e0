@@ -195,13 +195,13 @@ function GuestPage() {
         )}
         <h1
           className="whitespace-pre-line leading-[1.05]"
-          style={{ fontFamily: displayFont, fontSize: `${3 * titleScale}rem` }}
+          style={{ fontFamily: titleFont, fontSize: `${3 * titleScale}rem` }}
         >
           {headline}
         </h1>
         <p
           className="mt-4 whitespace-pre-line uppercase tracking-[0.25em] opacity-70"
-          style={{ fontSize: `${0.75 * subtitleScale}rem` }}
+          style={{ fontFamily: subtitleFont, fontSize: `${0.75 * subtitleScale}rem` }}
         >
           {subheadline}
         </p>
@@ -216,7 +216,7 @@ function GuestPage() {
               <p className="uppercase tracking-[0.2em] opacity-80">{eventTime}</p>
             )}
             {venueName && (
-              <p style={{ fontFamily: displayFont }} className="text-lg">
+              <p style={{ fontFamily: subtitleFont }} className="text-lg">
                 {venueName}
               </p>
             )}
@@ -226,7 +226,7 @@ function GuestPage() {
         {welcome && (
           <p
             className="mx-auto mt-8 max-w-lg whitespace-pre-line leading-relaxed opacity-80"
-            style={{ fontSize: `${1 * bodyScale}rem` }}
+            style={{ fontFamily: bodyFont, fontSize: `${1 * bodyScale}rem` }}
           >
             {welcome}
           </p>
