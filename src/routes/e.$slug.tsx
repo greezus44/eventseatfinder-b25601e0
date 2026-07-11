@@ -94,6 +94,9 @@ function GuestPage() {
   const matches = searchQ.data ?? [];
   const tableFor = (id: string | null) => tablesQ.data?.find((tb) => tb.id === id);
   const displayFont = fontFor(event.font_style);
+  const titleFont = fontFor(((evAnyF: Record<string, unknown>) => (evAnyF.font_title as string) || event.font_style)(event as unknown as Record<string, unknown>));
+  const subtitleFont = fontFor(((evAnyF: Record<string, unknown>) => (evAnyF.font_subtitle as string) || event.font_style)(event as unknown as Record<string, unknown>));
+  const bodyFont = fontFor(((evAnyF: Record<string, unknown>) => (evAnyF.font_body as string) || event.font_style)(event as unknown as Record<string, unknown>));
 
   const evAny = event as unknown as Record<string, unknown>;
   const eventTime = (evAny.event_time as string | null) ?? null;
