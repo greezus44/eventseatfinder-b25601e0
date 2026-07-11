@@ -543,6 +543,15 @@ function GuestsTab({ eventId }: { eventId: string }) {
         </div>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Input placeholder="Search guests…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+          <Label className="text-xs text-muted-foreground">Table</Label>
+          <Select value={activeTable} onValueChange={(v) => { setActiveTable(v); setSelected(new Set()); }}>
+            <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {tabList.map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="ml-auto flex items-center gap-2">
             {selected.size > 0 && (
               <Button size="sm" variant="destructive" onClick={removeSelected}>
