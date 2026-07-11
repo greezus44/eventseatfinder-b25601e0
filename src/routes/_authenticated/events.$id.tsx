@@ -1143,9 +1143,6 @@ function GuestPreview({ form, lang }: { form: EventRow; lang: Lang }) {
     >
       <div className="flex min-h-full flex-col items-center px-5 py-8 text-center">
         {form.logo_url && <img src={form.logo_url} alt="" className={`mb-5 ${logoClass} object-contain`} />}
-        <h2 className="whitespace-pre-line leading-tight" style={{ fontFamily: displayFont, fontSize: `${1.5 * ts}rem` }}>
-          {headline}
-        </h2>
         <h2 className="whitespace-pre-line leading-tight" style={{ fontFamily: titleFont, fontSize: `${1.5 * ts}rem` }}>
           {headline}
         </h2>
