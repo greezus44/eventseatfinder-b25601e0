@@ -1117,6 +1117,9 @@ function GuestPreview({ form, lang }: { form: EventRow; lang: Lang }) {
     label: pickBilingual(s.label, scheduleMs[i]?.label, lang),
   }));
   const displayFont = fontFor(form.font_style);
+  const titleFont = fontFor(form.font_title || form.font_style);
+  const subtitleFont = fontFor(form.font_subtitle || form.font_style);
+  const bodyFont = fontFor(form.font_body || form.font_style);
   const accent = form.accent_color;
   const logoClass =
     form.logo_size === "small" ? "h-12" : form.logo_size === "large" ? "h-28" : "h-20";
