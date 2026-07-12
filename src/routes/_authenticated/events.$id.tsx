@@ -1198,11 +1198,14 @@ function GuestPreview({ form, lang }: { form: EventRow; lang: Lang }) {
         {schedule.length > 0 && (
           <div className="mt-6 w-full max-w-[240px] text-left">
             <p className="text-[9px] uppercase tracking-widest opacity-70">{t.schedule}</p>
-            <ul className="mt-1 space-y-0.5">
+            <ul className="mt-1.5 space-y-1.5">
               {schedule.map((s, i) => (
-                <li key={i} className="flex gap-2 text-[10px]">
-                  <span className="w-14 opacity-70">{s.time}</span>
-                  <span>{s.label}</span>
+                <li key={i} className="text-[10px]">
+                  <div className="flex gap-2">
+                    <span className="w-20 shrink-0 opacity-70">{fmtTime(s.time, s.end_time)}</span>
+                    <span className="font-medium">{s.label}</span>
+                  </div>
+                  {s.description && <p className="ml-[calc(5rem+0.5rem)] opacity-70">{s.description}</p>}
                 </li>
               ))}
             </ul>
