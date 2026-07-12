@@ -62,12 +62,15 @@ function GuestPage() {
   const venueName = pickBilingual(event.venue_name ?? "", ms.venue_name, lang);
   const venueAddress = pickBilingual(event.venue_address ?? "", ms.venue_address, lang);
   const contact = pickBilingual(event.contact_info ?? "", ms.contact_info, lang);
-  const scheduleRaw = (event.schedule ?? []) as Array<{ time: string; label: string }>;
+  const scheduleRaw = (event.schedule ?? []) as Array<{ time: string; end_time?: string; label: string; description?: string }>;
   const scheduleMs = ms.schedule ?? [];
   const schedule = scheduleRaw.map((s, i) => ({
     time: s.time,
+    end_time: s.end_time ?? "",
     label: pickBilingual(s.label, scheduleMs[i]?.label, lang),
+    description: pickBilingual(s.description ?? "", scheduleMs[i]?.description, lang),
   }));
+  const fmtScheduleTime = (a: string, b: string) => (a && b ? `${a} – ${b}` : a || b);
 
   const q = query.trim();
   const searchQ = useQuery({
