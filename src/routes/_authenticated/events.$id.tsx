@@ -1121,8 +1121,23 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
               ))}
             </div>
           </div>
+          <div className="mb-2 inline-flex overflow-hidden rounded-md border border-border text-[10px]">
+            {([
+              { id: "search" as const, label: "Search view" },
+              { id: "seated" as const, label: "Seated view" },
+            ]).map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setPreviewView(v.id)}
+                className={`px-2 py-1 transition ${previewView === v.id ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
           <div className="overflow-hidden rounded-lg border border-border">
-            <GuestPreview form={form} lang={previewLang} />
+            <GuestPreview form={form} lang={previewLang} view={previewView} />
           </div>
         </div>
       </div>
