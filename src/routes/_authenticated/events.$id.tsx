@@ -753,8 +753,11 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
       if (form.venue_name) fields.venue_name = form.venue_name;
       if (form.venue_address) fields.venue_address = form.venue_address;
       if (form.contact_info) fields.contact_info = form.contact_info;
-      const scheduleLabels = (form.schedule ?? []).map((s) => s.label).filter(Boolean);
-      scheduleLabels.forEach((lbl, i) => { fields[`__schedule_${i}`] = lbl; });
+      (form.schedule ?? []).forEach((s, i) => {
+        if (s.label) fields[`__schedule_label_${i}`] = s.label;
+        const desc = (s as { description?: string }).description;
+        if (desc) fields[`__schedule_desc_${i}`] = desc;
+      });
       if (Object.keys(fields).length === 0) {
         toast.error("Nothing to translate yet");
         setTranslating(false);
@@ -763,12 +766,20 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
       const res = await translateFields({ data: { fields, target: "ms" } });
       const nextMs: BilingualContent = { ...(form.content_ms ?? {}) };
       const scheduleMs = [...(form.content_ms?.schedule ?? [])];
+      const ensureRow = (i: number) => {
+        while (scheduleMs.length < i + 1) scheduleMs.push({ time: "", label: "" });
+        scheduleMs[i] = { ...scheduleMs[i], time: form.schedule?.[i]?.time ?? "" };
+      };
       for (const [k, v] of Object.entries(res ?? {})) {
         if (typeof v !== "string") continue;
-        if (k.startsWith("__schedule_")) {
-          const i = Number(k.replace("__schedule_", ""));
-          while (scheduleMs.length < i + 1) scheduleMs.push({ time: "", label: "" });
-          scheduleMs[i] = { time: form.schedule?.[i]?.time ?? "", label: v };
+        if (k.startsWith("__schedule_label_")) {
+          const i = Number(k.replace("__schedule_label_", ""));
+          ensureRow(i);
+          scheduleMs[i] = { ...scheduleMs[i], label: v };
+        } else if (k.startsWith("__schedule_desc_")) {
+          const i = Number(k.replace("__schedule_desc_", ""));
+          ensureRow(i);
+          scheduleMs[i] = { ...scheduleMs[i], description: v };
         } else {
           (nextMs as Record<string, unknown>)[k] = v;
         }
