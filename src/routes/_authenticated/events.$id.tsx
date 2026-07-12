@@ -1184,6 +1184,39 @@ function GuestPreview({ form, lang, view = "search" }: { form: EventRow; lang: L
       })
     : null;
 
+  if (view === "seated") {
+    return (
+      <div
+        className="aspect-[9/16] w-full overflow-auto"
+        style={{ background: form.background_color, color: form.text_color }}
+      >
+        <div className="flex min-h-full flex-col items-center px-5 py-6 text-center">
+          {form.logo_url && <img src={form.logo_url} alt="" className={`mb-5 ${logoClass} object-contain`} />}
+          <p className="text-[9px] uppercase tracking-[0.28em] opacity-60" style={{ fontFamily: subtitleFont }}>
+            {t.welcome}
+          </p>
+          <h2 className="mt-2 text-2xl leading-tight" style={{ fontFamily: titleFont }}>
+            Guest Name
+          </h2>
+          <div
+            className="mt-6 w-full rounded-lg border px-5 py-5"
+            style={{ borderColor: accent + "40", background: accent + "0d" }}
+          >
+            <p className="text-[9px] uppercase tracking-[0.28em] opacity-60" style={{ fontFamily: subtitleFont }}>
+              {t.seated_at}
+            </p>
+            <p className="mt-1.5 text-4xl leading-none" style={{ fontFamily: displayFont, color: accent }}>
+              Table 1
+            </p>
+          </div>
+          <p className="mt-auto pt-6 text-[10px] italic opacity-70" style={{ fontFamily: displayFont }}>
+            {footer || " "}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="aspect-[9/16] w-full overflow-auto"
