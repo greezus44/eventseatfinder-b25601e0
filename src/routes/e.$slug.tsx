@@ -357,11 +357,23 @@ function GuestPage() {
             {schedule.length > 0 && (
               <div className="mx-auto mt-16 max-w-lg text-left">
                 <p className="text-xs uppercase tracking-widest opacity-70">{t.schedule}</p>
-                <ul className="mt-2 space-y-1.5">
+                <ul className="mt-3 space-y-3">
                   {schedule.map((s, i) => (
                     <li key={i} className="flex gap-4 text-sm">
-                      <span className="w-20 opacity-70">{s.time}</span>
-                      <span>{s.label}</span>
+                      <span
+                        className="w-28 shrink-0 whitespace-nowrap opacity-70"
+                        style={{ fontFamily: subtitleFont }}
+                      >
+                        {fmtScheduleTime(s.time, s.end_time)}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block font-medium">{s.label}</span>
+                        {s.description && (
+                          <span className="mt-0.5 block whitespace-pre-line text-xs opacity-70">
+                            {s.description}
+                          </span>
+                        )}
+                      </span>
                     </li>
                   ))}
                 </ul>
