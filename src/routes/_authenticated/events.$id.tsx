@@ -530,22 +530,11 @@ function GuestsTab({ eventId }: { eventId: string }) {
   return (
     <div className="grid gap-6 md:grid-cols-[1fr_320px]">
       <div>
-        <div className="mb-3 flex flex-wrap gap-1">
-          {tabList.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => { setActiveTable(t.id); setSelected(new Set()); }}
-              className={`rounded-md border px-3 py-1 text-xs transition ${activeTable === t.id ? "border-foreground bg-foreground text-background" : "border-border hover:border-foreground/40"}`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Input placeholder="Search guests…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
           <Label className="text-xs text-muted-foreground">Table</Label>
           <Select value={activeTable} onValueChange={(v) => { setActiveTable(v); setSelected(new Set()); }}>
-            <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-9 w-52"><SelectValue /></SelectTrigger>
             <SelectContent>
               {tabList.map((t) => (
                 <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
@@ -563,7 +552,7 @@ function GuestsTab({ eventId }: { eventId: string }) {
             </Button>
             <Label className="text-xs text-muted-foreground">Sort</Label>
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as "name" | "table")}>
-              <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-28"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="name">Name</SelectItem>
                 <SelectItem value="table">Table</SelectItem>
