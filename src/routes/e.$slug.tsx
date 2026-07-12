@@ -62,12 +62,15 @@ function GuestPage() {
   const venueName = pickBilingual(event.venue_name ?? "", ms.venue_name, lang);
   const venueAddress = pickBilingual(event.venue_address ?? "", ms.venue_address, lang);
   const contact = pickBilingual(event.contact_info ?? "", ms.contact_info, lang);
-  const scheduleRaw = (event.schedule ?? []) as Array<{ time: string; label: string }>;
+  const scheduleRaw = (event.schedule ?? []) as Array<{ time: string; end_time?: string; label: string; description?: string }>;
   const scheduleMs = ms.schedule ?? [];
   const schedule = scheduleRaw.map((s, i) => ({
     time: s.time,
+    end_time: s.end_time ?? "",
     label: pickBilingual(s.label, scheduleMs[i]?.label, lang),
+    description: pickBilingual(s.description ?? "", scheduleMs[i]?.description, lang),
   }));
+  const fmtScheduleTime = (a: string, b: string) => (a && b ? `${a} – ${b}` : a || b);
 
   const q = query.trim();
   const searchQ = useQuery({
@@ -133,49 +136,73 @@ function GuestPage() {
   if (selected) {
     const tbl = tableFor(selected.table_id);
     return (
-      <div style={bodyStyle} className="flex items-center justify-center px-6">
-        <div className="w-full max-w-md py-16 text-center">
-          <div className="mb-6 flex items-center justify-between">
-            <button
-              onClick={() => setSelected(null)}
-              className="inline-flex items-center gap-1 text-sm opacity-70 hover:opacity-100"
-            >
-              <ArrowLeft className="h-4 w-4" /> {t.search_again}
-            </button>
-            {langSwitch}
-          </div>
+      <div style={bodyStyle}>
+        {/* Top bar with lang switch top-right */}
+        <div className="mx-auto flex max-w-2xl items-center justify-between px-6 pt-6">
+          <button
+            onClick={() => setSelected(null)}
+            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm opacity-70 transition hover:opacity-100"
+          >
+            <ArrowLeft className="h-4 w-4" /> {t.search_again}
+          </button>
+          {langSwitch}
+        </div>
+
+        <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-md flex-col items-center px-6 pb-16 pt-4 text-center">
           {event.logo_url && (
-            <img src={event.logo_url} alt="" className={`mx-auto mb-8 ${logoSelectedClass} object-contain`} />
+            <img src={event.logo_url} alt="" className={`mb-8 ${logoSelectedClass} object-contain`} />
           )}
-          <p className="text-xs uppercase tracking-[0.2em] opacity-70">{t.welcome}</p>
-          <h1 className="mt-3 text-4xl leading-tight" style={{ fontFamily: titleFont }}>
+
+          <p
+            className="text-[11px] uppercase tracking-[0.28em] opacity-60"
+            style={{ fontFamily: subtitleFont }}
+          >
+            {t.welcome}
+          </p>
+          <h1
+            className="mt-3 text-4xl leading-tight md:text-5xl"
+            style={{ fontFamily: titleFont }}
+          >
             {selected.full_name}
           </h1>
+
           {tbl ? (
-            <>
-              <p className="mt-10 text-xs uppercase tracking-[0.2em] opacity-70">{t.seated_at}</p>
-              <p className="mt-2 text-6xl" style={{ fontFamily: displayFont, color: accent }}>
+            <div
+              className="mt-10 w-full rounded-lg border px-8 py-8"
+              style={{ borderColor: accent + "30", background: accent + "08" }}
+            >
+              <p
+                className="text-[11px] uppercase tracking-[0.28em] opacity-60"
+                style={{ fontFamily: subtitleFont }}
+              >
+                {t.seated_at}
+              </p>
+              <p
+                className="mt-3 text-6xl leading-none md:text-7xl"
+                style={{ fontFamily: displayFont, color: accent }}
+              >
                 {tbl.name}
               </p>
               {tbl.location_note && (
-                <p className="mt-3 inline-flex items-center gap-1 text-sm opacity-80">
+                <p className="mt-4 inline-flex items-center gap-1.5 text-sm opacity-80">
                   <MapPin className="h-3.5 w-3.5" /> {tbl.location_note}
                 </p>
               )}
-            </>
+            </div>
           ) : (
             <p className="mt-10 opacity-70">{t.no_table}</p>
           )}
+
           {selected.personal_message && (
             <div
-              className="mt-10 rounded-2xl border p-5 text-left text-sm opacity-90"
-              style={{ borderColor: accent + "40" }}
+              className="mt-6 w-full rounded-lg border p-5 text-left text-sm leading-relaxed opacity-90"
+              style={{ borderColor: accent + "30" }}
             >
               {selected.personal_message}
             </div>
           )}
           {selected.meal_choice && (
-            <p className="mt-6 text-xs uppercase tracking-widest opacity-70">
+            <p className="mt-6 text-[11px] uppercase tracking-[0.28em] opacity-60">
               {t.meal} · {selected.meal_choice}
             </p>
           )}
@@ -186,12 +213,12 @@ function GuestPage() {
 
   return (
     <div style={bodyStyle}>
-      <div className="mx-auto max-w-2xl px-6 py-12 text-center">
-        <div className="mb-6 flex justify-end">{langSwitch}</div>
+      <div className="mx-auto max-w-2xl px-6 pb-12 pt-6 text-center">
+        <div className="mb-8 flex justify-end">{langSwitch}</div>
 
         {/* Logo + title + date/venue block */}
         {event.logo_url && (
-          <img src={event.logo_url} alt="" className={`mx-auto mb-8 ${logoClass} object-contain`} />
+          <img src={event.logo_url} alt="" className={`mx-auto mb-6 ${logoClass} object-contain`} />
         )}
         <h1
           className="whitespace-pre-line leading-[1.05]"
@@ -330,11 +357,23 @@ function GuestPage() {
             {schedule.length > 0 && (
               <div className="mx-auto mt-16 max-w-lg text-left">
                 <p className="text-xs uppercase tracking-widest opacity-70">{t.schedule}</p>
-                <ul className="mt-2 space-y-1.5">
+                <ul className="mt-3 space-y-3">
                   {schedule.map((s, i) => (
                     <li key={i} className="flex gap-4 text-sm">
-                      <span className="w-20 opacity-70">{s.time}</span>
-                      <span>{s.label}</span>
+                      <span
+                        className="w-28 shrink-0 whitespace-nowrap opacity-70"
+                        style={{ fontFamily: subtitleFont }}
+                      >
+                        {fmtScheduleTime(s.time, s.end_time)}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block font-medium">{s.label}</span>
+                        {s.description && (
+                          <span className="mt-0.5 block whitespace-pre-line text-xs opacity-70">
+                            {s.description}
+                          </span>
+                        )}
+                      </span>
                     </li>
                   ))}
                 </ul>

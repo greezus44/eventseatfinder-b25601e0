@@ -39,7 +39,7 @@ type EventRow = {
   accent_color: string; background_color: string; text_color: string; font_style: string;
   font_title: string | null; font_subtitle: string | null; font_body: string | null;
   venue_name: string | null; venue_address: string | null; contact_info: string | null;
-  is_published: boolean; schedule: Array<{ time: string; label: string }>;
+  is_published: boolean; schedule: Array<{ time: string; end_time?: string; label: string; description?: string }>;
   public_base_url: string | null;
   content_ms: BilingualContent;
   default_language: string;
@@ -530,22 +530,11 @@ function GuestsTab({ eventId }: { eventId: string }) {
   return (
     <div className="grid gap-6 md:grid-cols-[1fr_320px]">
       <div>
-        <div className="mb-3 flex flex-wrap gap-1">
-          {tabList.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => { setActiveTable(t.id); setSelected(new Set()); }}
-              className={`rounded-md border px-3 py-1 text-xs transition ${activeTable === t.id ? "border-foreground bg-foreground text-background" : "border-border hover:border-foreground/40"}`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Input placeholder="Search guests…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
           <Label className="text-xs text-muted-foreground">Table</Label>
           <Select value={activeTable} onValueChange={(v) => { setActiveTable(v); setSelected(new Set()); }}>
-            <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-9 w-52"><SelectValue /></SelectTrigger>
             <SelectContent>
               {tabList.map((t) => (
                 <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
@@ -563,7 +552,7 @@ function GuestsTab({ eventId }: { eventId: string }) {
             </Button>
             <Label className="text-xs text-muted-foreground">Sort</Label>
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as "name" | "table")}>
-              <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-28"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="name">Name</SelectItem>
                 <SelectItem value="table">Table</SelectItem>
@@ -691,6 +680,7 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
   const [form, setForm] = useState<EventRow>(event);
   const [contentLang, setContentLang] = useState<Lang>("en");
   const [previewLang, setPreviewLang] = useState<Lang>((event.default_language as Lang) ?? "en");
+  const [previewView, setPreviewView] = useState<"search" | "seated">("search");
   const [translating, setTranslating] = useState(false);
   useEffect(() => setForm(event), [event]);
 
@@ -735,19 +725,19 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
   const setMs = (patch: Partial<BilingualContent>) =>
     setForm((f) => ({ ...f, content_ms: { ...(f.content_ms ?? {}), ...patch } }));
 
-  const updateSchedule = (i: number, patch: Partial<{ time: string; label: string }>) => {
-    const next = [...(form.schedule ?? [])];
+  const updateSchedule = (i: number, patch: Partial<{ time: string; end_time: string; label: string; description: string }>) => {
+    const next = [...(form.schedule ?? [])] as Array<{ time: string; end_time?: string; label: string; description?: string }>;
     next[i] = { ...next[i], ...patch };
-    set("schedule", next);
+    set("schedule", next as EventRow["schedule"]);
   };
   const addSchedule = () => set("schedule", [...(form.schedule ?? []), { time: "", label: "" }]);
   const removeSchedule = (i: number) => set("schedule", (form.schedule ?? []).filter((_, idx) => idx !== i));
 
-  const updateScheduleMs = (i: number, label: string) => {
-    const next = [...(form.content_ms?.schedule ?? [])];
-    while (next.length < i + 1) next.push({ time: "", label: "" });
-    next[i] = { time: form.schedule?.[i]?.time ?? "", label };
-    setMs({ schedule: next });
+  const updateScheduleMs = (i: number, patch: Partial<{ label: string; description: string }>) => {
+    const cur = [...(form.content_ms?.schedule ?? [])];
+    while (cur.length < i + 1) cur.push({ time: "", label: "" });
+    cur[i] = { ...cur[i], ...patch, time: form.schedule?.[i]?.time ?? cur[i]?.time ?? "" };
+    setMs({ schedule: cur });
   };
 
   const ms = form.content_ms ?? {};
@@ -764,8 +754,11 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
       if (form.venue_name) fields.venue_name = form.venue_name;
       if (form.venue_address) fields.venue_address = form.venue_address;
       if (form.contact_info) fields.contact_info = form.contact_info;
-      const scheduleLabels = (form.schedule ?? []).map((s) => s.label).filter(Boolean);
-      scheduleLabels.forEach((lbl, i) => { fields[`__schedule_${i}`] = lbl; });
+      (form.schedule ?? []).forEach((s, i) => {
+        if (s.label) fields[`__schedule_label_${i}`] = s.label;
+        const desc = (s as { description?: string }).description;
+        if (desc) fields[`__schedule_desc_${i}`] = desc;
+      });
       if (Object.keys(fields).length === 0) {
         toast.error("Nothing to translate yet");
         setTranslating(false);
@@ -774,12 +767,20 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
       const res = await translateFields({ data: { fields, target: "ms" } });
       const nextMs: BilingualContent = { ...(form.content_ms ?? {}) };
       const scheduleMs = [...(form.content_ms?.schedule ?? [])];
+      const ensureRow = (i: number) => {
+        while (scheduleMs.length < i + 1) scheduleMs.push({ time: "", label: "" });
+        scheduleMs[i] = { ...scheduleMs[i], time: form.schedule?.[i]?.time ?? "" };
+      };
       for (const [k, v] of Object.entries(res ?? {})) {
         if (typeof v !== "string") continue;
-        if (k.startsWith("__schedule_")) {
-          const i = Number(k.replace("__schedule_", ""));
-          while (scheduleMs.length < i + 1) scheduleMs.push({ time: "", label: "" });
-          scheduleMs[i] = { time: form.schedule?.[i]?.time ?? "", label: v };
+        if (k.startsWith("__schedule_label_")) {
+          const i = Number(k.replace("__schedule_label_", ""));
+          ensureRow(i);
+          scheduleMs[i] = { ...scheduleMs[i], label: v };
+        } else if (k.startsWith("__schedule_desc_")) {
+          const i = Number(k.replace("__schedule_desc_", ""));
+          ensureRow(i);
+          scheduleMs[i] = { ...scheduleMs[i], description: v };
         } else {
           (nextMs as Record<string, unknown>)[k] = v;
         }
@@ -911,18 +912,38 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
         </Section>
 
         <Section title="Schedule">
-          <div className="space-y-2">
-            {(form.schedule ?? []).map((s, i) => (
-              <div key={i} className="flex gap-2">
-                <Input className="w-32" placeholder="5:00 pm" value={s.time} onChange={(e) => updateSchedule(i, { time: e.target.value })} />
-                <Input
-                  placeholder={isMs ? "Majlis" : "Ceremony"}
-                  value={isMs ? ms.schedule?.[i]?.label ?? "" : s.label}
-                  onChange={(e) => isMs ? updateScheduleMs(i, e.target.value) : updateSchedule(i, { label: e.target.value })}
-                />
-                <Button variant="ghost" size="icon" onClick={() => removeSchedule(i)}><Trash2 className="h-4 w-4" /></Button>
-              </div>
-            ))}
+          <p className="text-xs text-muted-foreground">Add times in 12-hour format (e.g. 5:00 PM). Leave end time blank for a single moment.</p>
+          <div className="space-y-3">
+            {(form.schedule ?? []).map((s, i) => {
+              const sx = s as { time: string; end_time?: string; label: string; description?: string };
+              const msRow = ms.schedule?.[i] as { label?: string; description?: string } | undefined;
+              return (
+                <div key={i} className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Start</Label>
+                      <Input className="h-9 w-28" placeholder="5:00 PM" value={sx.time} onChange={(e) => updateSchedule(i, { time: e.target.value })} />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">End</Label>
+                      <Input className="h-9 w-28" placeholder="6:00 PM" value={sx.end_time ?? ""} onChange={(e) => updateSchedule(i, { end_time: e.target.value })} />
+                    </div>
+                    <Button variant="ghost" size="icon" className="ml-auto" onClick={() => removeSchedule(i)}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
+                  <Input
+                    placeholder={isMs ? "Tajuk (contoh: Majlis)" : "Title (e.g. Ceremony)"}
+                    value={isMs ? msRow?.label ?? "" : sx.label}
+                    onChange={(e) => isMs ? updateScheduleMs(i, { label: e.target.value }) : updateSchedule(i, { label: e.target.value })}
+                  />
+                  <Textarea
+                    rows={2}
+                    placeholder={isMs ? "Penerangan (pilihan)" : "Description (optional)"}
+                    value={isMs ? msRow?.description ?? "" : sx.description ?? ""}
+                    onChange={(e) => isMs ? updateScheduleMs(i, { description: e.target.value }) : updateSchedule(i, { description: e.target.value })}
+                  />
+                </div>
+              );
+            })}
             <Button variant="outline" size="sm" onClick={addSchedule}><Plus className="h-4 w-4" /> Add item</Button>
           </div>
         </Section>
@@ -1101,8 +1122,23 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
               ))}
             </div>
           </div>
+          <div className="mb-2 inline-flex overflow-hidden rounded-md border border-border text-[10px]">
+            {([
+              { id: "search" as const, label: "Search view" },
+              { id: "seated" as const, label: "Seated view" },
+            ]).map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setPreviewView(v.id)}
+                className={`px-2 py-1 transition ${previewView === v.id ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
           <div className="overflow-hidden rounded-lg border border-border">
-            <GuestPreview form={form} lang={previewLang} />
+            <GuestPreview form={form} lang={previewLang} view={previewView} />
           </div>
         </div>
       </div>
@@ -1110,7 +1146,7 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
   );
 }
 
-function GuestPreview({ form, lang }: { form: EventRow; lang: Lang }) {
+function GuestPreview({ form, lang, view = "search" }: { form: EventRow; lang: Lang; view?: "search" | "seated" }) {
   const t = T[lang];
   const ms = form.content_ms ?? {};
   const headline = pickBilingual(form.headline ?? form.name, ms.headline, lang);
@@ -1123,8 +1159,11 @@ function GuestPreview({ form, lang }: { form: EventRow; lang: Lang }) {
   const scheduleMs = ms.schedule ?? [];
   const schedule = scheduleRaw.map((s, i) => ({
     time: s.time,
+    end_time: s.end_time ?? "",
     label: pickBilingual(s.label, scheduleMs[i]?.label, lang),
+    description: pickBilingual(s.description ?? "", scheduleMs[i]?.description, lang),
   }));
+  const fmtTime = (a: string, b: string) => (a && b ? `${a} – ${b}` : a || b);
   const displayFont = fontFor(form.font_style);
   const titleFont = fontFor(form.font_title || form.font_style);
   const subtitleFont = fontFor(form.font_subtitle || form.font_style);
@@ -1144,6 +1183,39 @@ function GuestPreview({ form, lang }: { form: EventRow; lang: Lang }) {
         year: "numeric",
       })
     : null;
+
+  if (view === "seated") {
+    return (
+      <div
+        className="aspect-[9/16] w-full overflow-auto"
+        style={{ background: form.background_color, color: form.text_color }}
+      >
+        <div className="flex min-h-full flex-col items-center px-5 py-6 text-center">
+          {form.logo_url && <img src={form.logo_url} alt="" className={`mb-5 ${logoClass} object-contain`} />}
+          <p className="text-[9px] uppercase tracking-[0.28em] opacity-60" style={{ fontFamily: subtitleFont }}>
+            {t.welcome}
+          </p>
+          <h2 className="mt-2 text-2xl leading-tight" style={{ fontFamily: titleFont }}>
+            Guest Name
+          </h2>
+          <div
+            className="mt-6 w-full rounded-lg border px-5 py-5"
+            style={{ borderColor: accent + "40", background: accent + "0d" }}
+          >
+            <p className="text-[9px] uppercase tracking-[0.28em] opacity-60" style={{ fontFamily: subtitleFont }}>
+              {t.seated_at}
+            </p>
+            <p className="mt-1.5 text-4xl leading-none" style={{ fontFamily: displayFont, color: accent }}>
+              Table 1
+            </p>
+          </div>
+          <p className="mt-auto pt-6 text-[10px] italic opacity-70" style={{ fontFamily: displayFont }}>
+            {footer || " "}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -1175,11 +1247,14 @@ function GuestPreview({ form, lang }: { form: EventRow; lang: Lang }) {
         {schedule.length > 0 && (
           <div className="mt-6 w-full max-w-[240px] text-left">
             <p className="text-[9px] uppercase tracking-widest opacity-70">{t.schedule}</p>
-            <ul className="mt-1 space-y-0.5">
+            <ul className="mt-1.5 space-y-1.5">
               {schedule.map((s, i) => (
-                <li key={i} className="flex gap-2 text-[10px]">
-                  <span className="w-14 opacity-70">{s.time}</span>
-                  <span>{s.label}</span>
+                <li key={i} className="text-[10px]">
+                  <div className="flex gap-2">
+                    <span className="w-20 shrink-0 opacity-70">{fmtTime(s.time, s.end_time)}</span>
+                    <span className="font-medium">{s.label}</span>
+                  </div>
+                  {s.description && <p className="ml-[calc(5rem+0.5rem)] opacity-70">{s.description}</p>}
                 </li>
               ))}
             </ul>

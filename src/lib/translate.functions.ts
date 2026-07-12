@@ -1,8 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 type Payload = { fields: Record<string, string>; target: "ms" | "en" };
 
 export const translateFields = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((data: Payload) => {
     if (!data || typeof data !== "object") throw new Error("Invalid input");
     if (!data.fields || typeof data.fields !== "object") throw new Error("Missing fields");
