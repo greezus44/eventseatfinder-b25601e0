@@ -1143,8 +1143,11 @@ function GuestPreview({ form, lang }: { form: EventRow; lang: Lang }) {
   const scheduleMs = ms.schedule ?? [];
   const schedule = scheduleRaw.map((s, i) => ({
     time: s.time,
+    end_time: s.end_time ?? "",
     label: pickBilingual(s.label, scheduleMs[i]?.label, lang),
+    description: pickBilingual(s.description ?? "", scheduleMs[i]?.description, lang),
   }));
+  const fmtTime = (a: string, b: string) => (a && b ? `${a} – ${b}` : a || b);
   const displayFont = fontFor(form.font_style);
   const titleFont = fontFor(form.font_title || form.font_style);
   const subtitleFont = fontFor(form.font_subtitle || form.font_style);
