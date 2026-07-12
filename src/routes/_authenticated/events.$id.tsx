@@ -39,7 +39,7 @@ type EventRow = {
   accent_color: string; background_color: string; text_color: string; font_style: string;
   font_title: string | null; font_subtitle: string | null; font_body: string | null;
   venue_name: string | null; venue_address: string | null; contact_info: string | null;
-  is_published: boolean; schedule: Array<{ time: string; label: string }>;
+  is_published: boolean; schedule: Array<{ time: string; end_time?: string; label: string; description?: string }>;
   public_base_url: string | null;
   content_ms: BilingualContent;
   default_language: string;
