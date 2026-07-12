@@ -78,7 +78,7 @@ export type BilingualContent = {
   venue_address?: string;
   contact_info?: string;
   default_sub?: string;
-  schedule?: Array<{ time: string; label: string }>;
+  schedule?: Array<{ time: string; end_time?: string; label: string; description?: string }>;
 };
 
 export function pickBilingual<T>(en: T, ms: T | undefined | null, lang: Lang): T {
