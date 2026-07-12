@@ -911,18 +911,38 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
         </Section>
 
         <Section title="Schedule">
-          <div className="space-y-2">
-            {(form.schedule ?? []).map((s, i) => (
-              <div key={i} className="flex gap-2">
-                <Input className="w-32" placeholder="5:00 pm" value={s.time} onChange={(e) => updateSchedule(i, { time: e.target.value })} />
-                <Input
-                  placeholder={isMs ? "Majlis" : "Ceremony"}
-                  value={isMs ? ms.schedule?.[i]?.label ?? "" : s.label}
-                  onChange={(e) => isMs ? updateScheduleMs(i, e.target.value) : updateSchedule(i, { label: e.target.value })}
-                />
-                <Button variant="ghost" size="icon" onClick={() => removeSchedule(i)}><Trash2 className="h-4 w-4" /></Button>
-              </div>
-            ))}
+          <p className="text-xs text-muted-foreground">Add times in 12-hour format (e.g. 5:00 PM). Leave end time blank for a single moment.</p>
+          <div className="space-y-3">
+            {(form.schedule ?? []).map((s, i) => {
+              const sx = s as { time: string; end_time?: string; label: string; description?: string };
+              const msRow = ms.schedule?.[i] as { label?: string; description?: string } | undefined;
+              return (
+                <div key={i} className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Start</Label>
+                      <Input className="h-9 w-28" placeholder="5:00 PM" value={sx.time} onChange={(e) => updateSchedule(i, { time: e.target.value })} />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">End</Label>
+                      <Input className="h-9 w-28" placeholder="6:00 PM" value={sx.end_time ?? ""} onChange={(e) => updateSchedule(i, { end_time: e.target.value })} />
+                    </div>
+                    <Button variant="ghost" size="icon" className="ml-auto" onClick={() => removeSchedule(i)}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
+                  <Input
+                    placeholder={isMs ? "Tajuk (contoh: Majlis)" : "Title (e.g. Ceremony)"}
+                    value={isMs ? msRow?.label ?? "" : sx.label}
+                    onChange={(e) => isMs ? updateScheduleMs(i, { label: e.target.value }) : updateSchedule(i, { label: e.target.value })}
+                  />
+                  <Textarea
+                    rows={2}
+                    placeholder={isMs ? "Penerangan (pilihan)" : "Description (optional)"}
+                    value={isMs ? msRow?.description ?? "" : sx.description ?? ""}
+                    onChange={(e) => isMs ? updateScheduleMs(i, { description: e.target.value }) : updateSchedule(i, { description: e.target.value })}
+                  />
+                </div>
+              );
+            })}
             <Button variant="outline" size="sm" onClick={addSchedule}><Plus className="h-4 w-4" /> Add item</Button>
           </div>
         </Section>
