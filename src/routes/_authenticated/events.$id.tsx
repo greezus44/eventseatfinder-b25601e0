@@ -724,19 +724,19 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
   const setMs = (patch: Partial<BilingualContent>) =>
     setForm((f) => ({ ...f, content_ms: { ...(f.content_ms ?? {}), ...patch } }));
 
-  const updateSchedule = (i: number, patch: Partial<{ time: string; label: string }>) => {
-    const next = [...(form.schedule ?? [])];
+  const updateSchedule = (i: number, patch: Partial<{ time: string; end_time: string; label: string; description: string }>) => {
+    const next = [...(form.schedule ?? [])] as Array<{ time: string; end_time?: string; label: string; description?: string }>;
     next[i] = { ...next[i], ...patch };
-    set("schedule", next);
+    set("schedule", next as EventRow["schedule"]);
   };
   const addSchedule = () => set("schedule", [...(form.schedule ?? []), { time: "", label: "" }]);
   const removeSchedule = (i: number) => set("schedule", (form.schedule ?? []).filter((_, idx) => idx !== i));
 
-  const updateScheduleMs = (i: number, label: string) => {
-    const next = [...(form.content_ms?.schedule ?? [])];
-    while (next.length < i + 1) next.push({ time: "", label: "" });
-    next[i] = { time: form.schedule?.[i]?.time ?? "", label };
-    setMs({ schedule: next });
+  const updateScheduleMs = (i: number, patch: Partial<{ label: string; description: string }>) => {
+    const cur = [...(form.content_ms?.schedule ?? [])];
+    while (cur.length < i + 1) cur.push({ time: "", label: "" });
+    cur[i] = { ...cur[i], ...patch, time: form.schedule?.[i]?.time ?? cur[i]?.time ?? "" };
+    setMs({ schedule: cur });
   };
 
   const ms = form.content_ms ?? {};
