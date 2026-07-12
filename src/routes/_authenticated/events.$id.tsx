@@ -1146,7 +1146,7 @@ function CustomizeTab({ event, onSaved }: { event: EventRow; onSaved: () => void
   );
 }
 
-function GuestPreview({ form, lang }: { form: EventRow; lang: Lang }) {
+function GuestPreview({ form, lang, view = "search" }: { form: EventRow; lang: Lang; view?: "search" | "seated" }) {
   const t = T[lang];
   const ms = form.content_ms ?? {};
   const headline = pickBilingual(form.headline ?? form.name, ms.headline, lang);
