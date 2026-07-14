@@ -108,9 +108,16 @@ body { font-family: var(--font-sans); background: var(--color-bg); color: var(--
 .gp-preview-venue { color: var(--color-text-muted); }
 
 /* ===== Guest Management ===== */
-.guest-filters { display: flex; gap: var(--space-3); margin-bottom: var(--space-4); }
+.guest-filters { display: flex; gap: var(--space-3); margin-bottom: var(--space-3); }
 .guest-filters .input { flex: 1; }
 .guest-filters .select { width: auto; }
+
+/* Sort toggle — compact two-button segmented control */
+.sort-toggle { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
+.sort-toggle-btn { flex: 1; padding: var(--space-2) var(--space-4); font-size: 13px; font-weight: 600; border: 1px solid var(--color-primary); border-radius: 11px; background: transparent; color: var(--color-primary); cursor: pointer; transition: all .2s ease; text-align: center; }
+.sort-toggle-btn.active { background: var(--color-primary); color: #fff; }
+.sort-toggle-btn:hover:not(.active) { background: rgba(15,118,110,.06); }
+
 .guest-list { display: flex; flex-direction: column; gap: var(--space-1); max-height: 600px; overflow-y: auto; }
 .guest-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); border: 1px solid var(--color-border); transition: background .15s ease; }
 .guest-row:hover { background: var(--color-bg); }

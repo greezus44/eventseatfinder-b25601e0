@@ -18,7 +18,6 @@ type Tab = 'details' | 'guests' | 'tables' | 'layout' | 'theme' | 'share'
 const HOURS = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 const MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55']
 
-// Logo size presets — map to pixel widths
 const LOGO_SIZES = [
   { label: 'Small', value: 80 },
   { label: 'Medium', value: 160 },
@@ -65,22 +64,16 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
   const [time, setTime] = useState(event.time ?? '09:00')
   const [venue, setVenue] = useState(event.venue ?? '')
   const [detailsDirty, setDetailsDirty] = useState(false)
-
-  // Logo state — restored logo management
   const [logoUrl, setLogoUrl] = useState<string | null>(settings?.logo_url ?? null)
   const [logoSize, setLogoSize] = useState<number>(settings?.logo_size ?? 80)
   const [logoUploading, setLogoUploading] = useState(false)
   const [logoDragOver, setLogoDragOver] = useState(false)
   const logoFileRef = useRef<HTMLInputElement>(null)
-
-  // Typography state
   const [titleFont, setTitleFont] = useState('Inter'); const [titleSize, setTitleSize] = useState(32); const [titleColor, setTitleColor] = useState('#0f172a')
   const [subtitleFont, setSubtitleFont] = useState('Inter'); const [subtitleSize, setSubtitleSize] = useState(16); const [subtitleColor, setSubtitleColor] = useState('#64748b')
   const [datetimeFont, setDatetimeFont] = useState('Inter'); const [datetimeSize, setDatetimeSize] = useState(14); const [datetimeColor, setDatetimeColor] = useState('#64748b')
   const [venueFont, setVenueFont] = useState('Inter'); const [venueSize, setVenueSize] = useState(14); const [venueColor, setVenueColor] = useState('#64748b')
   const [typoDirty, setTypoDirty] = useState(false)
-
-  // Sync state when settings arrive from server
   useEffect(() => {
     if (!settings) return
     setTitleFont(settings.font_title_family ?? 'Inter'); setTitleSize(settings.font_title_size ?? 32); setTitleColor(settings.font_title_color ?? '#0f172a')
@@ -91,22 +84,15 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
     setLogoUrl(settings.logo_url ?? null)
     setLogoSize(settings.logo_size ?? 80)
   }, [settings])
-
   useEffect(() => {
     setDetailsDirty(
-      name !== event.name ||
-      subtitle !== (settings?.event_subtitle ?? '') ||
-      date !== (event.date ?? '') ||
-      time !== (event.time ?? '09:00') ||
-      venue !== (event.venue ?? '') ||
-      logoUrl !== (settings?.logo_url ?? null) ||
-      logoSize !== (settings?.logo_size ?? 80)
+      name !== event.name || subtitle !== (settings?.event_subtitle ?? '') || date !== (event.date ?? '') ||
+      time !== (event.time ?? '09:00') || venue !== (event.venue ?? '') ||
+      logoUrl !== (settings?.logo_url ?? null) || logoSize !== (settings?.logo_size ?? 80)
     )
   }, [name, subtitle, date, time, venue, logoUrl, logoSize, event, settings])
-
   const allFonts = [titleFont, subtitleFont, datetimeFont, venueFont]
   useEffect(() => { loadGoogleFonts(allFonts) }, allFonts)
-
   useEffect(() => {
     if (!settings) { setTypoDirty(false); return }
     setTypoDirty(
@@ -116,31 +102,17 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
       venueFont !== (settings.font_venue_family ?? 'Inter') || venueSize !== (settings.font_venue_size ?? 14) || venueColor !== (settings.font_venue_color ?? '#64748b')
     )
   }, [titleFont, titleSize, titleColor, subtitleFont, subtitleSize, subtitleColor, datetimeFont, datetimeSize, datetimeColor, venueFont, venueSize, venueColor, settings])
-
-  // Logo upload handler — supports drag & drop and browse
   const handleLogoFile = async (file: File) => {
-    if (!file.type.match(/image\/(png|jpe?g|svg\+xml|webp)/)) {
-      toast('Please use PNG, JPG, SVG, or WebP', 'error')
-      return
-    }
+    if (!file.type.match(/image\/(png|jpe?g|svg\+xml|webp)/)) { toast('Please use PNG, JPG, SVG, or WebP', 'error'); return }
     setLogoUploading(true)
     try {
-      // Read as data URL for immediate preview
       const reader = new FileReader()
-      reader.onload = () => {
-        setLogoUrl(reader.result as string)
-        setLogoUploading(false)
-      }
+      reader.onload = () => { setLogoUrl(reader.result as string); setLogoUploading(false) }
       reader.readAsDataURL(file)
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load image', 'error')
-      setLogoUploading(false)
-    }
+    } catch (err) { toast(err instanceof Error ? err.message : 'Failed to load image', 'error'); setLogoUploading(false) }
   }
-
   const handleLogoUpload = async (): Promise<string | null> => {
     if (!logoUrl) return null
-    // If it's a data URL, upload to storage
     if (logoUrl.startsWith('data:')) {
       try {
         const response = await fetch(logoUrl)
@@ -149,39 +121,20 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
         const publicUrl = await uploadEventImage(eventId, file, 'logo')
         setLogoUrl(publicUrl)
         return publicUrl
-      } catch (err) {
-        toast(err instanceof Error ? err.message : 'Failed to upload logo', 'error')
-        throw err
-      }
+      } catch (err) { toast(err instanceof Error ? err.message : 'Failed to upload logo', 'error'); throw err }
     }
     return logoUrl
   }
-
-  const handleRemoveLogo = () => {
-    setLogoUrl(null)
-  }
-
+  const handleRemoveLogo = () => { setLogoUrl(null) }
   const handleSaveDetails = async () => {
     try {
-      // Upload logo to storage if it's a data URL
       let finalLogoUrl: string | null = logoUrl
-      if (logoUrl && logoUrl.startsWith('data:')) {
-        finalLogoUrl = await handleLogoUpload()
-      }
-
+      if (logoUrl && logoUrl.startsWith('data:')) { finalLogoUrl = await handleLogoUpload() }
       await updateEvent.mutateAsync({ id: eventId, name, slug: event.slug, date: date || null, time: time || null, venue: venue || null })
-      await upsertSettings.mutateAsync({
-        event_id: eventId,
-        event_subtitle: subtitle || null,
-        logo_url: finalLogoUrl,
-        logo_size: logoSize,
-      })
+      await upsertSettings.mutateAsync({ event_id: eventId, event_subtitle: subtitle || null, logo_url: finalLogoUrl, logo_size: logoSize })
       toast('Event details saved'); setDetailsDirty(false)
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to save', 'error')
-    }
+    } catch (err) { toast(err instanceof Error ? err.message : 'Failed to save', 'error') }
   }
-
   const handleSaveTypography = async () => {
     try {
       await upsertSettings.mutateAsync({
@@ -194,89 +147,42 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
       toast('Typography saved'); setTypoDirty(false)
     } catch (err) { toast(err instanceof Error ? err.message : 'Failed to save', 'error') }
   }
-
-  const logoSizeLabel = LOGO_SIZES.find((s) => s.value === logoSize)?.label ?? 'Custom'
-
   return (
     <div className="section">
       <div className="card section">
         <div className="card-header"><h3 className="card-title">Event Details</h3><p className="card-subtitle">Basic information about your event</p></div>
-        <div className="form-row">
-          <div className="form-group"><label className="form-label">Event Name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Wedding" /></div>
-          <div className="form-group"><label className="form-label">Subtitle (optional)</label><input className="input" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="Together With Our Families" /></div>
-        </div>
-        <div className="form-row" style={{ marginTop: 'var(--space-4)' }}>
-          <div className="form-group"><label className="form-label">Venue</label><input className="input" value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="Grand Hotel" /></div>
-        </div>
-        <div className="form-row" style={{ marginTop: 'var(--space-4)' }}>
-          <div className="form-group"><label className="form-label">Date</label><input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Time</label><TimeSelector value={time} onChange={setTime} /></div>
-        </div>
-
-        {/* Logo Management Section — restored */}
+        <div className="form-row"><div className="form-group"><label className="form-label">Event Name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Wedding" /></div><div className="form-group"><label className="form-label">Subtitle (optional)</label><input className="input" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="Together With Our Families" /></div></div>
+        <div className="form-row" style={{ marginTop: 'var(--space-4)' }}><div className="form-group"><label className="form-label">Venue</label><input className="input" value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="Grand Hotel" /></div></div>
+        <div className="form-row" style={{ marginTop: 'var(--space-4)' }}><div className="form-group"><label className="form-label">Date</label><input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div><div className="form-group"><label className="form-label">Time</label><TimeSelector value={time} onChange={setTime} /></div></div>
         <div className="logo-section" style={{ marginTop: 'var(--space-5)' }}>
           <label className="form-label">Logo</label>
           {logoUrl ? (
             <div className="logo-preview-area">
-              <div className="logo-preview-box">
-                <img src={logoUrl} alt="Event logo preview" style={{ maxWidth: '100%', maxHeight: '120px', objectFit: 'contain' }} />
-              </div>
-              <div className="logo-actions">
-                <button className="btn btn-ghost btn-sm" onClick={() => logoFileRef.current?.click()} disabled={logoUploading}>Replace</button>
-                <button className="btn btn-ghost btn-sm" onClick={handleRemoveLogo} disabled={logoUploading}>Remove</button>
-              </div>
+              <div className="logo-preview-box"><img src={logoUrl} alt="Event logo preview" style={{ maxWidth: '100%', maxHeight: '120px', objectFit: 'contain' }} /></div>
+              <div className="logo-actions"><button className="btn btn-ghost btn-sm" onClick={() => logoFileRef.current?.click()} disabled={logoUploading}>Replace</button><button className="btn btn-ghost btn-sm" onClick={handleRemoveLogo} disabled={logoUploading}>Remove</button></div>
             </div>
           ) : (
-            <div
-              className={`dropzone ${logoDragOver ? 'dropzone-active' : ''}`}
-              onDragOver={(e) => { e.preventDefault(); setLogoDragOver(true) }}
-              onDragLeave={() => setLogoDragOver(false)}
-              onDrop={(e) => { e.preventDefault(); setLogoDragOver(false); if (e.dataTransfer.files[0]) handleLogoFile(e.dataTransfer.files[0]) }}
-              onClick={() => logoFileRef.current?.click()}
-            >
-              <p className="dropzone-text">{logoUploading ? 'Uploading…' : 'Drop logo here or click to browse'}</p>
-              <p className="dropzone-hint">PNG, JPG, SVG, or WebP</p>
-            </div>
+            <div className={`dropzone ${logoDragOver ? 'dropzone-active' : ''}`} onDragOver={(e) => { e.preventDefault(); setLogoDragOver(true) }} onDragLeave={() => setLogoDragOver(false)} onDrop={(e) => { e.preventDefault(); setLogoDragOver(false); if (e.dataTransfer.files[0]) handleLogoFile(e.dataTransfer.files[0]) }} onClick={() => logoFileRef.current?.click()}><p className="dropzone-text">{logoUploading ? 'Uploading…' : 'Drop logo here or click to browse'}</p><p className="dropzone-hint">PNG, JPG, SVG, or WebP</p></div>
           )}
           <input ref={logoFileRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && handleLogoFile(e.target.files[0])} />
-
-          {/* Logo Size Controls — preset buttons */}
           <div className="logo-size-controls" style={{ marginTop: 'var(--space-4)' }}>
             <label className="form-label">Logo Size</label>
-            <div className="logo-size-presets">
-              {LOGO_SIZES.map((s) => (
-                <button
-                  key={s.value}
-                  className={`btn btn-sm ${logoSize === s.value ? 'btn-primary' : 'btn-ghost'}`}
-                  onClick={() => setLogoSize(s.value)}
-                >{s.label}</button>
-              ))}
-            </div>
+            <div className="logo-size-presets">{LOGO_SIZES.map((s) => <button key={s.value} className={`btn btn-sm ${logoSize === s.value ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setLogoSize(s.value)}>{s.label}</button>)}</div>
           </div>
         </div>
-
         <div style={{ marginTop: 'var(--space-5)' }}><button className="btn btn-primary" onClick={handleSaveDetails} disabled={!detailsDirty || updateEvent.isPending || upsertSettings.isPending || logoUploading}>{updateEvent.isPending || upsertSettings.isPending ? 'Saving…' : 'Save Changes'}</button></div>
       </div>
-
-      {/* Live Preview — shows logo, title, subtitle, date, venue */}
       <div className="card section">
         <div className="card-header"><h3 className="card-title">Live Preview</h3><p className="card-subtitle">See how your guest page will look</p></div>
         <div className="gp-preview-container">
-          {logoUrl && (
-            <div className="gp-preview-logo-wrapper">
-              <img src={logoUrl} alt="Logo preview" style={{ width: `${Math.min(logoSize, 500)}px`, maxWidth: '100%', height: 'auto', objectFit: 'contain' }} />
-            </div>
-          )}
+          {logoUrl && <div className="gp-preview-logo-wrapper"><img src={logoUrl} alt="Logo preview" style={{ width: `${Math.min(logoSize, 500)}px`, maxWidth: '100%', height: 'auto', objectFit: 'contain' }} /></div>}
           <h3 className="gp-preview-title" style={{ fontFamily: getFontCss(titleFont), fontSize: `${titleSize}px`, color: titleColor }}>{name || 'Event Name'}</h3>
-          {subtitle && subtitle.trim() && (
-            <p className="gp-preview-subtitle" style={{ fontFamily: getFontCss(subtitleFont), fontSize: `${subtitleSize}px`, color: subtitleColor }}>{subtitle}</p>
-          )}
+          {subtitle && subtitle.trim() && <p className="gp-preview-subtitle" style={{ fontFamily: getFontCss(subtitleFont), fontSize: `${subtitleSize}px`, color: subtitleColor }}>{subtitle}</p>}
           {date && <p className="gp-preview-datetime" style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${datetimeSize}px`, color: datetimeColor }}>{new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>}
           {time && <p className="gp-preview-datetime" style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${datetimeSize}px`, color: datetimeColor }}>{formatTime12(time)}</p>}
           {venue && <p className="gp-preview-venue" style={{ fontFamily: getFontCss(venueFont), fontSize: `${venueSize}px`, color: venueColor }}>{venue}</p>}
         </div>
       </div>
-
       <div className="card section">
         <div className="card-header"><h3 className="card-title">Typography</h3><p className="card-subtitle">Fonts, sizes, and colours for each text element. Preview updates live.</p></div>
         <div className="typo-cards">
@@ -292,41 +198,146 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
 }
 
 function GuestsTab({ eventId, guests, tables, toast, confirm }: any) {
-  const [search, setSearch] = useState(''); const [sortBy, setSortBy] = useState<'name'|'table'|'created'>('name'); const [filterTable, setFilterTable] = useState('')
-  const [editingId, setEditingId] = useState<string|null>(null); const [editName, setEditName] = useState(''); const [editTable, setEditTable] = useState('')
+  const [search, setSearch] = useState('')
+  // Simplified sort: 'name' or 'table', with ascending/descending toggle
+  const [sortBy, setSortBy] = useState<'name' | 'table'>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [filterTable, setFilterTable] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null); const [editName, setEditName] = useState(''); const [editTable, setEditTable] = useState('')
   const [bulkText, setBulkText] = useState(''); const [bulkTable, setBulkTable] = useState('')
-  const [parsedGuests, setParsedGuests] = useState<ParsedGuest[]>([]); const [importFile, setImportFile] = useState<File|null>(null)
+  const [parsedGuests, setParsedGuests] = useState<ParsedGuest[]>([]); const [importFile, setImportFile] = useState<File | null>(null)
   const [importing, setImporting] = useState(false); const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const updateGuest = useUpdateGuest(); const deleteGuest = useDeleteGuest(); const bulkCreateGuests = useBulkCreateGuests()
   const tableMap: Map<string, { id: string; name: string }> = new Map(tables.map((t: any) => [t.id, t] as [string, { id: string; name: string }]))
-  const filtered = guests.filter((g: any) => { if (search && !g.name.toLowerCase().includes(search.toLowerCase())) return false; if (filterTable && g.table_id !== filterTable) return false; return true }).sort((a: any, b: any) => { if (sortBy === 'name') return a.name.localeCompare(b.name); if (sortBy === 'table') return (tableMap.get(a.table_id ?? '')?.name ?? '').localeCompare(tableMap.get(b.table_id ?? '')?.name ?? ''); return new Date(b.created_at).getTime() - new Date(a.created_at).getTime() })
+
+  // Sort handler — clicking active toggle flips direction, clicking inactive switches field
+  const handleSortClick = (field: 'name' | 'table') => {
+    if (sortBy === field) {
+      setSortDir((prev) => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortBy(field)
+      setSortDir('asc')
+    }
+  }
+
+  const filtered = guests
+    .filter((g: any) => {
+      if (search && !g.name.toLowerCase().includes(search.toLowerCase())) return false
+      if (filterTable && g.table_id !== filterTable) return false
+      return true
+    })
+    .sort((a: any, b: any) => {
+      let cmp = 0
+      if (sortBy === 'name') {
+        cmp = a.name.localeCompare(b.name)
+      } else {
+        const ta = tableMap.get(a.table_id ?? '')?.name ?? 'Unassigned'
+        const tb = tableMap.get(b.table_id ?? '')?.name ?? 'Unassigned'
+        cmp = ta.localeCompare(tb)
+      }
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+
   const handleEdit = (g: any) => { setEditingId(g.id); setEditName(g.name); setEditTable(g.table_id ?? '') }
   const handleSaveEdit = async () => { if (!editingId || !editName.trim()) return; try { await updateGuest.mutateAsync({ id: editingId, event_id: eventId, name: editName.trim(), table_id: editTable || null }); toast('Guest updated'); setEditingId(null) } catch (err) { toast(err instanceof Error ? err.message : 'Failed to update guest', 'error') } }
   const handleDelete = async (id: string, name: string) => { const confirmed = await confirm({ title: 'Delete Guest', message: `Remove "${name}" from the guest list?`, confirmText: 'Delete' }); if (!confirmed) return; try { await deleteGuest.mutateAsync(id); toast('Guest removed') } catch (err) { toast(err instanceof Error ? err.message : 'Failed to delete guest', 'error') } }
   const handleBulkAdd = async () => { const lines = bulkText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean); if (lines.length === 0) { toast('Enter at least one guest name', 'error'); return } try { const guestsInput: GuestInput[] = lines.map((n: string) => ({ name: n, event_id: eventId, table_id: bulkTable || null })); await bulkCreateGuests.mutateAsync({ event_id: eventId, guests: guestsInput }); toast(`Added ${lines.length} guests`); setBulkText('') } catch (err) { toast(classifyError(err), 'error') } }
   const handleFileSelect = async (file: File) => { setImportFile(file); setImporting(true); try { const result = await parseFile(file); if (result.guests.length === 0) { toast('No guests found in file', 'error'); return } setParsedGuests(result.guests); toast(`Found ${result.guests.length} guests in ${result.format} file`) } catch (err) { toast(classifyError(err), 'error') } finally { setImporting(false) } }
   const handleDrop = (e: React.DragEvent) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFileSelect(f) }
-  const handleParsedGuestChange = (i: number, field: 'name'|'tableName', value: string) => { const u = [...parsedGuests]; u[i][field] = value; setParsedGuests(u) }
+  const handleParsedGuestChange = (i: number, field: 'name' | 'tableName', value: string) => { const u = [...parsedGuests]; u[i][field] = value; setParsedGuests(u) }
   const handleConfirmImport = async () => { const valid = parsedGuests.filter((g) => g.name.trim()); if (valid.length === 0) return; setImporting(true); try { const guestsInput: GuestInput[] = valid.map((g) => ({ name: g.name.trim(), event_id: eventId, table_id: g.tableName.trim() ? matchTableByName(g.tableName, tables) : null })); await bulkCreateGuests.mutateAsync({ event_id: eventId, guests: guestsInput }); toast(`Imported ${valid.length} guests`); setParsedGuests([]); setImportFile(null) } catch (err) { toast(classifyError(err), 'error') } finally { setImporting(false) } }
-  return <div className="two-col"><div className="card"><div className="card-header"><h3 className="card-title">Guest List</h3><p className="card-subtitle">{guests.length} guest{guests.length !== 1 ? 's' : ''} total</p></div><div className="guest-filters"><input className="input" placeholder="Search guests…" value={search} onChange={(e) => setSearch(e.target.value)} /><select className="select" value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}><option value="name">Sort by Name</option><option value="table">Sort by Table</option><option value="created">Sort by Recent</option></select><select className="select" value={filterTable} onChange={(e) => setFilterTable(e.target.value)}><option value="">All Tables</option>{tables.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="guest-list">{filtered.length === 0 ? <div className="empty-state" style={{ padding: 'var(--space-7)' }}><p>{search || filterTable ? 'No guests match your filters' : 'No guests yet. Add some from the panel on the right.'}</p></div> : filtered.map((g: any) => <div key={g.id} className="guest-row">{editingId === g.id ? <div className="guest-row-edit"><input className="input" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Name" autoFocus /><select className="select" value={editTable} onChange={(e) => setEditTable(e.target.value)}><option value="">No Table</option>{tables.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}</select><button className="btn btn-primary btn-sm" onClick={handleSaveEdit}>Save</button><button className="btn btn-ghost btn-sm" onClick={() => setEditingId(null)}>Cancel</button></div> : <><span className="guest-name">{g.name}</span><span className="guest-table">{g.table_id ? tableMap.get(g.table_id)?.name ?? 'Unknown' : 'No table'}</span><div className="guest-row-actions"><button className="btn btn-ghost btn-sm" onClick={() => handleEdit(g)}>Edit</button><button className="btn btn-ghost btn-sm" onClick={() => handleDelete(g.id, g.name)}>Delete</button></div></>}</div>)}</div></div><div className="guest-mgmt-panel"><div className="card card-sm section"><div className="card-header"><h3 className="card-title">Manual Bulk Add</h3><p className="card-subtitle">One guest per line. Paste from Excel or type manually.</p></div><textarea className="textarea bulk-textarea" placeholder={'John Tan\nSarah Lee\nAhmad Bin Ali\nLim Wei Jie\nNur Aisyah'} value={bulkText} onChange={(e) => setBulkText(e.target.value)} rows={10} /><div className="form-group" style={{ marginTop: 'var(--space-3)' }}><label className="form-label">Assign to Table (optional)</label><select className="select" value={bulkTable} onChange={(e) => setBulkTable(e.target.value)}><option value="">No Table</option>{tables.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="manual-actions" style={{ marginTop: 'var(--space-4)' }}><span className="form-hint">{bulkText.split(/\r?\n/).filter((l) => l.trim()).length} guests</span><button className="btn btn-primary btn-sm" onClick={handleBulkAdd} disabled={bulkCreateGuests.isPending}>{bulkCreateGuests.isPending ? 'Adding…' : 'Add Guests'}</button></div></div><div className="card card-sm section"><div className="card-header"><h3 className="card-title">Import Guest List</h3><p className="card-subtitle">CSV, Excel, or PDF</p></div>{!parsedGuests.length ? <div className={`dropzone ${dragOver ? 'dropzone-active' : ''}`} onDragOver={(e) => { e.preventDefault(); setDragOver(true) }} onDragLeave={() => setDragOver(false)} onDrop={handleDrop} onClick={() => fileInputRef.current?.click()}><p className="dropzone-text">{importing ? 'Parsing…' : 'Drop file here or click to browse'}</p><p className="dropzone-hint">Supports CSV, XLSX, XLS, PDF</p><input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls,.pdf" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])} /></div> : <div className="import-review"><div className="import-review-header"><span>{parsedGuests.length} guests found in {importFile?.name}</span><button className="btn btn-ghost btn-sm" onClick={() => { setParsedGuests([]); setImportFile(null) }}>Cancel</button></div><div className="import-review-list">{parsedGuests.map((g, i) => <div key={i} className="import-review-row"><input className="input" value={g.name} onChange={(e) => handleParsedGuestChange(i, 'name', e.target.value)} /><input className="input" placeholder="Table" value={g.tableName} onChange={(e) => handleParsedGuestChange(i, 'tableName', e.target.value)} /><button className="btn btn-ghost btn-sm" onClick={() => setParsedGuests(parsedGuests.filter((_, idx) => idx !== i))}>Remove</button></div>)}</div><button className="btn btn-primary btn-block" onClick={handleConfirmImport} disabled={importing}>{importing ? 'Importing…' : `Confirm Import (${parsedGuests.filter((g) => g.name.trim()).length})`}</button></div>}</div></div></div>
+
+  return (
+    <div className="two-col">
+      <div className="card">
+        <div className="card-header"><h3 className="card-title">Guest List</h3><p className="card-subtitle">{guests.length} guest{guests.length !== 1 ? 's' : ''} total</p></div>
+        <div className="guest-filters">
+          <input className="input" placeholder="Search guests…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <select className="select" value={filterTable} onChange={(e) => setFilterTable(e.target.value)}><option value="">All Tables</option>{tables.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+        </div>
+        {/* Simplified sort toggle — replaces old Sort By dropdown */}
+        <div className="sort-toggle">
+          <button
+            className={`sort-toggle-btn ${sortBy === 'name' ? 'active' : ''}`}
+            onClick={() => handleSortClick('name')}
+          >
+            Name {sortBy === 'name' && (sortDir === 'asc' ? '↑' : '↓')}
+          </button>
+          <button
+            className={`sort-toggle-btn ${sortBy === 'table' ? 'active' : ''}`}
+            onClick={() => handleSortClick('table')}
+          >
+            Table {sortBy === 'table' && (sortDir === 'asc' ? '↑' : '↓')}
+          </button>
+        </div>
+        <div className="guest-list">
+          {filtered.length === 0 ? (
+            <div className="empty-state" style={{ padding: 'var(--space-7)' }}><p>{search || filterTable ? 'No guests match your filters' : 'No guests yet. Add some from the panel on the right.'}</p></div>
+          ) : (
+            filtered.map((g: any) => (
+              <div key={g.id} className="guest-row">
+                {editingId === g.id ? (
+                  <div className="guest-row-edit">
+                    <input className="input" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Name" autoFocus />
+                    <select className="select" value={editTable} onChange={(e) => setEditTable(e.target.value)}><option value="">No Table</option>{tables.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+                    <button className="btn btn-primary btn-sm" onClick={handleSaveEdit}>Save</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setEditingId(null)}>Cancel</button>
+                  </div>
+                ) : (
+                  <>
+                    <span className="guest-name">{g.name}</span>
+                    <span className="guest-table">{g.table_id ? tableMap.get(g.table_id)?.name ?? 'Unknown' : 'No table'}</span>
+                    <div className="guest-row-actions">
+                      <button className="btn btn-ghost btn-sm" onClick={() => handleEdit(g)}>Edit</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(g.id, g.name)}>Delete</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+      <div className="guest-mgmt-panel">
+        <div className="card card-sm section">
+          <div className="card-header"><h3 className="card-title">Manual Bulk Add</h3><p className="card-subtitle">One guest per line. Paste from Excel or type manually.</p></div>
+          <textarea className="textarea bulk-textarea" placeholder={'John Tan\nSarah Lee\nAhmad Bin Ali\nLim Wei Jie\nNur Aisyah'} value={bulkText} onChange={(e) => setBulkText(e.target.value)} rows={10} />
+          <div className="form-group" style={{ marginTop: 'var(--space-3)' }}><label className="form-label">Assign to Table (optional)</label><select className="select" value={bulkTable} onChange={(e) => setBulkTable(e.target.value)}><option value="">No Table</option>{tables.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
+          <div className="manual-actions" style={{ marginTop: 'var(--space-4)' }}><span className="form-hint">{bulkText.split(/\r?\n/).filter((l) => l.trim()).length} guests</span><button className="btn btn-primary btn-sm" onClick={handleBulkAdd} disabled={bulkCreateGuests.isPending}>{bulkCreateGuests.isPending ? 'Adding…' : 'Add Guests'}</button></div>
+        </div>
+        <div className="card card-sm section">
+          <div className="card-header"><h3 className="card-title">Import Guest List</h3><p className="card-subtitle">CSV, Excel, or PDF</p></div>
+          {!parsedGuests.length ? (
+            <div className={`dropzone ${dragOver ? 'dropzone-active' : ''}`} onDragOver={(e) => { e.preventDefault(); setDragOver(true) }} onDragLeave={() => setDragOver(false)} onDrop={handleDrop} onClick={() => fileInputRef.current?.click()}><p className="dropzone-text">{importing ? 'Parsing…' : 'Drop file here or click to browse'}</p><p className="dropzone-hint">Supports CSV, XLSX, XLS, PDF</p><input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls,.pdf" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])} /></div>
+          ) : (
+            <div className="import-review">
+              <div className="import-review-header"><span>{parsedGuests.length} guests found in {importFile?.name}</span><button className="btn btn-ghost btn-sm" onClick={() => { setParsedGuests([]); setImportFile(null) }}>Cancel</button></div>
+              <div className="import-review-list">{parsedGuests.map((g, i) => <div key={i} className="import-review-row"><input className="input" value={g.name} onChange={(e) => handleParsedGuestChange(i, 'name', e.target.value)} /><input className="input" placeholder="Table" value={g.tableName} onChange={(e) => handleParsedGuestChange(i, 'tableName', e.target.value)} /><button className="btn btn-ghost btn-sm" onClick={() => setParsedGuests(parsedGuests.filter((_, idx) => idx !== i))}>Remove</button></div>)}</div>
+              <button className="btn btn-primary btn-block" onClick={handleConfirmImport} disabled={importing}>{importing ? 'Importing…' : `Confirm Import (${parsedGuests.filter((g) => g.name.trim()).length})`}</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function TablesTab({ eventId, tables, guests, toast, confirm }: any) {
-  const [mode, setMode] = useState<'sequential'|'custom'>('sequential')
+  const [mode, setMode] = useState<'sequential' | 'custom'>('sequential')
   const [prefix, setPrefix] = useState('Table'); const [startNum, setStartNum] = useState(1); const [count, setCount] = useState(10); const [seats, setSeats] = useState(8)
   const [customRows, setCustomRows] = useState<{ name: string; capacity: number }[]>([{ name: '', capacity: 8 }])
   const bulkCreateTables = useBulkCreateTables(); const deleteTable = useDeleteTable()
   const guestCount = (tableId: string) => guests.filter((g: any) => g.table_id === tableId).length
   const handleSequentialCreate = async () => { const newTables = []; for (let i = 0; i < count; i++) { const num = startNum + i; newTables.push({ name: `${prefix} ${num}`, number: num, capacity: seats }) } try { await bulkCreateTables.mutateAsync({ event_id: eventId, tables: newTables }); toast(`Created ${count} tables`) } catch (err) { toast(err instanceof Error ? err.message : 'Failed to create tables', 'error') } }
-  const handleCustomRowChange = (index: number, field: 'name'|'capacity', value: string|number) => { const updated = [...customRows]; if (field === 'name') updated[index].name = value as string; else updated[index].capacity = value as number; setCustomRows(updated) }
+  const handleCustomRowChange = (index: number, field: 'name' | 'capacity', value: string | number) => { const updated = [...customRows]; if (field === 'name') updated[index].name = value as string; else updated[index].capacity = value as number; setCustomRows(updated) }
   const handleCustomCreate = async () => { const valid = customRows.filter((r) => r.name.trim()); if (valid.length === 0) { toast('Enter at least one table name', 'error'); return } const names = valid.map((r) => r.name.trim()); const dupes = names.filter((n, i) => names.indexOf(n) !== i); if (dupes.length > 0) { toast(`Duplicate table names: ${dupes.join(', ')}`, 'error'); return } const existingNames = tables.map((t: any) => t.name.toLowerCase()); const conflicts = names.filter((n) => existingNames.includes(n.toLowerCase())); if (conflicts.length > 0) { toast(`Tables already exist: ${conflicts.join(', ')}`, 'error'); return } const newTables = valid.map((r, i) => ({ name: r.name.trim(), number: tables.length + i + 1, capacity: r.capacity })); try { await bulkCreateTables.mutateAsync({ event_id: eventId, tables: newTables }); toast(`Created ${valid.length} tables`); setCustomRows([{ name: '', capacity: 8 }]) } catch (err) { toast(err instanceof Error ? err.message : 'Failed to create tables', 'error') } }
   const handleDeleteTable = async (id: string, name: string) => { const confirmed = await confirm({ title: 'Delete Table', message: `Delete "${name}"? Guests at this table will be unassigned.`, confirmText: 'Delete' }); if (!confirmed) return; try { await deleteTable.mutateAsync(id); toast('Table deleted') } catch (err) { toast(err instanceof Error ? err.message : 'Failed to delete table', 'error') } }
   return <div className="section"><div className="card section"><div className="card-header"><h3 className="card-title">Bulk Create Tables</h3><p className="card-subtitle">Create multiple tables at once</p></div><div className="mode-toggle"><button className={`btn btn-sm ${mode === 'sequential' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setMode('sequential')}>Sequential Numbering</button><button className={`btn btn-sm ${mode === 'custom' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setMode('custom')}>Custom Names</button></div>{mode === 'sequential' ? <div className="bulk-form"><div className="form-row"><div className="form-group"><label className="form-label">Prefix</label><input className="input" value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="Table" /></div><div className="form-group"><label className="form-label">Start Number</label><input type="number" className="input" value={startNum} min={1} onChange={(e) => setStartNum(Number(e.target.value))} /></div><div className="form-group"><label className="form-label">Count</label><input type="number" className="input" value={count} min={1} max={100} onChange={(e) => setCount(Number(e.target.value))} /></div><div className="form-group"><label className="form-label">Seats per Table</label><input type="number" className="input" value={seats} min={1} onChange={(e) => setSeats(Number(e.target.value))} /></div></div><div className="bulk-preview"><span className="form-hint">Will create: {prefix} {startNum}, {prefix} {startNum + 1}, … {prefix} {startNum + count - 1}</span></div><button className="btn btn-primary" onClick={handleSequentialCreate} disabled={bulkCreateTables.isPending}>{bulkCreateTables.isPending ? 'Creating…' : `Create ${count} Tables`}</button></div> : <div className="bulk-form"><div className="custom-rows">{customRows.map((row, i) => <div key={i} className="custom-row"><input className="input" placeholder="Table name" value={row.name} onChange={(e) => handleCustomRowChange(i, 'name', e.target.value)} /><input type="number" className="input" placeholder="Capacity" value={row.capacity} min={1} onChange={(e) => handleCustomRowChange(i, 'capacity', Number(e.target.value))} style={{ maxWidth: '120px' }} /><button className="btn btn-ghost btn-sm" onClick={() => setCustomRows(customRows.filter((_, idx) => idx !== i))}>Remove</button></div>)}</div><div className="manual-actions"><button className="btn btn-ghost btn-sm" onClick={() => setCustomRows([...customRows, { name: '', capacity: 8 }])}>+ Add Row</button><button className="btn btn-primary btn-sm" onClick={handleCustomCreate} disabled={bulkCreateTables.isPending}>{bulkCreateTables.isPending ? 'Creating…' : 'Create Tables'}</button></div></div>}</div>{tables.length > 0 && <div className="card section"><div className="card-header"><h3 className="card-title">Existing Tables</h3><p className="card-subtitle">{tables.length} table{tables.length !== 1 ? 's' : ''}</p></div><div className="grid grid-3">{tables.map((t: any) => <div key={t.id} className="card card-sm table-card"><div className="table-card-header"><h4 className="table-card-name">{t.name}</h4><span className="badge">{guestCount(t.id)} / {t.capacity}</span></div><button className="btn btn-ghost btn-sm" onClick={() => handleDeleteTable(t.id, t.name)}>Delete</button></div>)}</div></div>}</div>
 }
 
 function LayoutTab({ eventId, settings, upsertSettings, toast }: any) {
-  const [image, setImage] = useState<string|null>(settings?.venue_image_url ?? null)
+  const [image, setImage] = useState<string | null>(settings?.venue_image_url ?? null)
   const [dragOver, setDragOver] = useState(false); const [saving, setSaving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const handleFile = (file: File) => { if (!file.type.match(/image\/(png|jpe?g|svg|webp)/)) { toast('Please use PNG, JPG, SVG, or WebP', 'error'); return } const reader = new FileReader(); reader.onload = () => setImage(reader.result as string); reader.readAsDataURL(file) }
@@ -351,6 +362,6 @@ function ShareTab({ event, eventId, settings, upsertSettings, toast }: any) {
   const handleCheckSlug = async () => { if (!slug.trim()) return; setSlugCheck(slug.trim()); await refetch() }
   const handleSaveSlug = async () => { if (!slug.trim()) return; try { await upsertSettings.mutateAsync({ event_id: eventId }); toast('URL updated') } catch (err) { toast(err instanceof Error ? err.message : 'Failed to update URL', 'error') } }
   const handleCopy = (text: string) => { navigator.clipboard.writeText(text); toast('Copied to clipboard') }
-  const handleDownloadQR = (format: 'png'|'svg') => { if (format === 'png' && qrUrl) { const a = document.createElement('a'); a.href = qrUrl; a.download = `${slug}-qr.png`; a.click() } else if (format === 'svg') { QRCode.toString(guestUrl, { type: 'svg', margin: 2 }).then((svg) => { const blob = new Blob([svg], { type: 'image/svg+xml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${slug}-qr.svg`; a.click(); URL.revokeObjectURL(url) }) } }
+  const handleDownloadQR = (format: 'png' | 'svg') => { if (format === 'png' && qrUrl) { const a = document.createElement('a'); a.href = qrUrl; a.download = `${slug}-qr.png`; a.click() } else if (format === 'svg') { QRCode.toString(guestUrl, { type: 'svg', margin: 2 }).then((svg) => { const blob = new Blob([svg], { type: 'image/svg+xml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${slug}-qr.svg`; a.click(); URL.revokeObjectURL(url) }) } }
   return <div className="section"><div className="card section"><div className="card-header"><h3 className="card-title">Guest Website URL</h3><p className="card-subtitle">Share this link with your guests</p></div><div className="share-url"><input className="input" value={guestUrl} readOnly /><button className="btn btn-ghost" onClick={() => handleCopy(guestUrl)}>Copy</button><button className="btn btn-primary" onClick={() => window.open(guestUrl, '_blank')}>Open</button></div></div><div className="card section"><div className="card-header"><h3 className="card-title">Custom URL Slug</h3><p className="card-subtitle">Change the URL for your guest page</p></div><div className="form-row"><div className="form-group"><label className="form-label">Slug</label><input className="input" value={slug} onChange={(e) => { setSlug(e.target.value); setSlugCheck('') }} placeholder="my-event" /></div><div className="form-group" style={{ flex: '0 0 auto', alignSelf: 'flex-end' }}><button className="btn btn-ghost" onClick={handleCheckSlug} disabled={isFetching}>Check</button></div></div>{slugResult && slugCheck && <p className={`form-hint ${slugResult.available ? 'hint-success' : 'hint-error'}`}>{slugResult.available ? 'URL is available!' : 'URL is already taken'}</p>}<div style={{ marginTop: 'var(--space-4)' }}><button className="btn btn-primary" onClick={handleSaveSlug} disabled={!slug.trim()}>Save URL</button></div></div><div className="card section"><div className="card-header"><h3 className="card-title">QR Code</h3><p className="card-subtitle">Download a QR code for printed materials</p></div><div className="qr-section">{qrUrl && <img src={qrUrl} alt="QR Code" className="qr-preview" />}<div className="qr-actions"><button className="btn btn-ghost" onClick={() => handleDownloadQR('png')}>Download PNG</button><button className="btn btn-ghost" onClick={() => handleDownloadQR('svg')}>Download SVG</button></div></div></div></div>
 }

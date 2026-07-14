@@ -23,7 +23,6 @@ export function InvitationPage() {
   const [findView, setFindView] = useState<FindView>('search')
   const [selectedGuest, setSelectedGuest] = useState<GuestSearchResult | null>(null)
 
-  // Autocomplete search state
   const [searchText, setSearchText] = useState('')
   const [highlightIndex, setHighlightIndex] = useState(-1)
   const [showDropdown, setShowDropdown] = useState(false)
@@ -33,7 +32,6 @@ export function InvitationPage() {
   const [loadingGuests, setLoadingGuests] = useState(false)
   const [guestsData, setGuestsData] = useState<GuestWithTable[]>([])
 
-  // Zoom/pan for layout
   const [zoom, setZoom] = useState(1)
   const [panX, setPanX] = useState(0)
   const [panY, setPanY] = useState(0)
@@ -51,7 +49,6 @@ export function InvitationPage() {
 
   useEffect(() => { loadGoogleFonts([titleFont, subtitleFont, datetimeFont, venueFont, welcomeFont]) }, [titleFont, subtitleFont, datetimeFont, venueFont, welcomeFont])
 
-  // Fetch all guests once
   useEffect(() => {
     if (!data?.event_id) return
     let cancelled = false
@@ -65,16 +62,13 @@ export function InvitationPage() {
     return () => { cancelled = true }
   }, [data?.event_id])
 
-  // Filtered results — live as user types
   const filteredResults = useMemo(() => {
     if (!searchText.trim()) return []
     return searchGuests(guestsData, searchText, 50)
   }, [guestsData, searchText])
 
-  // Reset highlight when search changes
   useEffect(() => { setHighlightIndex(-1) }, [searchText])
 
-  // Auto-focus the input when the find tab is active and in search view
   useEffect(() => {
     if (activeTab === 'find' && findView === 'search') {
       setTimeout(() => inputRef.current?.focus(), 100)
@@ -99,7 +93,6 @@ export function InvitationPage() {
     setTimeout(() => inputRef.current?.focus(), 100)
   }
 
-  // Keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
@@ -118,7 +111,6 @@ export function InvitationPage() {
     }
   }
 
-  // Click outside to close dropdown
   useEffect(() => {
     if (!showDropdown) return
     const handler = (e: MouseEvent) => {
@@ -130,7 +122,6 @@ export function InvitationPage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [showDropdown])
 
-  // Zoom/pan
   const handleZoomIn = () => setZoom((z) => Math.min(z + 0.25, 4))
   const handleZoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.5))
   const handleZoomReset = () => { setZoom(1); setPanX(0); setPanY(0) }
@@ -148,7 +139,6 @@ export function InvitationPage() {
   const logoSize = settings.logo_size ?? 80
   const logoRounded = settings.logo_rounded ?? false
   const subtitle = settings.event_subtitle
-  // Logo URL — from guest_page_settings.logo_url (set by host in Event Details)
   const logoUrl = settings.logo_url
 
   const formatDate = () => { if (!event.date) return ''; return new Date(event.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }
@@ -156,7 +146,6 @@ export function InvitationPage() {
   return (
     <div className="gp-page" style={{ background: bg, color: text }}>
       <div className="gp-container">
-        {/* Logo — only rendered when logo_url exists, no empty space when absent */}
         {logoUrl && (
           <div className="gp-logo-wrapper">
             <img src={logoUrl} alt="Event logo" className="gp-logo" style={{ width: `${Math.min(logoSize, 500)}px`, maxWidth: '100%', height: 'auto', borderRadius: logoRounded ? '50%' : '0' }} />
@@ -170,7 +159,6 @@ export function InvitationPage() {
         {event.time && <p className="gp-datetime" style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${settings.font_datetime_size ?? 14}px`, color: settings.font_datetime_color ?? text }}>{formatTime12(event.time)}</p>}
         {event.venue && <p className="gp-venue" style={{ fontFamily: getFontCss(venueFont), fontSize: `${settings.font_venue_size ?? 14}px`, color: settings.font_venue_color ?? text }}>{event.venue}</p>}
 
-        {/* Segmented control */}
         <div className="gp-segmented" style={{ borderRadius: radius, border: `1px solid ${primary}` }}>
           <button className={`gp-segment ${activeTab === 'find' ? 'active' : ''}`} onClick={() => setActiveTab('find')} style={activeTab === 'find' ? { background: primary, color: '#fff' } : { background: bg, color: primary }}>Find Seat</button>
           <button className={`gp-segment ${activeTab === 'layout' ? 'active' : ''}`} onClick={() => setActiveTab('layout')} style={activeTab === 'layout' ? { background: primary, color: '#fff' } : { background: bg, color: primary }}>Venue Layout</button>
@@ -208,14 +196,7 @@ export function InvitationPage() {
                             style={{ background: i === highlightIndex ? `${primary}15` : 'transparent' }}
                           >
                             <span className="gp-autocomplete-name" style={{ color: text }}>{g.name}</span>
-                            <span className="gp-table-badge" style={{
-                              background: bg,
-                              borderColor: primary,
-                              color: primary,
-                              borderRadius: '11px',
-                            }}>
-                              {g.table_name}
-                            </span>
+                            <span className="gp-table-badge" style={{ background: bg, borderColor: primary, color: primary, borderRadius: '11px' }}>{g.table_name}</span>
                           </button>
                         ))
                       )}
@@ -233,9 +214,7 @@ export function InvitationPage() {
                     <p className="gp-table-info-name" style={{ color: text, fontSize: '22.5px' }}>{selectedGuest.name}</p>
                   </div>
                   <div className="gp-table-info-right">
-                    <span className="gp-table-info-badge" style={{ background: bg, borderColor: primary, color: primary, borderRadius: radius, fontSize: '18px' }}>
-                      {selectedGuest.table_name}
-                    </span>
+                    <span className="gp-table-info-badge" style={{ background: bg, borderColor: primary, color: primary, borderRadius: radius, fontSize: '18px' }}>{selectedGuest.table_name}</span>
                   </div>
                 </div>
                 <button className="btn btn-ghost gp-back-btn" onClick={handleBackToSearch} style={{ borderColor: primary, color: primary, borderRadius: radius }}>← Search again</button>
