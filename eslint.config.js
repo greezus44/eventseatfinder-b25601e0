@@ -4,12 +4,23 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 
 export default tseslint.config(
+  { ignores: ['dist'] },
   {
-    ignores: ['dist', 'vite.config.js', 'vite.config.d.ts'],
-  },
-  js.configs.recommended,
-  ...tseslint.configs.recommended,
-  {
+    extends: [js.configs.recommended, ...tseslint.configs.recommended],
+    files: ['**/*.{ts,tsx}'],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: {
+        window: 'readonly',
+        document: 'readonly',
+        console: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+        localStorage: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+      },
+    },
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,

@@ -16,26 +16,78 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginBottom: 'var(--space-3)' }}>{title}</h2>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        zIndex: 9999,
+      }}
+      onClick={onCancel}
+    >
+      <div
+        style={{
+          backgroundColor: '#fff',
+          borderRadius: 12,
+          padding: 24,
+          maxWidth: 400,
+          width: '90%',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2
+          style={{
+            margin: 0,
+            marginBottom: 12,
+            fontSize: 18,
+            color: '#0f172a',
+          }}
+        >
+          {title}
+        </h2>
         <p
-          className="text-secondary"
-          style={{ marginBottom: 'var(--space-6)' }}
+          style={{
+            margin: 0,
+            marginBottom: 24,
+            fontSize: 14,
+            color: '#475569',
+          }}
         >
           {message}
         </p>
-        <div
-          style={{
-            display: 'flex',
-            gap: 'var(--space-3)',
-            justifyContent: 'flex-end',
-          }}
-        >
-          <button className="btn btn--secondary" onClick={onCancel}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              padding: '8px 20px',
+              borderRadius: 8,
+              border: '1px solid #cbd5e1',
+              backgroundColor: '#fff',
+              color: '#334155',
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
             {cancelLabel}
           </button>
-          <button className="btn btn--primary" onClick={onConfirm}>
+          <button
+            onClick={onConfirm}
+            style={{
+              padding: '8px 20px',
+              borderRadius: 8,
+              border: 'none',
+              backgroundColor: '#dc2626',
+              color: '#fff',
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
             {confirmLabel}
           </button>
         </div>

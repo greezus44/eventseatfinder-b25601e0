@@ -1,267 +1,195 @@
-import { Link, useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useEvent } from '@/hooks/use-events';
 import { useGuests } from '@/hooks/use-guests';
 import { useTables } from '@/hooks/use-tables';
 import { useRSVPs } from '@/hooks/use-rsvps';
 import { useCheckIns } from '@/hooks/use-check-ins';
-import { LoadingScreen, ErrorScreen } from '@/components/ui/feedback';
-import type { GuestWithTable } from '@/types/guest';
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return 'Date TBD';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
 
 export function EventOverviewPage() {
   const { eventId } = useParams<{ eventId: string }>();
-  const id = eventId ?? '';
+  const eid = eventId ?? '';
+  const { data: event, isLoading, error } = useEvent(eid);
+  const { data: guests } = useGuests(eid);
+  const { data: tables } = useTables(eid);
+  const { data: rsvps } = useRSVPs(eid);
+  const { data: checkIns } = useCheckIns(eid);
 
-  const { data: event, isLoading } = useEvent(id);
-  const { data: guests } = useGuests(id);
-  const { data: tables } = useTables(id);
-  const { data: rsvps } = useRSVPs(id);
-  const { data: checkIns } = useCheckIns(id);
+  if (isLoading) return <div className="page">Loading...</div>;
+  if (error || !event) return <div className="page">Event not found.</div>;
 
-  if (isLoading) return <LoadingScreen label="Loading overview…" />;
+  const totalGuests = guests?.length ?? 0;
+  const totalCapacity = (tables ?? []).reduce((sum, t) => sum + t.capacity, 0);
+  const seated = (guests ?? []).filter((g) => g.table_id).length;
 
-  if (!event) {
-    return (
-      <div className="page">
-        <ErrorScreen message="Event not found" />
-        <Link to="/" className="btn btn--secondary btn--sm">
-          Back to dashboard
-        </Link>
-      </div>
-    );
-  }
-
-  const guestList = guests ?? [];
-  const tableList = tables ?? [];
-  const rsvpList = rsvps ?? [];
-  const checkInList = checkIns ?? [];
-
-  const totalGuests = guestList.length;
-  const totalTables = tableList.length;
-  const totalCapacity = tableList.reduce((sum, t) => sum + t.capacity, 0);
-  const attendingCount = rsvpList.filter(
+  const attending = (rsvps ?? []).filter(
     (r) => r.status === 'attending',
   ).length;
-  const checkedInCount = checkInList.length;
-  const respondedCount = rsvpList.length;
-  const pendingCount = totalGuests - respondedCount;
 
-  const assignedGuests = guestList.filter((g) => g.table_id !== null).length;
-  const seatingPct =
-    totalGuests > 0 ? Math.round((assignedGuests / totalGuests) * 100) : 0;
-  const rsvpPct =
-    totalGuests > 0 ? Math.round((respondedCount / totalGuests) * 100) : 0;
-  const checkInPct =
-    totalGuests > 0 ? Math.round((checkedInCount / totalGuests) * 100) : 0;
+  const checkedIn = checkIns?.length ?? 0;
+  const checkInPct = totalGuests > 0 ? (checkedIn / totalGuests) * 100 : 0;
 
-  const guestsByTable = new Map<string, GuestWithTable[]>();
-  for (const g of guestList) {
-    if (!g.table_id) continue;
-    const arr = guestsByTable.get(g.table_id) ?? [];
-    arr.push(g);
-    guestsByTable.set(g.table_id, arr);
-  }
-
-  const quickActions = [
-    { label: 'Edit Settings', to: `/events/${id}`, icon: '⚙' },
-    { label: 'Manage Guests', to: `/events/${id}/guests`, icon: '👥' },
-    { label: 'Arrange Seating', to: `/events/${id}/seating`, icon: '🪑' },
-    { label: 'Check-in', to: `/events/${id}/check-in`, icon: '✓' },
-    { label: 'Analytics', to: `/events/${id}/analytics`, icon: '📊' },
-    { label: 'Print Chart', to: `/events/${id}/print`, icon: '🖨' },
-    { label: 'Print Guest List', to: `/events/${id}/print/guests`, icon: '📋' },
-  ];
+  const seatingPct = totalGuests > 0 ? (seated / totalGuests) * 100 : 0;
+  const capacityPct =
+    totalCapacity > 0 ? (totalGuests / totalCapacity) * 100 : 0;
 
   return (
     <div className="page">
       <div className="page__header">
-        <div>
-          <h1>Overview</h1>
-          <p className="text-secondary">
-            {event.name} · {formatDate(event.date)}
-            {event.venue ? ` · ${event.venue}` : ''}
-          </p>
-        </div>
-        <Link to="/" className="btn btn--ghost btn--sm">
-          Back
-        </Link>
+        <h1>{event.name} — Overview</h1>
       </div>
 
       <div className="overview__layout">
         <div className="overview__stats-grid">
-          <div className="overview__stat card">
-            <div className="overview__stat__icon">👥</div>
-            <div className="overview__stat__value">{totalGuests}</div>
-            <div className="overview__stat__label">Total Guests</div>
-            <div className="overview__stat__sublabel">
-              {assignedGuests} seated
-            </div>
+          <div className="overview__stat overview__stat--guests">
+            <span className="overview__stat__number">{totalGuests}</span>
+            <span className="overview__stat__label">Total Guests</span>
           </div>
-          <div className="overview__stat card">
-            <div className="overview__stat__icon">🪑</div>
-            <div className="overview__stat__value">{totalTables}</div>
-            <div className="overview__stat__label">Tables</div>
-            <div className="overview__stat__sublabel">
-              {totalCapacity} capacity
-            </div>
+          <div className="overview__stat overview__stat--tables">
+            <span className="overview__stat__number">
+              {tables?.length ?? 0}
+            </span>
+            <span className="overview__stat__label">Tables</span>
           </div>
-          <div className="overview__stat card">
-            <div className="overview__stat__icon">🏛</div>
-            <div className="overview__stat__value">{totalCapacity}</div>
-            <div className="overview__stat__label">Total Capacity</div>
-            <div className="overview__stat__sublabel">
-              {totalGuests > 0
-                ? totalCapacity >= totalGuests
-                  ? 'Fits all guests'
-                  : `${totalCapacity - totalGuests} short`
-                : '—'}
-            </div>
+          <div className="overview__stat overview__stat--attending">
+            <span className="overview__stat__number">{attending}</span>
+            <span className="overview__stat__label">Attending</span>
           </div>
-          <div className="overview__stat overview__stat--success card">
-            <div className="overview__stat__icon">✓</div>
-            <div className="overview__stat__value">{attendingCount}</div>
-            <div className="overview__stat__label">Attending</div>
-            <div className="overview__stat__sublabel">RSVP confirmed</div>
-          </div>
-          <div className="overview__stat overview__stat--success card">
-            <div className="overview__stat__icon">🎟</div>
-            <div className="overview__stat__value">{checkedInCount}</div>
-            <div className="overview__stat__label">Checked In</div>
-            <div className="overview__stat__sublabel">
-              {totalGuests > 0 ? `${checkInPct}% of guests` : '—'}
-            </div>
-          </div>
-          <div className="overview__stat overview__stat--warning card">
-            <div className="overview__stat__icon">⏳</div>
-            <div className="overview__stat__value">{pendingCount}</div>
-            <div className="overview__stat__label">RSVP Pending</div>
-            <div className="overview__stat__sublabel">
-              {totalGuests > 0 ? `${rsvpPct}% responded` : '—'}
-            </div>
+          <div className="overview__stat overview__stat--checked-in">
+            <span className="overview__stat__number">{checkedIn}</span>
+            <span className="overview__stat__label">Checked In</span>
           </div>
         </div>
 
-        <div className="overview__progress-card card">
+        <div className="card overview__progress-card">
           <h2>Progress</h2>
+
           <div className="overview__progress">
-            <div className="overview__progress__header">
-              <span className="overview__progress__label">Seating</span>
-              <span className="overview__progress__value">{seatingPct}%</span>
+            <div className="overview__progress-header">
+              <span className="overview__progress-label">Seating</span>
+              <span className="overview__progress-value">
+                {seated}/{totalGuests} ({seatingPct.toFixed(0)}%)
+              </span>
             </div>
-            <div className="overview__progress__bar">
+            <div className="overview__progress-bar">
               <div
-                className="overview__progress__fill"
+                className="overview__progress-fill overview__progress-fill--primary"
                 style={{ width: `${seatingPct}%` }}
               />
             </div>
-            <div className="overview__progress__detail">
-              {assignedGuests} of {totalGuests} guests assigned
-            </div>
           </div>
+
           <div className="overview__progress">
-            <div className="overview__progress__header">
-              <span className="overview__progress__label">RSVP Response</span>
-              <span className="overview__progress__value">{rsvpPct}%</span>
+            <div className="overview__progress-header">
+              <span className="overview__progress-label">Capacity</span>
+              <span className="overview__progress-value">
+                {totalGuests}/{totalCapacity} ({capacityPct.toFixed(0)}%)
+              </span>
             </div>
-            <div className="overview__progress__bar">
+            <div className="overview__progress-bar">
               <div
-                className="overview__progress__fill"
-                style={{ width: `${rsvpPct}%` }}
+                className="overview__progress-fill overview__progress-fill--teal"
+                style={{ width: `${Math.min(capacityPct, 100)}%` }}
               />
             </div>
-            <div className="overview__progress__detail">
-              {respondedCount} of {totalGuests} responded
-            </div>
           </div>
+
           <div className="overview__progress">
-            <div className="overview__progress__header">
-              <span className="overview__progress__label">Check-in</span>
-              <span className="overview__progress__value">{checkInPct}%</span>
+            <div className="overview__progress-header">
+              <span className="overview__progress-label">Check-in</span>
+              <span className="overview__progress-value">
+                {checkedIn}/{totalGuests} ({checkInPct.toFixed(0)}%)
+              </span>
             </div>
-            <div className="overview__progress__bar">
+            <div className="overview__progress-bar">
               <div
-                className="overview__progress__fill"
+                className="overview__progress-fill overview__progress-fill--success"
                 style={{ width: `${checkInPct}%` }}
               />
             </div>
-            <div className="overview__progress__detail">
-              {checkedInCount} of {totalGuests} checked in
-            </div>
           </div>
         </div>
 
-        <div className="overview__tables-card card">
+        <div className="card overview__tables-card">
           <h2>Table Occupancy</h2>
-          {tableList.length === 0 ? (
-            <p className="text-secondary">No tables yet.</p>
-          ) : (
-            <div className="overview__tables-grid">
-              {tableList.map((table) => {
-                const count = (guestsByTable.get(table.id) ?? []).length;
-                const pct =
-                  table.capacity > 0
-                    ? Math.round((count / table.capacity) * 100)
-                    : 0;
-                const isOver = count > table.capacity;
-                const isFull = count === table.capacity;
-                const itemClass = isOver
-                  ? 'overview__table-item--over'
-                  : isFull
-                    ? 'overview__table-item--full'
-                    : '';
-                return (
-                  <div
-                    key={table.id}
-                    className={`overview__table-item ${itemClass}`.trim()}
-                  >
-                    <div className="overview__table-item__header">
-                      <span className="overview__table-item__name">
-                        {table.name}
-                      </span>
-                      <span className="overview__table-item__number">
-                        #{table.number}
-                      </span>
-                    </div>
-                    <div className="overview__table-item__bar">
-                      <div
-                        className="overview__table-item__bar-fill"
-                        style={{ width: `${Math.min(pct, 100)}%` }}
-                      />
-                    </div>
-                    <div className="overview__table-item__count">
-                      {count} / {table.capacity}
-                    </div>
+          <div className="overview__tables-grid">
+            {(tables ?? []).map((table) => {
+              const count = (guests ?? []).filter(
+                (g) => g.table_id === table.id,
+              ).length;
+              const pct =
+                table.capacity > 0 ? (count / table.capacity) * 100 : 0;
+              const isFull = count >= table.capacity;
+              return (
+                <div
+                  key={table.id}
+                  className={`overview__table-item${isFull ? ' overview__table-item--full' : ''}`}
+                >
+                  <span className="overview__table-item__name">
+                    {table.name}
+                  </span>
+                  <span className="overview__table-item__count">
+                    {count}/{table.capacity}
+                  </span>
+                  <div className="overview__table-item__bar">
+                    <div
+                      className="overview__table-item__fill"
+                      style={{ width: `${Math.min(pct, 100)}%` }}
+                    />
                   </div>
-                );
-              })}
-            </div>
-          )}
+                </div>
+              );
+            })}
+            {(!tables || tables.length === 0) && (
+              <p style={{ fontSize: 13, color: '#64748b' }}>No tables yet.</p>
+            )}
+          </div>
         </div>
 
-        <div className="overview__actions-card card">
+        <div className="card overview__actions-card">
           <h2>Quick Actions</h2>
           <div className="overview__actions-grid">
-            {quickActions.map((action) => (
-              <Link
-                key={action.label}
-                to={action.to}
-                className="overview__action"
-              >
-                <span className="overview__action__icon">{action.icon}</span>
-                <span className="overview__action__label">{action.label}</span>
-              </Link>
-            ))}
+            <Link
+              to={`/events/${eid}/guests`}
+              className="overview__action overview__action--guests"
+            >
+              <span className="overview__action__icon">👥</span>
+              <span className="overview__action__label">Manage Guests</span>
+            </Link>
+            <Link
+              to={`/events/${eid}/seating`}
+              className="overview__action overview__action--seating"
+            >
+              <span className="overview__action__icon">🪑</span>
+              <span className="overview__action__label">Arrange Seating</span>
+            </Link>
+            <Link
+              to={`/events/${eid}/check-in`}
+              className="overview__action overview__action--checkin"
+            >
+              <span className="overview__action__icon">✅</span>
+              <span className="overview__action__label">Check-in</span>
+            </Link>
+            <Link
+              to={`/events/${eid}/analytics`}
+              className="overview__action overview__action--analytics"
+            >
+              <span className="overview__action__icon">📊</span>
+              <span className="overview__action__label">Analytics</span>
+            </Link>
+            <Link
+              to={`/events/${eid}/print`}
+              className="overview__action overview__action--print"
+            >
+              <span className="overview__action__icon">🖨️</span>
+              <span className="overview__action__label">Print Chart</span>
+            </Link>
+            <Link
+              to={`/events/${eid}`}
+              className="overview__action overview__action--settings"
+            >
+              <span className="overview__action__icon">⚙️</span>
+              <span className="overview__action__label">Settings</span>
+            </Link>
           </div>
         </div>
       </div>

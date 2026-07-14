@@ -1,124 +1,102 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useEvent, useUpdateEvent } from '@/hooks/use-events';
 import { useRSVPs } from '@/hooks/use-rsvps';
 import { useToast } from '@/providers/toast-provider';
-import { LoadingScreen, ErrorScreen } from '@/components/ui/feedback';
-import type { RSVPStatus, RSVPWithGuest } from '@/types/rsvp';
-
-const STATUS_LABELS: Record<RSVPStatus, string> = {
-  attending: 'Attending',
-  not_attending: 'Not Attending',
-  maybe: 'Maybe',
-};
-
-function countByStatus(rsvps: RSVPWithGuest[]) {
-  let attending = 0;
-  let declined = 0;
-  let maybe = 0;
-  for (const r of rsvps) {
-    if (r.status === 'attending') attending++;
-    else if (r.status === 'not_attending') declined++;
-    else if (r.status === 'maybe') maybe++;
-  }
-  const pending = 0;
-  return { attending, declined, maybe, pending };
-}
+import type { RSVPStatus } from '@/types/rsvp';
 
 export function EventSettingsPage() {
   const { eventId } = useParams<{ eventId: string }>();
-  const id = eventId ?? '';
-
-  const { data: event, isLoading } = useEvent(id);
+  const { data: event, isLoading, error } = useEvent(eventId ?? '');
   const updateEvent = useUpdateEvent();
   const { toast } = useToast();
-
-  const { data: rsvps } = useRSVPs(id);
 
   const [name, setName] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [venue, setVenue] = useState('');
   const [invitationEnabled, setInvitationEnabled] = useState(false);
-  const [initialized, setInitialized] = useState(false);
+
+  const rsvpsQuery = useRSVPs(eventId ?? '');
 
   useEffect(() => {
-    if (initialized || !event) return;
-    setName(event.name);
-    setDate(event.date ?? '');
-    setTime(event.time ?? '');
-    setVenue(event.venue ?? '');
-    setInvitationEnabled(event.invitation_enabled);
-    setInitialized(true);
-  }, [event, initialized]);
+    if (event) {
+      setName(event.name);
+      setDate(event.date);
+      setTime(event.time);
+      setVenue(event.venue);
+      setInvitationEnabled(event.invitation_enabled);
+    }
+  }, [event]);
 
-  async function handleSave(e: React.FormEvent) {
+  if (isLoading) return <div className="page">Loading...</div>;
+  if (error || !event) return <div className="page">Event not found.</div>;
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await updateEvent.mutateAsync({
-        id,
+        id: event.id,
         name,
-        slug: event?.slug ?? '',
-        date: date || null,
-        time: time || null,
-        venue: venue || null,
+        slug: event.slug,
+        date,
+        time,
+        venue,
         invitation_enabled: invitationEnabled,
       });
-      toast('Event saved', 'success');
-    } catch {
-      toast('Could not save event', 'error');
+      toast('Event settings saved', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to save', 'error');
     }
-  }
+  };
 
-  if (isLoading) return <LoadingScreen label="Loading event…" />;
+  const rsvps = rsvpsQuery.data ?? [];
+  const attending = rsvps.filter((r) => r.status === 'attending');
+  const declined = rsvps.filter((r) => r.status === 'not_attending');
+  const pending = rsvps.filter((r) => r.status === 'maybe');
 
-  if (!event) {
-    return (
-      <div className="page">
-        <ErrorScreen message="Event not found" />
-        <Link to="/" className="btn btn--secondary btn--sm">
-          Back to dashboard
-        </Link>
-      </div>
-    );
-  }
+  const statusLabel = (status: RSVPStatus) => {
+    if (status === 'attending') return 'Attending';
+    if (status === 'not_attending') return 'Not Attending';
+    return 'Maybe';
+  };
 
-  const stats = rsvps ? countByStatus(rsvps) : null;
+  const statusClass = (status: RSVPStatus) => {
+    if (status === 'attending')
+      return 'rsvp-item__badge rsvp-item__badge--attending';
+    if (status === 'not_attending')
+      return 'rsvp-item__badge rsvp-item__badge--declined';
+    return 'rsvp-item__badge rsvp-item__badge--pending';
+  };
+
+  const publicUrl = `${window.location.origin}/invite/${event.slug}`;
 
   return (
     <div className="page">
       <div className="page__header">
-        <div>
-          <h1>Event Settings</h1>
-          <p className="text-secondary">{event.name}</p>
-        </div>
-        <Link to="/" className="btn btn--ghost btn--sm">
-          Back
-        </Link>
+        <h1>Event Settings</h1>
       </div>
 
       <form className="card" onSubmit={handleSave}>
         <div className="form-field">
-          <label className="form-field__label" htmlFor="event-name">
-            Event name
+          <label className="form-field__label" htmlFor="name">
+            Event Name
           </label>
           <input
-            id="event-name"
+            id="name"
             className="input"
-            type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            required
           />
         </div>
 
         <div className="form-row">
           <div className="form-field">
-            <label className="form-field__label" htmlFor="event-date">
+            <label className="form-field__label" htmlFor="date">
               Date
             </label>
             <input
-              id="event-date"
+              id="date"
               className="input"
               type="date"
               value={date}
@@ -126,11 +104,11 @@ export function EventSettingsPage() {
             />
           </div>
           <div className="form-field">
-            <label className="form-field__label" htmlFor="event-time">
+            <label className="form-field__label" htmlFor="time">
               Time
             </label>
             <input
-              id="event-time"
+              id="time"
               className="input"
               type="time"
               value={time}
@@ -140,13 +118,12 @@ export function EventSettingsPage() {
         </div>
 
         <div className="form-field">
-          <label className="form-field__label" htmlFor="event-venue">
+          <label className="form-field__label" htmlFor="venue">
             Venue
           </label>
           <input
-            id="event-venue"
+            id="venue"
             className="input"
-            type="text"
             value={venue}
             onChange={(e) => setVenue(e.target.value)}
           />
@@ -164,68 +141,60 @@ export function EventSettingsPage() {
         </div>
 
         {invitationEnabled && (
-          <div className="public-link">
-            <label className="form-field__label">Public invitation link</label>
-            <div className="public-link__url">
-              {window.location.origin}/invite/{event.slug}
+          <div className="form-field">
+            <label className="form-field__label">Public Invitation Link</label>
+            <div className="public-link">
+              <span className="public-link__url">{publicUrl}</span>
             </div>
           </div>
         )}
 
         <button
-          className="btn btn--primary"
           type="submit"
+          className="btn btn--primary"
           disabled={updateEvent.isPending}
         >
-          {updateEvent.isPending ? 'Saving…' : 'Save changes'}
+          {updateEvent.isPending ? 'Saving...' : 'Save Changes'}
         </button>
       </form>
 
       {invitationEnabled && (
-        <div className="card" style={{ marginTop: 'var(--space-5)' }}>
-          <h2 style={{ marginBottom: 'var(--space-4)' }}>RSVP Tracking</h2>
+        <div className="card" style={{ marginTop: 24 }}>
+          <h2 style={{ marginBottom: 16 }}>RSVP Tracking</h2>
 
-          {stats && (
-            <div className="rsvp-stats">
-              <div className="rsvp-stat rsvp-stat--attending">
-                <div className="rsvp-stat__number">{stats.attending}</div>
-                <div className="rsvp-stat__label">Attending</div>
-              </div>
-              <div className="rsvp-stat rsvp-stat--declined">
-                <div className="rsvp-stat__number">{stats.declined}</div>
-                <div className="rsvp-stat__label">Declined</div>
-              </div>
-              <div className="rsvp-stat">
-                <div className="rsvp-stat__number">{stats.maybe}</div>
-                <div className="rsvp-stat__label">Maybe</div>
-              </div>
-              <div className="rsvp-stat rsvp-stat--pending">
-                <div className="rsvp-stat__number">{stats.pending}</div>
-                <div className="rsvp-stat__label">Pending</div>
-              </div>
+          <div className="rsvp-stats">
+            <div className="rsvp-stat rsvp-stat--attending">
+              <span className="rsvp-stat__number">{attending.length}</span>
+              <span className="rsvp-stat__label">Attending</span>
             </div>
-          )}
+            <div className="rsvp-stat rsvp-stat--declined">
+              <span className="rsvp-stat__number">{declined.length}</span>
+              <span className="rsvp-stat__label">Declined</span>
+            </div>
+            <div className="rsvp-stat rsvp-stat--pending">
+              <span className="rsvp-stat__number">{pending.length}</span>
+              <span className="rsvp-stat__label">Pending</span>
+            </div>
+          </div>
 
-          {rsvps && rsvps.length > 0 && (
+          {rsvps.length > 0 && (
             <div className="rsvp-list">
               {rsvps.map((rsvp) => (
                 <div key={rsvp.id} className="rsvp-item">
-                  <span className="rsvp-item__name">{rsvp.guest.name}</span>
-                  <span
-                    className={`rsvp-item__status rsvp-item__badge rsvp-item__badge--${rsvp.status}`}
-                  >
-                    {STATUS_LABELS[rsvp.status]}
+                  <span className="rsvp-item__name">
+                    {rsvp.guest.first_name} {rsvp.guest.last_name}
                   </span>
-                  <span className="rsvp-item__plus-ones">
-                    +{rsvp.plus_ones} guest{rsvp.plus_ones === 1 ? '' : 's'}
+                  <span className={statusClass(rsvp.status)}>
+                    {statusLabel(rsvp.status)}
                   </span>
+                  {rsvp.plus_ones > 0 && (
+                    <span className="rsvp-item__plus-ones">
+                      +{rsvp.plus_ones} guest{rsvp.plus_ones > 1 ? 's' : ''}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
-          )}
-
-          {(!rsvps || rsvps.length === 0) && (
-            <p className="text-secondary">No RSVPs yet.</p>
           )}
         </div>
       )}

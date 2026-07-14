@@ -1,274 +1,211 @@
-import { useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useCallback, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { useEvent } from '@/hooks/use-events';
 import { useGuests, useUpdateGuest } from '@/hooks/use-guests';
 import { useTables, useUpdateTablePosition } from '@/hooks/use-tables';
 import { useToast } from '@/providers/toast-provider';
-import { LoadingScreen, ErrorScreen } from '@/components/ui/feedback';
-import type { GuestWithTable } from '@/types/guest';
 import type { Table } from '@/types/table';
-
-type DragType = 'guest' | 'table';
-
-interface DragState {
-  type: DragType;
-  guestId?: string;
-  tableId?: string;
-  offsetX: number;
-  offsetY: number;
-}
+import type { GuestWithTable } from '@/types/guest';
 
 export function SeatingArrangementPage() {
   const { eventId } = useParams<{ eventId: string }>();
-  const id = eventId ?? '';
-
-  const { data: event, isLoading } = useEvent(id);
-  const { data: guests } = useGuests(id);
-  const { data: tables } = useTables(id);
-  const updateTablePosition = useUpdateTablePosition(id);
-  const updateGuest = useUpdateGuest(id);
+  const eid = eventId ?? '';
+  const { data: event, isLoading } = useEvent(eid);
+  const { data: guests } = useGuests(eid);
+  const { data: tables } = useTables(eid);
+  const updateTablePosition = useUpdateTablePosition(eid);
+  const updateGuest = useUpdateGuest(eid);
   const { toast } = useToast();
 
-  const canvasRef = useRef<HTMLDivElement>(null);
-  const [dragState, setDragState] = useState<DragState | null>(null);
-  const [hoverTableId, setHoverTableId] = useState<string | null>(null);
-  const [hoverUnassigned, setHoverUnassigned] = useState(false);
+  const [draggingTable, setDraggingTable] = useState<Table | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [draggingGuest, setDraggingGuest] = useState<GuestWithTable | null>(
+    null,
+  );
+  const [saving, setSaving] = useState(false);
 
-  const unassignedGuests: GuestWithTable[] = [];
-  const guestsByTable = new Map<string, GuestWithTable[]>();
-  if (guests) {
-    for (const g of guests) {
-      if (g.table_id) {
-        const arr = guestsByTable.get(g.table_id) ?? [];
-        arr.push(g);
-        guestsByTable.set(g.table_id, arr);
-      } else {
-        unassignedGuests.push(g);
+  const handleTableMouseDown = useCallback(
+    (e: React.MouseEvent, table: Table) => {
+      e.preventDefault();
+      setDraggingTable(table);
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      setDragOffset({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      });
+    },
+    [],
+  );
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!draggingTable) return;
+      const canvas = e.currentTarget as HTMLElement;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left - dragOffset.x;
+      const y = e.clientY - rect.top - dragOffset.y;
+      const clampedX = Math.max(0, Math.min(x, rect.width - 180));
+      const clampedY = Math.max(0, Math.min(y, rect.height - 140));
+      setDragOffset((prev) => ({ ...prev, x: clampedX, y: clampedY }));
+    },
+    [draggingTable, dragOffset],
+  );
+
+  const handleTableDrop = useCallback(
+    async (e: React.MouseEvent) => {
+      if (!draggingTable) return;
+      const canvas = e.currentTarget as HTMLElement;
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.max(
+        0,
+        Math.min(e.clientX - rect.left - dragOffset.x, rect.width - 180),
+      );
+      const y = Math.max(
+        0,
+        Math.min(e.clientY - rect.top - dragOffset.y, rect.height - 140),
+      );
+      setSaving(true);
+      try {
+        await updateTablePosition.mutateAsync({
+          id: draggingTable.id,
+          position_x: x,
+          position_y: y,
+        });
+      } catch (err) {
+        toast(
+          err instanceof Error ? err.message : 'Failed to save position',
+          'error',
+        );
+      } finally {
+        setSaving(false);
+        setDraggingTable(null);
       }
-    }
-  }
+    },
+    [draggingTable, dragOffset, eid, updateTablePosition, toast],
+  );
 
-  function handleGuestDragStart(e: React.DragEvent, guest: GuestWithTable) {
-    setDragState({
-      type: 'guest',
-      guestId: guest.id,
-      tableId: guest.table_id ?? undefined,
-      offsetX: 0,
-      offsetY: 0,
-    });
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', guest.id);
-  }
+  const handleGuestDragStart = useCallback(
+    (e: React.DragEvent, guest: GuestWithTable) => {
+      setDraggingGuest(guest);
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', guest.id);
+    },
+    [],
+  );
 
-  function handleTableDragStart(e: React.DragEvent, table: Table) {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setDragState({
-      type: 'table',
-      tableId: table.id,
-      offsetX: e.clientX - rect.left,
-      offsetY: e.clientY - rect.top,
-    });
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', table.id);
-  }
-
-  function handleCanvasDragOver(e: React.DragEvent) {
-    if (dragState?.type === 'table') {
+  const handleTableDropGuest = useCallback(
+    async (e: React.DragEvent, tableId: string) => {
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-    }
-  }
+      if (!draggingGuest) return;
+      if (draggingGuest.table_id === tableId) {
+        setDraggingGuest(null);
+        return;
+      }
+      try {
+        await updateGuest.mutateAsync({
+          id: draggingGuest.id,
+          name: draggingGuest.name,
+          table_id: tableId,
+        });
+        toast(`${draggingGuest.name} seated`, 'success');
+      } catch (err) {
+        toast(
+          err instanceof Error ? err.message : 'Failed to seat guest',
+          'error',
+        );
+      } finally {
+        setDraggingGuest(null);
+      }
+    },
+    [draggingGuest, updateGuest, toast],
+  );
 
-  function handleCanvasDrop(e: React.DragEvent) {
-    if (dragState?.type !== 'table' || !dragState.tableId) return;
-    e.preventDefault();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left - dragState.offsetX;
-    const y = e.clientY - rect.top - dragState.offsetY;
-    const clampedX = Math.max(0, Math.min(x, rect.width - 200));
-    const clampedY = Math.max(0, Math.min(y, rect.height - 120));
-    updateTablePosition.mutate(
-      { id: dragState.tableId, position_x: clampedX, position_y: clampedY },
-      {
-        onError: () => toast('Could not save table position', 'error'),
-      },
-    );
-    setDragState(null);
-  }
-
-  function handleTableDragOver(e: React.DragEvent) {
-    if (dragState?.type === 'guest') {
+  const handleUnassignedDrop = useCallback(
+    async (e: React.DragEvent) => {
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      const tableId = (e.currentTarget as HTMLElement).dataset.tableId;
-      if (tableId) setHoverTableId(tableId);
-    }
-  }
+      if (!draggingGuest) return;
+      if (!draggingGuest.table_id) {
+        setDraggingGuest(null);
+        return;
+      }
+      try {
+        await updateGuest.mutateAsync({
+          id: draggingGuest.id,
+          name: draggingGuest.name,
+          table_id: null,
+        });
+        toast('Guest unassigned', 'success');
+      } catch (err) {
+        toast(
+          err instanceof Error ? err.message : 'Failed to unassign',
+          'error',
+        );
+      } finally {
+        setDraggingGuest(null);
+      }
+    },
+    [draggingGuest, updateGuest, toast],
+  );
 
-  function handleTableDragLeave(e: React.DragEvent) {
-    const tableId = (e.currentTarget as HTMLElement).dataset.tableId;
-    if (tableId === hoverTableId) setHoverTableId(null);
-  }
+  if (isLoading) return <div className="page">Loading...</div>;
+  if (!event) return <div className="page">Event not found.</div>;
 
-  function handleTableDrop(e: React.DragEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    setHoverTableId(null);
-    if (dragState?.type !== 'guest' || !dragState.guestId) return;
-    const targetTableId = (e.currentTarget as HTMLElement).dataset.tableId;
-    if (!targetTableId) return;
-    if (dragState.tableId === targetTableId) {
-      setDragState(null);
-      return;
-    }
-    const guest = guests?.find((g) => g.id === dragState.guestId);
-    if (!guest) {
-      setDragState(null);
-      return;
-    }
-    updateGuest.mutate(
-      { id: dragState.guestId, name: guest.name, table_id: targetTableId },
-      {
-        onSuccess: () => toast('Guest seated', 'success'),
-        onError: () => toast('Could not assign guest', 'error'),
-      },
-    );
-    setDragState(null);
-  }
-
-  function handleUnassignedDragOver(e: React.DragEvent) {
-    if (dragState?.type === 'guest') {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      setHoverUnassigned(true);
-    }
-  }
-
-  function handleUnassignedDragLeave() {
-    setHoverUnassigned(false);
-  }
-
-  function handleUnassignedDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setHoverUnassigned(false);
-    if (dragState?.type !== 'guest' || !dragState.guestId) return;
-    if (!dragState.tableId) {
-      setDragState(null);
-      return;
-    }
-    const guest = guests?.find((g) => g.id === dragState.guestId);
-    if (!guest) {
-      setDragState(null);
-      return;
-    }
-    updateGuest.mutate(
-      { id: dragState.guestId, name: guest.name, table_id: null },
-      {
-        onSuccess: () => toast('Guest unassigned', 'success'),
-        onError: () => toast('Could not unassign guest', 'error'),
-      },
-    );
-    setDragState(null);
-  }
-
-  function handleDragEnd() {
-    setDragState(null);
-    setHoverTableId(null);
-    setHoverUnassigned(false);
-  }
-
-  if (isLoading) return <LoadingScreen label="Loading seating…" />;
-
-  if (!event) {
-    return (
-      <div className="page">
-        <ErrorScreen message="Event not found" />
-        <Link to="/" className="btn btn--secondary btn--sm">
-          Back to dashboard
-        </Link>
-      </div>
-    );
-  }
-
-  const hasTables = tables && tables.length > 0;
+  const unassigned = (guests ?? []).filter((g) => !g.table_id);
 
   return (
     <div className="page">
       <div className="page__header">
-        <div>
-          <h1>Seating Arrangement</h1>
-          <p className="text-secondary">{event.name}</p>
-        </div>
-        <Link to={`/events/${id}`} className="btn btn--ghost btn--sm">
-          ← Back to event
-        </Link>
+        <h1>Seating Arrangement</h1>
+        {saving && <span className="seating-saving">Saving...</span>}
       </div>
-
-      {(updateTablePosition.isPending || updateGuest.isPending) && (
-        <div className="seating-saving">Saving…</div>
-      )}
 
       <div className="seating-layout">
         <div
-          ref={canvasRef}
           className="seating-canvas"
-          onDragOver={handleCanvasDragOver}
-          onDrop={handleCanvasDrop}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleTableDrop}
+          onMouseLeave={handleTableDrop}
         >
-          {!hasTables && (
+          {(!tables || tables.length === 0) && (
             <div className="seating-canvas__empty">
-              No tables yet. Add tables from the Guests page to start arranging.
+              <p>No tables yet. Add tables from the Guest Management page.</p>
             </div>
           )}
 
           {tables?.map((table) => {
-            const tableGuests = guestsByTable.get(table.id) ?? [];
-            const isDragging =
-              dragState?.type === 'table' && dragState.tableId === table.id;
-            const isHover = hoverTableId === table.id;
+            const tableGuests = (guests ?? []).filter(
+              (g) => g.table_id === table.id,
+            );
             return (
               <div
                 key={table.id}
-                data-table-id={table.id}
-                className={`seating-table${isDragging ? ' seating-table--dragging' : ''}${isHover ? ' seating-table--hover' : ''}`}
+                className="seating-table"
                 style={{
-                  left: table.position_x ?? 20,
-                  top: table.position_y ?? 20,
+                  left: table.position_x,
+                  top: table.position_y,
+                  opacity: draggingTable?.id === table.id ? 0.5 : 1,
                 }}
-                draggable
-                onDragStart={(e) => handleTableDragStart(e, table)}
-                onDragOver={handleTableDragOver}
-                onDragLeave={handleTableDragLeave}
-                onDrop={handleTableDrop}
-                onDragEnd={handleDragEnd}
+                onMouseDown={(e) => handleTableMouseDown(e, table)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => handleTableDropGuest(e, table.id)}
               >
                 <div className="seating-table__header">
                   <span className="seating-table__name">{table.name}</span>
-                  <span className="seating-table__number">#{table.number}</span>
-                </div>
-                <div className="seating-table__count">
-                  {tableGuests.length} / {table.capacity} guests
+                  <span className="seating-table__count">
+                    {tableGuests.length}/{table.capacity}
+                  </span>
                 </div>
                 <div className="seating-table__guests">
-                  {tableGuests.length === 0 ? (
-                    <span className="seating-table__empty">
-                      Drop guests here
-                    </span>
-                  ) : (
-                    tableGuests.map((g) => (
-                      <div
-                        key={g.id}
-                        className={`guest-chip${dragState?.type === 'guest' && dragState.guestId === g.id ? ' guest-chip--dragging' : ''}`}
-                        draggable
-                        onDragStart={(e) => handleGuestDragStart(e, g)}
-                        onDragEnd={handleDragEnd}
-                      >
-                        {g.name}
-                      </div>
-                    ))
-                  )}
+                  {tableGuests.map((g) => (
+                    <div
+                      key={g.id}
+                      className="guest-chip guest-chip--assigned"
+                      draggable
+                      onDragStart={(e) => handleGuestDragStart(e, g)}
+                    >
+                      {g.name}
+                    </div>
+                  ))}
                 </div>
               </div>
             );
@@ -276,48 +213,37 @@ export function SeatingArrangementPage() {
         </div>
 
         <div className="seating-sidebar">
-          <div
-            className={`unassigned-drop-zone${hoverUnassigned ? ' unassigned-drop-zone--hover' : ''}`}
-            onDragOver={handleUnassignedDragOver}
-            onDragLeave={handleUnassignedDragLeave}
-            onDrop={handleUnassignedDrop}
-          >
-            <h3>Unassigned Guests</h3>
-            {unassignedGuests.length === 0 ? (
-              <p className="text-secondary">All guests are seated.</p>
-            ) : (
-              <div
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 'var(--space-2)',
-                }}
-              >
-                {unassignedGuests.map((g) => (
-                  <div
-                    key={g.id}
-                    className={`guest-chip guest-chip--unassigned${dragState?.type === 'guest' && dragState.guestId === g.id ? ' guest-chip--dragging' : ''}`}
-                    draggable
-                    onDragStart={(e) => handleGuestDragStart(e, g)}
-                    onDragEnd={handleDragEnd}
-                  >
-                    {g.name}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           <div className="seating-tips">
             <h3>Tips</h3>
             <ul>
               <li>Drag table cards to reposition them on the canvas.</li>
-              <li>Drag guest chips between tables to seat them.</li>
+              <li>Drag guest chips to assign or reassign tables.</li>
               <li>
-                Drop a guest in the unassigned zone to remove their table.
+                Drop a guest in the unassigned zone to remove them from a table.
               </li>
-              <li>Positions save automatically.</li>
             </ul>
+          </div>
+
+          <div
+            className={`unassigned-drop-zone${draggingGuest ? ' unassigned-drop-zone--active' : ''}`}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleUnassignedDrop}
+          >
+            <h3>Unassigned Guests</h3>
+            {unassigned.length === 0 ? (
+              <p className="unassigned-drop-zone__empty">All guests seated!</p>
+            ) : (
+              unassigned.map((g) => (
+                <div
+                  key={g.id}
+                  className="guest-chip guest-chip--unassigned"
+                  draggable
+                  onDragStart={(e) => handleGuestDragStart(e, g)}
+                >
+                  {g.name}
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

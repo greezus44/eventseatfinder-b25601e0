@@ -3,9 +3,9 @@ export interface Event {
   user_id: string;
   name: string;
   slug: string;
-  date: string | null;
-  time: string | null;
-  venue: string | null;
+  date: string;
+  time: string;
+  venue: string;
   logo_url: string | null;
   cover_url: string | null;
   accent_color: string | null;
@@ -17,9 +17,9 @@ export interface Event {
 export interface EventInput {
   name: string;
   slug: string;
-  date?: string | null;
-  time?: string | null;
-  venue?: string | null;
+  date: string;
+  time: string;
+  venue: string;
   logo_url?: string | null;
   cover_url?: string | null;
   accent_color?: string | null;

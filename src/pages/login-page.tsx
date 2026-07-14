@@ -4,44 +4,49 @@ import { useAuth } from '@/providers/auth-provider';
 import { useToast } from '@/providers/toast-provider';
 
 export function LoginPage() {
+  const navigate = useNavigate();
   const { signIn, signUp } = useAuth();
   const { toast } = useToast();
-  const navigate = useNavigate();
 
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      if (isSignUp) {
-        await signUp(email, password);
-        toast('Account created! Please sign in.', 'success');
-        setIsSignUp(false);
-      } else {
+      if (mode === 'signin') {
         await signIn(email, password);
         toast('Welcome back!', 'success');
-        navigate('/');
+      } else {
+        await signUp(email, password);
+        toast('Account created! Please sign in.', 'success');
+        setMode('signin');
+        setSubmitting(false);
+        return;
       }
+      navigate('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed');
+      const message =
+        err instanceof Error ? err.message : 'Authentication failed';
+      setError(message);
+      toast(message, 'error');
     } finally {
       setSubmitting(false);
     }
-  }
+  };
 
   return (
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-card__logo">Seatly</div>
-        <div className="auth-card__tagline">
-          {isSignUp ? 'Create your account' : 'Sign in to manage your events'}
-        </div>
+        <p className="auth-card__tagline">
+          Plan seating, manage guests, and run your event seamlessly.
+        </p>
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <div className="auth-form__field">
@@ -54,6 +59,7 @@ export function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
               required
               autoComplete="email"
             />
@@ -69,38 +75,57 @@ export function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
               required
-              autoComplete={isSignUp ? 'new-password' : 'current-password'}
+              autoComplete={
+                mode === 'signin' ? 'current-password' : 'new-password'
+              }
             />
           </div>
 
-          {error && <div className="auth-form__error">{error}</div>}
+          {error && <p className="auth-form__error">{error}</p>}
 
           <button
-            className="btn btn--primary"
             type="submit"
+            className="btn btn--primary"
             disabled={submitting}
           >
             {submitting
-              ? 'Please wait…'
-              : isSignUp
-                ? 'Create account'
-                : 'Sign in'}
+              ? 'Please wait...'
+              : mode === 'signin'
+                ? 'Sign In'
+                : 'Sign Up'}
           </button>
         </form>
 
         <div className="auth-form__toggle">
-          {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
-          <button
-            className="btn btn--secondary"
-            type="button"
-            onClick={() => {
-              setIsSignUp((prev) => !prev);
-              setError(null);
-            }}
-          >
-            {isSignUp ? 'Sign in' : 'Sign up'}
-          </button>
+          {mode === 'signin' ? (
+            <>
+              Don't have an account?{' '}
+              <button
+                className="btn btn--secondary"
+                onClick={() => {
+                  setMode('signup');
+                  setError(null);
+                }}
+              >
+                Sign Up
+              </button>
+            </>
+          ) : (
+            <>
+              Already have an account?{' '}
+              <button
+                className="btn btn--secondary"
+                onClick={() => {
+                  setMode('signin');
+                  setError(null);
+                }}
+              >
+                Sign In
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
