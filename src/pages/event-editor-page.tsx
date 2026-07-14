@@ -10,7 +10,7 @@ import { AppHeader } from '@/components/app-header'
 import { FONTS, getFontCss, loadGoogleFonts, formatTime12 } from '@/lib/fonts'
 import { parseFile, matchTableByName, classifyError, type ParsedGuest } from '@/lib/guest-import'
 import QRCode from 'qrcode'
-import type { EventInput, GuestInput, TableInput, GuestPageSettingsInput } from '@/types'
+import type { GuestInput, TableInput } from '@/types'
 
 type Tab = 'details' | 'guests' | 'tables' | 'layout' | 'theme' | 'share'
 

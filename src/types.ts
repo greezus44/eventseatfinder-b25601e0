@@ -1,5 +1,3 @@
-// Core domain types mirroring the Supabase schema.
-
 export interface Event {
   id: string
   user_id: string
@@ -100,8 +98,6 @@ export interface GuestPageSettings {
   created_at: string | null
   updated_at: string | null
 }
-
-// Input types — all fields optional so partial updates are ergonomic.
 
 export interface EventInput {
   name?: string

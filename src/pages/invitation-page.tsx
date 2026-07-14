@@ -126,6 +126,7 @@ export function InvitationPage() {
   const primary = settings.color_primary ?? '#0f766e'
   const bg = settings.color_background ?? '#f8fafc'
   const text = settings.color_text ?? '#0f172a'
+  const cardBg = settings.color_card ?? '#ffffff'
   const radius = `${settings.border_radius ?? 16}px`
   const logoSize = settings.logo_size ?? 80
   const logoRounded = settings.logo_rounded ?? false
@@ -136,30 +137,35 @@ export function InvitationPage() {
   return (
     <div className="gp-page" style={{ background: bg, color: text }}>
       <div className="gp-container">
+        {/* 1. Event Logo */}
         {settings.logo_url && (
           <div className="gp-logo-wrapper">
             <img src={settings.logo_url} alt="Event logo" className="gp-logo" style={{ width: `${Math.min(logoSize, 500)}px`, height: 'auto', borderRadius: logoRounded ? '50%' : '0' }} />
           </div>
         )}
+        {/* 2. Event Title */}
         <h1 className="gp-title" style={{ fontFamily: getFontCss(titleFont), fontSize: `${settings.font_title_size ?? 32}px`, color: settings.font_title_color ?? text }}>{event.name}</h1>
+        {/* 3. Event Subtitle */}
         {settings.event_subtitle && <p className="gp-subtitle" style={{ fontFamily: getFontCss(subtitleFont), fontSize: `${settings.font_subtitle_size ?? 16}px`, color: settings.font_subtitle_color ?? text }}>{settings.event_subtitle}</p>}
+        {/* 4. Event Date & Time */}
         {event.date && <p className="gp-datetime" style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${settings.font_datetime_size ?? 14}px`, color: settings.font_datetime_color ?? text }}>{formatDate()}</p>}
         {event.time && <p className="gp-datetime" style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${settings.font_datetime_size ?? 14}px`, color: settings.font_datetime_color ?? text }}>{formatTime12(event.time)}</p>}
+        {/* 5. Venue */}
         {event.venue && <p className="gp-venue" style={{ fontFamily: getFontCss(venueFont), fontSize: `${settings.font_venue_size ?? 14}px`, color: settings.font_venue_color ?? text }}>{event.venue}</p>}
-        <p className="gp-welcome" style={{ fontFamily: getFontCss(welcomeFont), fontSize: `${settings.font_welcome_size ?? 16}px`, color: settings.font_welcome_color ?? text }}>{welcomeMessage}</p>
-
+        {/* 6. Find Seat / Venue Layout tabs */}
         <div className="gp-tabs">
-          <button className={`gp-tab ${activeTab === 'find' ? 'active' : ''}`} onClick={() => setActiveTab('find')} style={activeTab === 'find' ? { background: primary, color: '#fff' } : {}}>Find Seat</button>
-          <button className={`gp-tab ${activeTab === 'layout' ? 'active' : ''}`} onClick={() => setActiveTab('layout')} style={activeTab === 'layout' ? { background: primary, color: '#fff' } : {}}>Venue Layout</button>
+          <button className={`gp-tab ${activeTab === 'find' ? 'active' : ''}`} onClick={() => setActiveTab('find')} style={activeTab === 'find' ? { background: primary, color: '#fff', borderColor: primary } : { borderColor: primary, color: text }}>Find Seat</button>
+          <button className={`gp-tab ${activeTab === 'layout' ? 'active' : ''}`} onClick={() => setActiveTab('layout')} style={activeTab === 'layout' ? { background: primary, color: '#fff', borderColor: primary } : { borderColor: primary, color: text }}>Venue Layout</button>
         </div>
 
+        {/* 7. Search Your Name + 8. Search Results */}
         {activeTab === 'find' && (
           <div className="gp-find-seat">
             <div className="gp-search-wrapper">
               <div className="gp-search-box">
                 <input
                   type="text"
-                  className="input gp-search-input"
+                  className="gp-search-input"
                   placeholder="Search your name…"
                   value={search}
                   onChange={handleSearchChange}
@@ -167,37 +173,42 @@ export function InvitationPage() {
                   onFocus={handleFocus}
                   onBlur={handleBlur}
                   autoFocus
-                  style={{ borderColor: primary }}
                   autoComplete="off"
+                  style={{ background: bg, borderColor: primary, color: text, borderRadius: radius }}
                 />
-                <button className="btn btn-primary" onClick={handleSearchSubmit} style={{ background: primary, borderRadius: radius }}>Search</button>
+                <button className="gp-search-btn" onClick={handleSearchSubmit} style={{ background: primary, color: '#fff', borderRadius: radius }}>Search</button>
               </div>
+              {/* Live suggestions dropdown */}
               {showSuggestions && suggestions.length > 0 && (
-                <div className="gp-suggestions">
+                <div className="gp-suggestions" style={{ background: bg, borderColor: primary, borderRadius: radius }}>
                   {suggestions.map((s) => (
                     <button key={s.id} className="gp-suggestion" onClick={() => handleSuggestionClick(s)} style={{ borderRadius: radius }}>
-                      <span className="gp-suggestion-name">{s.name}</span>
-                      <span className="gp-suggestion-table">{s.table_name}</span>
+                      <span className="gp-suggestion-name" style={{ color: text }}>{s.name}</span>
+                      <span className="gp-suggestion-table" style={{ color: primary }}>{s.table_name}</span>
                     </button>
                   ))}
                 </div>
               )}
             </div>
 
+            {/* Search Results */}
             {searched && (
               <div className="gp-results">
                 {loadingGuests ? (
                   <div className="gp-no-results"><p>Loading guests…</p></div>
                 ) : selectedResult ? (
-                  <div className="gp-result-card" style={{ borderRadius: radius }}>
-                    <p className="gp-result-name">{selectedResult.name}</p>
-                    <p className="gp-result-table">
-                      <span className="gp-result-table-label">Your table:</span>
-                      <span className="gp-result-table-value" style={{ color: primary }}>{selectedResult.table_name}</span>
-                    </p>
+                  <div className="gp-result-card" style={{ background: cardBg, borderColor: primary, borderRadius: radius }}>
+                    <div className="gp-result-left">
+                      <p className="gp-result-name" style={{ color: text }}>{selectedResult.name}</p>
+                    </div>
+                    <div className="gp-result-right">
+                      <span className="gp-result-badge" style={{ background: primary, color: '#fff', borderRadius: radius }}>
+                        {selectedResult.table_name}
+                      </span>
+                    </div>
                   </div>
                 ) : (
-                  <div className="gp-no-results">
+                  <div className="gp-no-results" style={{ color: text }}>
                     <p>No matching guest found. Please check the spelling of your name.</p>
                   </div>
                 )}
@@ -211,17 +222,17 @@ export function InvitationPage() {
             {settings.venue_image_url ? (
               <>
                 <div className="gp-layout-controls">
-                  <button className="btn btn-ghost btn-sm" onClick={handleZoomOut}>−</button>
-                  <span className="gp-zoom-label">{Math.round(zoom * 100)}%</span>
-                  <button className="btn btn-ghost btn-sm" onClick={handleZoomIn}>+</button>
-                  <button className="btn btn-ghost btn-sm" onClick={handleZoomReset}>Reset</button>
+                  <button className="gp-zoom-btn" onClick={handleZoomOut} style={{ borderColor: primary, color: primary, borderRadius: radius }}>−</button>
+                  <span className="gp-zoom-label" style={{ color: text }}>{Math.round(zoom * 100)}%</span>
+                  <button className="gp-zoom-btn" onClick={handleZoomIn} style={{ borderColor: primary, color: primary, borderRadius: radius }}>+</button>
+                  <button className="gp-zoom-btn" onClick={handleZoomReset} style={{ borderColor: primary, color: primary, borderRadius: radius }}>Reset</button>
                 </div>
-                <div className="gp-layout-viewport" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} style={{ cursor: isDragging ? 'grabbing' : zoom > 1 ? 'grab' : 'default' }}>
+                <div className="gp-layout-viewport" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} style={{ cursor: isDragging ? 'grabbing' : zoom > 1 ? 'grab' : 'default', borderColor: primary, borderRadius: radius }}>
                   <img src={settings.venue_image_url} alt="Venue layout" className="gp-venue-img" style={{ transform: `scale(${zoom}) translate(${panX / zoom}px, ${panY / zoom}px)`, transformOrigin: 'center', transition: isDragging ? 'none' : 'transform 0.2s ease', borderRadius: radius }} draggable={false} />
                 </div>
               </>
             ) : (
-              <div className="gp-no-layout"><p>No venue layout available.</p></div>
+              <div className="gp-no-layout" style={{ color: text }}><p>No venue layout available.</p></div>
             )}
           </div>
         )}

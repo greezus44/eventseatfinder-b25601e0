@@ -9,11 +9,7 @@ export function useGuestPageSettings(eventId: string | undefined) {
     queryKey: [SETTINGS_KEY, eventId],
     enabled: !!eventId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('guest_page_settings')
-        .select('*')
-        .eq('event_id', eventId!)
-        .maybeSingle()
+      const { data, error } = await supabase.from('guest_page_settings').select('*').eq('event_id', eventId!).maybeSingle()
       if (error) throw error
       return (data as GuestPageSettings | null) ?? null
     },
@@ -25,7 +21,6 @@ export function useGuestPageSettingsBySlug(slug: string | undefined) {
     queryKey: [SETTINGS_KEY, 'slug', slug],
     enabled: !!slug,
     queryFn: async () => {
-      // 1. Find the event by slug.
       const { data: event, error: eventError } = await supabase
         .from('events')
         .select('id, name, slug, date, time, venue, logo_url, cover_url, accent_color, invitation_enabled')
@@ -33,8 +28,6 @@ export function useGuestPageSettingsBySlug(slug: string | undefined) {
         .maybeSingle()
       if (eventError) throw eventError
       if (!event) return null
-
-      // 2. Fetch the settings for that event.
       const { data: settings, error: settingsError } = await supabase
         .from('guest_page_settings')
         .select('*')
@@ -42,11 +35,7 @@ export function useGuestPageSettingsBySlug(slug: string | undefined) {
         .maybeSingle()
       if (settingsError) throw settingsError
       if (!settings) return null
-
-      return {
-        ...(settings as GuestPageSettings),
-        events: event as Pick<Event, 'id' | 'name' | 'slug' | 'date' | 'time' | 'venue' | 'logo_url' | 'cover_url' | 'accent_color' | 'invitation_enabled'>,
-      }
+      return { ...(settings as GuestPageSettings), events: event as Pick<Event, 'id' | 'name' | 'slug' | 'date' | 'time' | 'venue' | 'logo_url' | 'cover_url' | 'accent_color' | 'invitation_enabled'> }
     },
   })
 }
@@ -55,11 +44,7 @@ export function useUpsertGuestPageSettings() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: { event_id: string } & GuestPageSettingsInput) => {
-      const { data, error } = await supabase
-        .from('guest_page_settings')
-        .upsert(input, { onConflict: 'event_id' })
-        .select()
-        .single()
+      const { data, error } = await supabase.from('guest_page_settings').upsert(input, { onConflict: 'event_id' }).select().single()
       if (error) throw error
       return data as GuestPageSettings
     },

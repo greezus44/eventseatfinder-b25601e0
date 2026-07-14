@@ -1,5 +1,3 @@
-// Font helpers for the guest page designer.
-
 export interface FontOption {
   name: string
   cssName: string
@@ -20,37 +18,25 @@ export const FONTS: FontOption[] = [
   { name: 'DM Serif Display', cssName: 'DM Serif Display' },
 ]
 
-/**
- * Returns a CSS `font-family` value for a font name, falling back to Inter
- * (and a generic sans-serif) when the font is unknown or empty.
- */
 export function getFontCss(name: string): string {
   const font = FONTS.find((f) => f.name === name)
   const cssName = font?.cssName ?? 'Inter'
   return `'${cssName}', sans-serif`
 }
 
-/**
- * Injects <link> tags for the requested Google Fonts, de-duplicating against
- * already-loaded links so repeated calls are cheap and idempotent.
- */
 export function loadGoogleFonts(fontNames: string[]): void {
   const wanted = Array.from(new Set(fontNames.filter(Boolean)))
   if (wanted.length === 0) return
-
   const head = document.head
   const existing = new Set<string>()
   head.querySelectorAll<HTMLLinkElement>('link[data-google-font]').forEach((link) => {
     const family = link.getAttribute('data-google-font')
     if (family) existing.add(family)
   })
-
   for (const name of wanted) {
     if (existing.has(name)) continue
     const cssName = FONTS.find((f) => f.name === name)?.cssName ?? name
-    const href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(
-      cssName,
-    ).replace(/%20/g, '+')}:wght@400;500;600;700&display=swap`
+    const href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(cssName).replace(/%20/g, '+')}:wght@400;500;600;700&display=swap`
     const link = document.createElement('link')
     link.rel = 'stylesheet'
     link.href = href
@@ -60,10 +46,6 @@ export function loadGoogleFonts(fontNames: string[]): void {
   }
 }
 
-/**
- * Converts a 24-hour "HH:MM" time string to a 12-hour "h:mm AM/PM" label.
- * Returns an empty string for null/undefined/blank input.
- */
 export function formatTime12(time: string | null | undefined): string {
   if (!time) return ''
   const match = /^(\d{2}):(\d{2})/.exec(time)
