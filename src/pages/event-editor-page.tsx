@@ -169,11 +169,6 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
   const [venue, setVenue] = useState(event.venue ?? '')
   const [detailsDirty, setDetailsDirty] = useState(false)
 
-  // logoUrl always holds either a real Supabase Storage public URL or null.
-  // The logo is uploaded to storage IMMEDIATELY when the user selects a file,
-  // not deferred to save time. This eliminates the state race condition where
-  // a data: URL could be passed to the upsert or where the save could overwrite
-  // the logo with an empty/stale value.
   const [logoUrl, setLogoUrl] = useState<string | null>(settings?.logo_url ?? null)
   const [logoSize, setLogoSize] = useState<number>(settings?.logo_size ?? 80)
   const [logoUploading, setLogoUploading] = useState(false)
@@ -246,10 +241,6 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
     )
   }, [titleFont, titleSize, titleColor, subtitleFont, subtitleSize, subtitleColor, datetimeFont, datetimeSize, datetimeColor, venueFont, venueSize, venueColor, settings])
 
-  // Upload the logo to Supabase Storage IMMEDIATELY when the user selects a file.
-  // logoUrl in state always holds a real public URL (or null if removed).
-  // When Save is clicked, logoUrl is already a real URL — no data: URL conversion needed,
-  // no state race condition, and the save payload always contains the correct value.
   const handleLogoFile = async (file: File) => {
     if (!file.type.match(/image\/(png|jpe?g|svg\+xml|webp)/)) {
       toast('Please use PNG, JPG, SVG, or WebP', 'error')
@@ -271,8 +262,6 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
   const handleSaveDetails = async () => {
     try {
       await updateEvent.mutateAsync({ id: eventId, name, slug: event.slug, date: date || null, time: time || null, venue: venue || null })
-      // logoUrl is already a real public URL (uploaded at selection time) or null.
-      // This payload correctly persists the logo reference.
       await upsertSettings.mutateAsync({ event_id: eventId, event_subtitle: subtitle || null, logo_url: logoUrl, logo_size: logoSize })
       toast('Event details saved')
       setDetailsDirty(false)
@@ -299,7 +288,6 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
 
   return (
     <div className="details-layout">
-      {/* Left column: Event Details + Typography */}
       <div className="details-main">
         <div className="card section">
           <div className="card-header">
@@ -392,7 +380,6 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
         </div>
       </div>
 
-      {/* Right column: sticky Live Preview */}
       <div className="details-preview">
         <div className="card section preview-sticky">
           <div className="card-header">
