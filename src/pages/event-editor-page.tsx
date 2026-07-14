@@ -109,14 +109,14 @@ function TypoCard({ label, font, size, color, onFont, onSize, onColor, previewTe
 
 export function EventEditorPage() {
   const { eventId } = useParams<{ eventId: string }>()
-  const toast = useToast()
-  const { confirm } = useConfirmDialog()
   const { data: event, isLoading: eventLoading } = useEvent(eventId ?? '')
   const { data: guests } = useGuests(eventId ?? '')
   const { data: tables } = useTables(eventId ?? '')
   const { data: settings } = useGuestPageSettings(eventId ?? '')
   const updateEvent = useUpdateEvent()
   const upsertSettings = useUpsertGuestPageSettings()
+  const toast = useToast()
+  const { confirm } = useConfirmDialog()
   const [activeTab, setActiveTab] = useState<Tab>('details')
 
   if (eventLoading || !event) {
@@ -298,123 +298,129 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
   }
 
   return (
-    <div className="section">
-      <div className="card section">
-        <div className="card-header">
-          <h3 className="card-title">Event Details</h3>
-          <p className="card-subtitle">Basic information about your event</p>
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Event Name</label>
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Wedding" />
+    <div className="details-layout">
+      {/* Left column: Event Details + Typography */}
+      <div className="details-main">
+        <div className="card section">
+          <div className="card-header">
+            <h3 className="card-title">Event Details</h3>
+            <p className="card-subtitle">Basic information about your event</p>
           </div>
-          <div className="form-group">
-            <label className="form-label">Subtitle (optional)</label>
-            <input className="input" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="Together With Our Families" />
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Event Name</label>
+              <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Wedding" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Subtitle (optional)</label>
+              <input className="input" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="Together With Our Families" />
+            </div>
           </div>
-        </div>
-        <div className="form-row" style={{ marginTop: 'var(--space-4)' }}>
-          <div className="form-group">
-            <label className="form-label">Venue</label>
-            <input className="input" value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="Grand Hotel" />
+          <div className="form-row" style={{ marginTop: 'var(--space-4)' }}>
+            <div className="form-group">
+              <label className="form-label">Venue</label>
+              <input className="input" value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="Grand Hotel" />
+            </div>
           </div>
-        </div>
-        <div className="form-row" style={{ marginTop: 'var(--space-4)' }}>
-          <div className="form-group">
-            <label className="form-label">Date</label>
-            <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
+          <div className="form-row" style={{ marginTop: 'var(--space-4)' }}>
+            <div className="form-group">
+              <label className="form-label">Date</label>
+              <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Time</label>
+              <TimeSelector value={time} onChange={setTime} />
+            </div>
           </div>
-          <div className="form-group">
-            <label className="form-label">Time</label>
-            <TimeSelector value={time} onChange={setTime} />
-          </div>
-        </div>
-        <div className="logo-section" style={{ marginTop: 'var(--space-5)' }}>
-          <label className="form-label">Logo</label>
-          {logoUrl ? (
-            <div className="logo-preview-area">
-              <div className="logo-preview-box">
-                <img src={logoUrl} alt="Event logo preview" style={{ maxWidth: '100%', maxHeight: '120px', objectFit: 'contain' }} />
+          <div className="logo-section" style={{ marginTop: 'var(--space-5)' }}>
+            <label className="form-label">Logo</label>
+            {logoUrl ? (
+              <div className="logo-preview-area">
+                <div className="logo-preview-box">
+                  <img src={logoUrl} alt="Event logo preview" style={{ maxWidth: '100%', maxHeight: '120px', objectFit: 'contain' }} />
+                </div>
+                <div className="logo-actions">
+                  <button className="btn btn-ghost btn-sm" onClick={() => logoFileRef.current?.click()} disabled={logoUploading}>Replace</button>
+                  <button className="btn btn-ghost btn-sm" onClick={handleRemoveLogo} disabled={logoUploading}>Remove</button>
+                </div>
               </div>
-              <div className="logo-actions">
-                <button className="btn btn-ghost btn-sm" onClick={() => logoFileRef.current?.click()} disabled={logoUploading}>Replace</button>
-                <button className="btn btn-ghost btn-sm" onClick={handleRemoveLogo} disabled={logoUploading}>Remove</button>
+            ) : (
+              <div
+                className={`dropzone ${logoDragOver ? 'dropzone-active' : ''}`}
+                onDragOver={(e) => { e.preventDefault(); setLogoDragOver(true) }}
+                onDragLeave={() => setLogoDragOver(false)}
+                onDrop={(e) => { e.preventDefault(); setLogoDragOver(false); if (e.dataTransfer.files[0]) handleLogoFile(e.dataTransfer.files[0]) }}
+                onClick={() => logoFileRef.current?.click()}
+              >
+                <p className="dropzone-text">{logoUploading ? 'Uploading…' : 'Drop logo here or click to browse'}</p>
+                <p className="dropzone-hint">PNG, JPG, SVG, or WebP</p>
+              </div>
+            )}
+            <input ref={logoFileRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && handleLogoFile(e.target.files[0])} />
+            <div className="logo-size-controls" style={{ marginTop: 'var(--space-4)' }}>
+              <label className="form-label">Logo Size</label>
+              <div className="logo-size-presets">
+                {LOGO_SIZES.map((s) => (
+                  <button key={s.value} className={`btn btn-sm ${logoSize === s.value ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setLogoSize(s.value)}>{s.label}</button>
+                ))}
               </div>
             </div>
-          ) : (
-            <div
-              className={`dropzone ${logoDragOver ? 'dropzone-active' : ''}`}
-              onDragOver={(e) => { e.preventDefault(); setLogoDragOver(true) }}
-              onDragLeave={() => setLogoDragOver(false)}
-              onDrop={(e) => { e.preventDefault(); setLogoDragOver(false); if (e.dataTransfer.files[0]) handleLogoFile(e.dataTransfer.files[0]) }}
-              onClick={() => logoFileRef.current?.click()}
-            >
-              <p className="dropzone-text">{logoUploading ? 'Uploading…' : 'Drop logo here or click to browse'}</p>
-              <p className="dropzone-hint">PNG, JPG, SVG, or WebP</p>
-            </div>
-          )}
-          <input ref={logoFileRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && handleLogoFile(e.target.files[0])} />
-          <div className="logo-size-controls" style={{ marginTop: 'var(--space-4)' }}>
-            <label className="form-label">Logo Size</label>
-            <div className="logo-size-presets">
-              {LOGO_SIZES.map((s) => (
-                <button key={s.value} className={`btn btn-sm ${logoSize === s.value ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setLogoSize(s.value)}>{s.label}</button>
-              ))}
-            </div>
+          </div>
+          <div style={{ marginTop: 'var(--space-5)' }}>
+            <button className="btn btn-primary" onClick={handleSaveDetails} disabled={!detailsDirty || updateEvent.isPending || upsertSettings.isPending || logoUploading}>
+              {updateEvent.isPending || upsertSettings.isPending ? 'Saving…' : 'Save Changes'}
+            </button>
           </div>
         </div>
-        <div style={{ marginTop: 'var(--space-5)' }}>
-          <button className="btn btn-primary" onClick={handleSaveDetails} disabled={!detailsDirty || updateEvent.isPending || upsertSettings.isPending || logoUploading}>
-            {updateEvent.isPending || upsertSettings.isPending ? 'Saving…' : 'Save Changes'}
-          </button>
+
+        <div className="card section">
+          <div className="card-header">
+            <h3 className="card-title">Typography</h3>
+            <p className="card-subtitle">Fonts, sizes, and colours for each text element. Preview updates live.</p>
+          </div>
+          <div className="typo-cards">
+            <TypoCard label="Event Title" font={titleFont} size={titleSize} color={titleColor} onFont={setTitleFont} onSize={setTitleSize} onColor={setTitleColor} previewText={name || 'Event Name'} previewStyle={{ fontFamily: getFontCss(titleFont), fontSize: `${titleSize}px`, color: titleColor }} />
+            <TypoCard label="Event Subtitle" font={subtitleFont} size={subtitleSize} color={subtitleColor} onFont={setSubtitleFont} onSize={setSubtitleSize} onColor={setSubtitleColor} previewText={subtitle || 'Event Subtitle'} previewStyle={{ fontFamily: getFontCss(subtitleFont), fontSize: `${subtitleSize}px`, color: subtitleColor }} />
+            <TypoCard label="Date & Time" font={datetimeFont} size={datetimeSize} color={datetimeColor} onFont={setDatetimeFont} onSize={setDatetimeSize} onColor={setDatetimeColor} previewText={date && time ? `${new Date(date).toLocaleDateString()} at ${formatTime12(time)}` : 'Date & Time'} previewStyle={{ fontFamily: getFontCss(datetimeFont), fontSize: `${datetimeSize}px`, color: datetimeColor }} />
+            <TypoCard label="Venue" font={venueFont} size={venueSize} color={venueColor} onFont={setVenueFont} onSize={setVenueSize} onColor={setVenueColor} previewText={venue || 'Venue Name'} previewStyle={{ fontFamily: getFontCss(venueFont), fontSize: `${venueSize}px`, color: venueColor }} />
+          </div>
+          <div style={{ marginTop: 'var(--space-5)' }}>
+            <button className="btn btn-primary" onClick={handleSaveTypography} disabled={!typoDirty || upsertSettings.isPending}>
+              {upsertSettings.isPending ? 'Saving…' : 'Save Typography'}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="card section">
-        <div className="card-header">
-          <h3 className="card-title">Live Preview</h3>
-          <p className="card-subtitle">See how your guest page will look</p>
-        </div>
-        <div className="gp-preview-container">
-          {logoUrl && (
-            <div className="gp-preview-logo-wrapper">
-              <img src={logoUrl} alt="Logo preview" style={{ width: `${Math.min(logoSize, 500)}px`, maxWidth: '100%', height: 'auto', objectFit: 'contain' }} />
-            </div>
-          )}
-          <h3 className="gp-preview-title" style={{ fontFamily: getFontCss(titleFont), fontSize: `${titleSize}px`, color: titleColor }}>{name || 'Event Name'}</h3>
-          {subtitle && subtitle.trim() && (
-            <p className="gp-preview-subtitle" style={{ fontFamily: getFontCss(subtitleFont), fontSize: `${subtitleSize}px`, color: subtitleColor }}>{subtitle}</p>
-          )}
-          {date && (
-            <p className="gp-preview-datetime" style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${datetimeSize}px`, color: datetimeColor }}>
-              {new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            </p>
-          )}
-          {time && (
-            <p className="gp-preview-datetime" style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${datetimeSize}px`, color: datetimeColor }}>{formatTime12(time)}</p>
-          )}
-          {venue && (
-            <p className="gp-preview-venue" style={{ fontFamily: getFontCss(venueFont), fontSize: `${venueSize}px`, color: venueColor }}>{venue}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="card section">
-        <div className="card-header">
-          <h3 className="card-title">Typography</h3>
-          <p className="card-subtitle">Fonts, sizes, and colours for each text element. Preview updates live.</p>
-        </div>
-        <div className="typo-cards">
-          <TypoCard label="Event Title" font={titleFont} size={titleSize} color={titleColor} onFont={setTitleFont} onSize={setTitleSize} onColor={setTitleColor} previewText={name || 'Event Name'} previewStyle={{ fontFamily: getFontCss(titleFont), fontSize: `${titleSize}px`, color: titleColor }} />
-          <TypoCard label="Event Subtitle" font={subtitleFont} size={subtitleSize} color={subtitleColor} onFont={setSubtitleFont} onSize={setSubtitleSize} onColor={setSubtitleColor} previewText={subtitle || 'Event Subtitle'} previewStyle={{ fontFamily: getFontCss(subtitleFont), fontSize: `${subtitleSize}px`, color: subtitleColor }} />
-          <TypoCard label="Date & Time" font={datetimeFont} size={datetimeSize} color={datetimeColor} onFont={setDatetimeFont} onSize={setDatetimeSize} onColor={setDatetimeColor} previewText={date && time ? `${new Date(date).toLocaleDateString()} at ${formatTime12(time)}` : 'Date & Time'} previewStyle={{ fontFamily: getFontCss(datetimeFont), fontSize: `${datetimeSize}px`, color: datetimeColor }} />
-          <TypoCard label="Venue" font={venueFont} size={venueSize} color={venueColor} onFont={setVenueFont} onSize={setVenueSize} onColor={setVenueColor} previewText={venue || 'Venue Name'} previewStyle={{ fontFamily: getFontCss(venueFont), fontSize: `${venueSize}px`, color: venueColor }} />
-        </div>
-        <div style={{ marginTop: 'var(--space-5)' }}>
-          <button className="btn btn-primary" onClick={handleSaveTypography} disabled={!typoDirty || upsertSettings.isPending}>
-            {upsertSettings.isPending ? 'Saving…' : 'Save Typography'}
-          </button>
+      {/* Right column: sticky Live Preview */}
+      <div className="details-preview">
+        <div className="card section preview-sticky">
+          <div className="card-header">
+            <h3 className="card-title">Live Preview</h3>
+            <p className="card-subtitle">See how your guest page will look</p>
+          </div>
+          <div className="gp-preview-container">
+            {logoUrl && (
+              <div className="gp-preview-logo-wrapper">
+                <img src={logoUrl} alt="Logo preview" style={{ width: `${Math.min(logoSize, 500)}px`, maxWidth: '100%', height: 'auto', objectFit: 'contain' }} />
+              </div>
+            )}
+            <h3 className="gp-preview-title" style={{ fontFamily: getFontCss(titleFont), fontSize: `${titleSize}px`, color: titleColor }}>{name || 'Event Name'}</h3>
+            {subtitle && subtitle.trim() && (
+              <p className="gp-preview-subtitle" style={{ fontFamily: getFontCss(subtitleFont), fontSize: `${subtitleSize}px`, color: subtitleColor }}>{subtitle}</p>
+            )}
+            {date && (
+              <p className="gp-preview-datetime" style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${datetimeSize}px`, color: datetimeColor }}>
+                {new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </p>
+            )}
+            {time && (
+              <p className="gp-preview-datetime" style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${datetimeSize}px`, color: datetimeColor }}>{formatTime12(time)}</p>
+            )}
+            {venue && (
+              <p className="gp-preview-venue" style={{ fontFamily: getFontCss(venueFont), fontSize: `${venueSize}px`, color: venueColor }}>{venue}</p>
+            )}
+          </div>
         </div>
       </div>
     </div>

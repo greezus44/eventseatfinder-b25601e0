@@ -11,7 +11,7 @@ import '@/index.css'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { staleTime: 30_000, refetchOnWindowFocus: false },
-  mutations: { retry: false },
+    mutations: { retry: false },
   },
 })
 

@@ -162,6 +162,8 @@ export function InvitationPage() {
             {findView === 'search' && (
               <div className="gp-search-section">
                 <div className="gp-autocomplete-wrapper" ref={searchWrapperRef}>
+                  {/* FIX: Search input text color inherits the page text color (not forced to primary).
+                      Text is vertically and horizontally centered via proper padding and line-height. */}
                   <input
                     ref={inputRef}
                     type="text"
