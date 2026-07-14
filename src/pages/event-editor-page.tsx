@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo, useEffect, type DragEvent, type ChangeEvent } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useEvent, useUpdateEvent, useDeleteEvent } from '@/hooks/use-events';
 import { useGuests, useCreateGuest, useBulkCreateGuests, useUpdateGuest, useDeleteGuest } from '@/hooks/use-guests';
@@ -10,1124 +10,830 @@ import { DEFAULT_SETTINGS, FONT_OPTIONS, THEME_PRESETS } from '@/types/guest-pag
 import type { GuestPageSettingsInput } from '@/types/guest-page-settings';
 import type { GuestWithTable } from '@/types/guest';
 
-/* ------------------------------------------------------------------ *
- * Design tokens — modern monochrome (Linear / Notion / Stripe vibe)
- * ------------------------------------------------------------------ */
-const C = {
-  white: '#FFFFFF',
-  offWhite: '#F8F8F8',
-  lightGrey: '#EFEFEF',
-  midGrey: '#DADADA',
-  darkGrey: '#4A4A4A',
-  nearBlack: '#1A1A1A',
-  danger: '#D64545',
-  dangerBg: '#FBECEC',
-  border: '#EFEFEF',
-  borderStrong: '#E5E5E5',
-  textMuted: '#8A8A8A',
-};
+const EE_CSS = `
+.ee-root {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #1A1A1A;
+}
+.ee-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 32px;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E5E5;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.ee-back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  color: #4A4A4A;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+.ee-back:hover { background: #F8F8F8; color: #1A1A1A; }
+.ee-event-name {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.ee-topbar-spacer { flex: 1; }
+.ee-topbar-btn {
+  padding: 8px 16px;
+  border: 1px solid #D5D5D5;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1A1A1A;
+  background: #FFFFFF;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+.ee-topbar-btn:hover { background: #F8F8F8; }
+.ee-topbar-btn--danger {
+  color: #6A6A6A;
+}
+.ee-topbar-btn--danger:hover { background: #F0F0F0; }
+.ee-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 32px;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E5E5;
+  overflow-x: auto;
+}
+.ee-tab {
+  padding: 14px 20px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: #8A8A8A;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.ee-tab:hover { color: #4A4A4A; }
+.ee-tab--active {
+  color: #1A1A1A;
+  border-bottom-color: #1A1A1A;
+}
+.ee-content {
+  padding: 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.ee-panel {
+  display: none;
+}
+.ee-panel--active {
+  display: block;
+}
+.ee-section-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 24px 0;
+  letter-spacing: -0.01em;
+}
+.ee-field {
+  margin-bottom: 20px;
+}
+.ee-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4A4A4A;
+  margin-bottom: 6px;
+}
+.ee-input {
+  width: 100%;
+  max-width: 480px;
+  padding: 11px 14px;
+  border: 1px solid #D5D5D5;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #1A1A1A;
+  background: #FFFFFF;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+}
+.ee-input:focus { border-color: #1A1A1A; }
+.ee-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.ee-row > .ee-field { flex: 1; min-width: 200px; }
+.ee-btn {
+  padding: 11px 24px;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.ee-btn--primary {
+  background: #1A1A1A;
+  color: #FFFFFF;
+}
+.ee-btn--primary:hover { background: #2A2A2A; }
+.ee-btn--primary:disabled { opacity: 0.6; cursor: not-allowed; }
+.ee-btn--secondary {
+  background: #F8F8F8;
+  color: #1A1A1A;
+  border: 1px solid #D5D5D5;
+}
+.ee-btn--secondary:hover { background: #F0F0F0; }
+.ee-btn--danger {
+  background: #FFFFFF;
+  color: #6A6A6A;
+  border: 1px solid #D5D5D5;
+}
+.ee-btn--danger:hover { background: #F0F0F0; color: #1A1A1A; }
 
-const TABS = [
-  'Event Details',
-  'Guests',
-  'Tables',
-  'Venue Layout',
-  'Invitation',
-  'Schedule',
-  'Settings',
-] as const;
-type TabName = (typeof TABS)[number];
-
-const MAX_VENUE_BYTES = 5 * 1024 * 1024; // 5MB
-const VENUE_ACCEPT = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-
-/* ------------------------------------------------------------------ *
- * Helpers
- * ------------------------------------------------------------------ */
-function formatDateForInput(d: string): string {
-  if (!d) return '';
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return d;
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+/* Guests tab */
+.ee-guest-toolbar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.ee-guest-list {
+  background: #FFFFFF;
+  border: 1px solid #E5E5E5;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.ee-guest-row {
+  display: flex;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid #F0F0F0;
+  gap: 12px;
+}
+.ee-guest-row:last-child { border-bottom: none; }
+.ee-guest-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+}
+.ee-guest-table-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 100px;
+  background: #F8F8F8;
+  border: 1px solid #E5E5E5;
+  color: #4A4A4A;
+}
+.ee-guest-table-badge--none {
+  color: #8A8A8A;
+  font-style: italic;
+}
+.ee-guest-action {
+  padding: 6px 10px;
+  border: 1px solid #D5D5D5;
+  border-radius: 6px;
+  font-size: 12px;
+  background: #FFFFFF;
+  cursor: pointer;
+  color: #4A4A4A;
+}
+.ee-guest-action:hover { background: #F8F8F8; }
+.ee-guest-select {
+  padding: 6px 10px;
+  border: 1px solid #D5D5D5;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #FFFFFF;
+  cursor: pointer;
+  outline: none;
 }
 
-function formatTimeForInput(t: string): string {
-  if (!t) return '';
-  // Accept "HH:MM" or ISO; normalise to HH:MM
-  const m = t.match(/^(\d{2}):(\d{2})/);
-  if (m) return `${m[1]}:${m[2]}`;
-  const date = new Date(t);
-  if (!Number.isNaN(date.getTime())) {
-    const hh = String(date.getHours()).padStart(2, '0');
-    const mm = String(date.getMinutes()).padStart(2, '0');
-    return `${hh}:${mm}`;
-  }
-  return t;
+/* Tables tab */
+.ee-table-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ee-table-card {
+  background: #FFFFFF;
+  border: 1px solid #E5E5E5;
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.ee-table-num {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: #1A1A1A;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.ee-table-info {
+  flex: 1;
+}
+.ee-table-name {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 2px 0;
+}
+.ee-table-meta {
+  font-size: 13px;
+  color: #8A8A8A;
+  margin: 0;
 }
 
-function prettyDate(d: string, t: string): string {
-  if (!d) return 'No date set';
+/* Venue layout tab */
+.ee-dropzone {
+  border: 2px dashed #D5D5D5;
+  border-radius: 16px;
+  padding: 48px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #F8F8F8;
+}
+.ee-dropzone:hover, .ee-dropzone--drag {
+  border-color: #1A1A1A;
+  background: #F0F0F0;
+}
+.ee-dropzone-icon {
+  color: #8A8A8A;
+  margin-bottom: 12px;
+}
+.ee-dropzone-text {
+  font-size: 15px;
+  font-weight: 500;
+  color: #4A4A4A;
+  margin: 0 0 4px 0;
+}
+.ee-dropzone-hint {
+  font-size: 13px;
+  color: #8A8A8A;
+  margin: 0;
+}
+.ee-venue-preview {
+  margin-top: 24px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #E5E5E5;
+  background: #FFFFFF;
+}
+.ee-venue-preview img {
+  width: 100%;
+  display: block;
+}
+
+/* Settings tab */
+.ee-settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 32px;
+  align-items: start;
+}
+.ee-presets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.ee-preset {
+  border: 2px solid #E5E5E5;
+  border-radius: 12px;
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  text-align: center;
+}
+.ee-preset:hover { border-color: #B5B5B5; }
+.ee-preset--active { border-color: #1A1A1A; }
+.ee-preset-swatch {
+  width: 100%;
+  height: 40px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.ee-preset-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4A4A4A;
+}
+.ee-color-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.ee-color-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ee-color-input {
+  width: 48px;
+  height: 48px;
+  border: 1px solid #D5D5D5;
+  border-radius: 10px;
+  cursor: pointer;
+  padding: 4px;
+  background: #FFFFFF;
+}
+.ee-preview-wrap {
+  position: sticky;
+  top: 80px;
+}
+.ee-preview-toggle {
+  display: flex;
+  gap: 4px;
+  background: #F8F8F8;
+  border: 1px solid #E5E5E5;
+  border-radius: 8px;
+  padding: 4px;
+  margin-bottom: 12px;
+  width: fit-content;
+}
+.ee-preview-toggle-btn {
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #8A8A8A;
+  cursor: pointer;
+}
+.ee-preview-toggle-btn--active {
+  background: #1A1A1A;
+  color: #FFFFFF;
+}
+.ee-preview-frame {
+  border: 1px solid #E5E5E5;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #F8F8F8;
+  transition: max-width 0.3s ease;
+}
+.ee-preview-frame--mobile {
+  max-width: 390px;
+  margin: 0 auto;
+}
+.ee-preview-content {
+  padding: 32px 24px;
+  text-align: center;
+}
+.ee-preview-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.02em;
+}
+.ee-preview-subtitle {
+  font-size: 14px;
+  margin: 0 0 20px 0;
+}
+.ee-preview-btn {
+  display: inline-block;
+  padding: 12px 28px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.ee-danger-zone {
+  margin-top: 32px;
+  padding: 20px;
+  border: 1px solid #D5D5D5;
+  border-radius: 12px;
+  background: #F8F8F8;
+}
+.ee-danger-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+}
+.ee-danger-text {
+  font-size: 13px;
+  color: #8A8A8A;
+  margin: 0 0 12px 0;
+}
+
+/* Schedule tab */
+.ee-schedule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ee-schedule-item {
+  background: #FFFFFF;
+  border: 1px solid #E5E5E5;
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.ee-schedule-time {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1A1A1A;
+  min-width: 80px;
+}
+.ee-schedule-desc {
+  flex: 1;
+  font-size: 14px;
+  color: #4A4A4A;
+}
+
+/* Invitation tab */
+.ee-invite-card {
+  background: #FFFFFF;
+  border: 1px solid #E5E5E5;
+  border-radius: 16px;
+  padding: 28px;
+  max-width: 560px;
+}
+.ee-invite-url {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+}
+.ee-invite-url input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid #D5D5D5;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #4A4A4A;
+  background: #F8F8F8;
+  outline: none;
+}
+.ee-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.ee-toggle-switch {
+  width: 44px;
+  height: 24px;
+  border-radius: 100px;
+  background: #D5D5D5;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s ease;
+}
+.ee-toggle-switch--on { background: #1A1A1A; }
+.ee-toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  transition: transform 0.2s ease;
+}
+.ee-toggle-switch--on::after { transform: translateX(20px); }
+.ee-toggle-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ee-loading {
+  padding: 80px 32px;
+  text-align: center;
+  color: #8A8A8A;
+  font-size: 15px;
+}
+.ee-empty {
+  text-align: center;
+  padding: 48px;
+  color: #8A8A8A;
+  font-size: 14px;
+}
+.ee-modal-field {
+  margin-bottom: 16px;
+}
+.ee-modal-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4A4A4A;
+  margin-bottom: 6px;
+}
+.ee-modal-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #D5D5D5;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1A1A1A;
+  background: #FFFFFF;
+  outline: none;
+  box-sizing: border-box;
+}
+.ee-modal-input:focus { border-color: #1A1A1A; }
+.ee-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+.ee-modal-actions .ee-btn { flex: 1; }
+.ee-textarea {
+  width: 100%;
+  max-width: 480px;
+  min-height: 120px;
+  padding: 11px 14px;
+  border: 1px solid #D5D5D5;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #1A1A1A;
+  background: #FFFFFF;
+  outline: none;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: inherit;
+}
+.ee-textarea:focus { border-color: #1A1A1A; }
+`;
+
+type Tab = 'details' | 'guests' | 'tables' | 'venue' | 'invitation' | 'schedule' | 'settings';
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'details', label: 'Event Details' },
+  { key: 'guests', label: 'Guests' },
+  { key: 'tables', label: 'Tables' },
+  { key: 'venue', label: 'Venue Layout' },
+  { key: 'invitation', label: 'Invitation' },
+  { key: 'schedule', label: 'Schedule' },
+  { key: 'settings', label: 'Settings' },
+];
+
+function formatDate(dateStr: string): string {
+  if (!dateStr) return '';
   try {
-    const date = new Date(`${d}T${t || '00:00'}`);
-    if (Number.isNaN(date.getTime())) return d;
-    return date.toLocaleDateString(undefined, {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    }) + (t ? ` · ${formatTimeForInput(t)}` : '');
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   } catch {
-    return d;
+    return dateStr;
   }
 }
 
-/** Darken a hex colour by a percentage (0..1) — used to derive color_secondary. */
-function darken(hex: string, amount = 0.18): string {
-  if (!hex || !hex.startsWith('#')) return hex;
-  const full = hex.length === 4
-    ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
-    : hex;
-  const r = parseInt(full.slice(1, 3), 16);
-  const g = parseInt(full.slice(3, 5), 16);
-  const b = parseInt(full.slice(5, 7), 16);
-  const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount))));
-  const toHex = (v: number) => f(v).toString(16).padStart(2, '0');
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-}
-
-function readFileAsDataURL(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.readAsDataURL(file);
-  });
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-/* ------------------------------------------------------------------ *
- * Main component
- * ------------------------------------------------------------------ */
 export function EventEditorPage() {
-  const { eventId = '' } = useParams();
+  const { eventId } = useParams<{ eventId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const { data: event, isLoading: eventLoading } = useEvent(eventId);
+  const id = eventId ?? '';
+  const { data: event, isLoading: eventLoading } = useEvent(id);
+  const updateEvent = useUpdateEvent(id);
   const deleteEvent = useDeleteEvent();
 
-  const [activeTab, setActiveTab] = useState<TabName>('Event Details');
+  const { data: guests } = useGuests(id);
+  const createGuest = useCreateGuest(id);
+  const bulkCreateGuests = useBulkCreateGuests(id);
+  const updateGuest = useUpdateGuest(id);
+  const deleteGuest = useDeleteGuest(id);
 
-  /* ---------- Loading state ---------- */
-  if (eventLoading) {
-    return (
-      <div className="ee-page">
-        <div className="ee-loading">
-          <div className="ee-spinner" />
-          <p>Loading event…</p>
-        </div>
-        <EventEditorStyles />
-      </div>
-    );
+  const { data: tables } = useTables(id);
+  const createTable = useCreateTable(id);
+  const deleteTable = useDeleteTable(id);
+
+  const { data: settings } = useGuestPageSettings(id);
+  const upsertSettings = useUpsertGuestPageSettings(id);
+
+  const [activeTab, setActiveTab] = useState<Tab>('details');
+
+  // Details form
+  const [detName, setDetName] = useState('');
+  const [detDate, setDetDate] = useState('');
+  const [detTime, setDetTime] = useState('');
+  const [detVenue, setDetVenue] = useState('');
+  const [detSlug, setDetSlug] = useState('');
+  const [detSaving, setDetSaving] = useState(false);
+
+  // Guest form
+  const [guestName, setGuestName] = useState('');
+  const [guestTable, setGuestTable] = useState('');
+  const [bulkText, setBulkText] = useState('');
+  const [showBulk, setShowBulk] = useState(false);
+
+  // Table form
+  const [tableName, setTableName] = useState('');
+  const [tableNumber, setTableNumber] = useState('');
+  const [tableCapacity, setTableCapacity] = useState('');
+
+  // Venue layout
+  const [venueDragging, setVenueDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Settings
+  const [settingsForm, setSettingsForm] = useState<GuestPageSettingsInput>(DEFAULT_SETTINGS);
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
+  const [settingsSaving, setSettingsSaving] = useState(false);
+
+  // Sync form state when event loads
+  const eventSynced = useRef(false);
+  if (event && !eventSynced.current) {
+    eventSynced.current = true;
+    setDetName(event.name);
+    setDetDate(event.date);
+    setDetTime(event.time);
+    setDetVenue(event.venue);
+    setDetSlug(event.slug);
   }
 
-  if (!event) {
-    return (
-      <div className="ee-page">
-        <div className="ee-loading">
-          <p>Event not found.</p>
-          <Link to="/" className="ee-btn ee-btn--primary">Back to dashboard</Link>
-        </div>
-        <EventEditorStyles />
-      </div>
-    );
-  }
-
-  const accent = event.accent_color || C.nearBlack;
-
-  return (
-    <div className="ee-page" style={{ ['--ee-accent' as string]: accent }}>
-      {/* ---------- Header ---------- */}
-      <header className="ee-header">
-        <div className="ee-header__top">
-          <Link to="/" className="ee-back">← Dashboard</Link>
-        </div>
-        <div className="ee-header__main">
-          <h1 className="ee-header__title">{event.name || 'Untitled event'}</h1>
-          <p className="ee-header__subtitle">
-            {prettyDate(event.date, event.time)}
-            {event.venue ? ` · ${event.venue}` : ''}
-          </p>
-        </div>
-      </header>
-
-      {/* ---------- Sticky tab bar ---------- */}
-      <nav className="ee-tabs" role="tablist" aria-label="Event editor sections">
-        <div className="ee-tabs__inner">
-          {TABS.map((tab) => {
-            const active = tab === activeTab;
-            return (
-              <button
-                key={tab}
-                role="tab"
-                aria-selected={active}
-                className={`ee-tab ${active ? 'ee-tab--active' : ''}`}
-                onClick={() => setActiveTab(tab)}
-              >
-                {tab}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
-
-      {/* ---------- Tab content (all sections stay mounted) ---------- */}
-      <div className="ee-content">
-        <section className={`ee-section ${activeTab === 'Event Details' ? '' : 'ee-hidden'}`}>
-          <EventDetailsSection eventId={eventId} />
-        </section>
-        <section className={`ee-section ${activeTab === 'Guests' ? '' : 'ee-hidden'}`}>
-          <GuestsSection eventId={eventId} />
-        </section>
-        <section className={`ee-section ${activeTab === 'Tables' ? '' : 'ee-hidden'}`}>
-          <TablesSection eventId={eventId} />
-        </section>
-        <section className={`ee-section ${activeTab === 'Venue Layout' ? '' : 'ee-hidden'}`}>
-          <VenueLayoutSection eventId={eventId} />
-        </section>
-        <section className={`ee-section ${activeTab === 'Invitation' ? '' : 'ee-hidden'}`}>
-          <InvitationSection eventId={eventId} />
-        </section>
-        <section className={`ee-section ${activeTab === 'Schedule' ? '' : 'ee-hidden'}`}>
-          <ScheduleSection eventId={eventId} />
-        </section>
-        <section className={`ee-section ${activeTab === 'Settings' ? '' : 'ee-hidden'}`}>
-          <SettingsSection eventId={eventId} onDeleteEvent={async () => {
-            try {
-              await deleteEvent.mutateAsync(eventId);
-              toast('Event deleted', 'success');
-              navigate('/');
-            } catch {
-              toast('Failed to delete event', 'error');
-            }
-          }} />
-        </section>
-      </div>
-
-      <EventEditorStyles />
-    </div>
-  );
-}
-
-/* ================================================================== *
- * Event Details
- * ================================================================== */
-function EventDetailsSection({ eventId }: { eventId: string }) {
-  const { data: event } = useEvent(eventId);
-  const updateEvent = useUpdateEvent(eventId);
-  const { toast } = useToast();
-
-  const [form, setForm] = useState({
-    name: '',
-    slug: '',
-    date: '',
-    time: '',
-    venue: '',
-    logo_url: '',
-    cover_url: '',
-    accent_color: C.nearBlack,
-    invitation_enabled: false,
-  });
-  const [saving, setSaving] = useState(false);
-
-  // Sync form when event loads
-  useEffect(() => {
-    if (!event) return;
-    setForm({
-      name: event.name || '',
-      slug: event.slug || '',
-      date: formatDateForInput(event.date),
-      time: formatTimeForInput(event.time),
-      venue: event.venue || '',
-      logo_url: event.logo_url || '',
-      cover_url: event.cover_url || '',
-      accent_color: event.accent_color || C.nearBlack,
-      invitation_enabled: !!event.invitation_enabled,
+  // Sync settings form when settings load
+  const settingsSynced = useRef(false);
+  if (settings && !settingsSynced.current) {
+    settingsSynced.current = true;
+    const { id: _id, event_id: _eventId, created_at: _ca, updated_at: _ua, ...rest } = settings;
+    void _id; void _eventId; void _ca; void _ua;
+    setSettingsForm({
+      ...DEFAULT_SETTINGS,
+      ...rest,
+      schedule_items: rest.schedule_items ?? [],
+      gallery_images: rest.gallery_images ?? [],
     });
-  }, [event]);
+  }
+  // Also sync if settings become null after being loaded (e.g., new event)
+  if (!settings && !settingsSynced.current && !eventLoading && event) {
+    settingsSynced.current = true;
+    setSettingsForm(DEFAULT_SETTINGS);
+  }
 
-  const set = (k: keyof typeof form, v: string | boolean) =>
-    setForm((f) => ({ ...f, [k]: v }));
+  // ── Handlers ──
 
-  const handleSave = async () => {
-    setSaving(true);
+  const handleSaveDetails = async () => {
+    if (!detName.trim()) {
+      toast('Event name is required', 'error');
+      return;
+    }
+    setDetSaving(true);
     try {
       await updateEvent.mutateAsync({
-        name: form.name.trim(),
-        slug: form.slug.trim(),
-        date: form.date,
-        time: form.time,
-        venue: form.venue.trim(),
-        logo_url: form.logo_url.trim() || null,
-        cover_url: form.cover_url.trim() || null,
-        accent_color: form.accent_color,
-        invitation_enabled: form.invitation_enabled,
+        name: detName.trim(),
+        date: detDate,
+        time: detTime,
+        venue: detVenue.trim(),
+        slug: detSlug.trim(),
       });
       toast('Event details saved', 'success');
-    } catch {
-      toast('Failed to save event details', 'error');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to save', 'error');
     } finally {
-      setSaving(false);
+      setDetSaving(false);
     }
   };
 
-  return (
-    <div className="ee-card">
-      <div className="ee-card__head">
-        <h2 className="ee-card__title">Event details</h2>
-        <p className="ee-card__hint">Basic information about your event.</p>
-      </div>
-
-      <div className="ee-form">
-        <div className="ee-form__row ee-form__row--2">
-          <Field label="Event name">
-            <input className="ee-input" value={form.name}
-              onChange={(e) => set('name', e.target.value)} placeholder="Sarah & Tom's Wedding" />
-          </Field>
-          <Field label="URL slug">
-            <input className="ee-input" value={form.slug}
-              onChange={(e) => set('slug', e.target.value)} placeholder="sarah-tom-2025" />
-          </Field>
-        </div>
-
-        <div className="ee-form__row ee-form__row--2">
-          <Field label="Date">
-            <input type="date" className="ee-input" value={form.date}
-              onChange={(e) => set('date', e.target.value)} />
-          </Field>
-          <Field label="Time">
-            <input type="time" className="ee-input" value={form.time}
-              onChange={(e) => set('time', e.target.value)} />
-          </Field>
-        </div>
-
-        <Field label="Venue">
-          <input className="ee-input" value={form.venue}
-            onChange={(e) => set('venue', e.target.value)} placeholder="The Grand Hall, London" />
-        </Field>
-
-        <div className="ee-form__row ee-form__row--2">
-          <Field label="Logo URL">
-            <input className="ee-input" value={form.logo_url}
-              onChange={(e) => set('logo_url', e.target.value)} placeholder="https://…" />
-          </Field>
-          <Field label="Cover image URL">
-            <input className="ee-input" value={form.cover_url}
-              onChange={(e) => set('cover_url', e.target.value)} placeholder="https://…" />
-          </Field>
-        </div>
-
-        <Field label="Accent colour">
-          <div className="ee-color">
-            <input type="color" className="ee-color__swatch" value={form.accent_color}
-              onChange={(e) => set('accent_color', e.target.value)} />
-            <input className="ee-input ee-color__hex" value={form.accent_color}
-              onChange={(e) => set('accent_color', e.target.value)} />
-          </div>
-        </Field>
-
-        <label className="ee-check">
-          <input type="checkbox" checked={form.invitation_enabled}
-            onChange={(e) => set('invitation_enabled', e.target.checked)} />
-          <span>Invitation page enabled</span>
-        </label>
-      </div>
-
-      <div className="ee-card__foot">
-        <button className="ee-btn ee-btn--primary" onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving…' : 'Save changes'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ================================================================== *
- * Guests
- * ================================================================== */
-function GuestsSection({ eventId }: { eventId: string }) {
-  const { data: guests = [], isLoading } = useGuests(eventId);
-  const { data: tables = [] } = useTables(eventId);
-  const createGuest = useCreateGuest(eventId);
-  const bulkCreate = useBulkCreateGuests(eventId);
-  const updateGuest = useUpdateGuest(eventId);
-  const deleteGuest = useDeleteGuest(eventId);
-  const { toast } = useToast();
-
-  const [search, setSearch] = useState('');
-  const [addOpen, setAddOpen] = useState(false);
-  const [bulkOpen, setBulkOpen] = useState(false);
-  const [editGuest, setEditGuest] = useState<GuestWithTable | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-
-  // Add modal state
-  const [newName, setNewName] = useState('');
-  const [newTable, setNewTable] = useState('');
-
-  // Bulk state
-  const [bulkText, setBulkText] = useState('');
-
-  // Edit state
-  const [editName, setEditName] = useState('');
-  const [editTable, setEditTable] = useState('');
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return guests;
-    return guests.filter((g) => g.name.toLowerCase().includes(q));
-  }, [guests, search]);
-
-  const guestCountByTable = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const g of guests) {
-      if (g.table_id) m.set(g.table_id, (m.get(g.table_id) || 0) + 1);
-    }
-    return m;
-  }, [guests]);
-
-  const openAdd = () => {
-    setNewName('');
-    setNewTable('');
-    setAddOpen(true);
-  };
-
-  const handleAdd = async () => {
-    if (!newName.trim()) {
-      toast('Enter a guest name', 'error');
+  const handleAddGuest = async () => {
+    if (!guestName.trim()) {
+      toast('Guest name is required', 'error');
       return;
     }
     try {
       await createGuest.mutateAsync({
-        name: newName.trim(),
-        table_id: newTable || null,
+        name: guestName.trim(),
+        table_id: guestTable || null,
       });
+      setGuestName('');
+      setGuestTable('');
       toast('Guest added', 'success');
-      setAddOpen(false);
-    } catch {
-      toast('Failed to add guest', 'error');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to add guest', 'error');
     }
   };
 
-  const openBulk = () => {
-    setBulkText('');
-    setBulkOpen(true);
-  };
-
-  const handleBulk = async () => {
-    const names = bulkText.split('\n').map((n) => n.trim()).filter(Boolean);
-    if (names.length === 0) {
-      toast('Enter at least one name', 'error');
+  const handleBulkAdd = async () => {
+    const lines = bulkText.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) {
+      toast('Enter at least one guest name', 'error');
       return;
     }
     try {
-      await bulkCreate.mutateAsync(names.map((name) => ({ name })));
-      toast(`${names.length} guest${names.length === 1 ? '' : 's'} added`, 'success');
-      setBulkOpen(false);
-    } catch {
-      toast('Failed to add guests', 'error');
+      await bulkCreateGuests.mutateAsync(lines.map((name) => ({ name })));
+      setBulkText('');
+      setShowBulk(false);
+      toast(`${lines.length} guests added`, 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to add guests', 'error');
     }
   };
 
-  const openEdit = (g: GuestWithTable) => {
-    setEditGuest(g);
-    setEditName(g.name);
-    setEditTable(g.table_id || '');
-  };
-
-  const handleEdit = async () => {
-    if (!editGuest) return;
-    if (!editName.trim()) {
-      toast('Enter a guest name', 'error');
-      return;
-    }
+  const handleAssignTable = async (guestId: string, tableId: string) => {
     try {
-      await updateGuest.mutateAsync({
-        id: editGuest.id,
-        name: editName.trim(),
-        table_id: editTable || null,
-      });
-      toast('Guest updated', 'success');
-      setEditGuest(null);
-    } catch {
-      toast('Failed to update guest', 'error');
+      await updateGuest.mutateAsync({ id: guestId, table_id: tableId || null });
+      toast('Table assigned', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to assign', 'error');
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteId) return;
+  const handleDeleteGuest = async (guestId: string) => {
     try {
-      await deleteGuest.mutateAsync(deleteId);
+      await deleteGuest.mutateAsync(guestId);
       toast('Guest removed', 'success');
-      setDeleteId(null);
-    } catch {
-      toast('Failed to remove guest', 'error');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to remove guest', 'error');
     }
   };
 
-  return (
-    <div className="ee-card">
-      <div className="ee-card__head ee-card__head--row">
-        <div>
-          <h2 className="ee-card__title">Guests</h2>
-          <p className="ee-card__hint">{guests.length} guest{guests.length === 1 ? '' : 's'} total.</p>
-        </div>
-        <div className="ee-card__actions">
-          <button className="ee-btn ee-btn--secondary" onClick={openBulk}>Bulk add</button>
-          <button className="ee-btn ee-btn--primary" onClick={openAdd}>Add guest</button>
-        </div>
-      </div>
-
-      <div className="ee-toolbar">
-        <input className="ee-input ee-input--search" placeholder="Search guests…"
-          value={search} onChange={(e) => setSearch(e.target.value)} />
-      </div>
-
-      {isLoading ? (
-        <p className="ee-muted">Loading guests…</p>
-      ) : filtered.length === 0 ? (
-        <div className="ee-empty">
-          <p>{search ? 'No guests match your search.' : 'No guests yet. Add your first guest.'}</p>
-        </div>
-      ) : (
-        <div className="ee-table-wrap">
-          <table className="ee-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Table</th>
-                <th className="ee-table__actions-col">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((g) => (
-                <tr key={g.id}>
-                  <td className="ee-table__name">{g.name}</td>
-                  <td className="ee-table__muted">
-                    {g.table ? `Table ${g.table.number} · ${g.table.name}` : '—'}
-                  </td>
-                  <td className="ee-table__actions">
-                    <button className="ee-icon-btn" title="Edit" onClick={() => openEdit(g)}>Edit</button>
-                    <button className="ee-icon-btn ee-icon-btn--danger" title="Remove"
-                      onClick={() => setDeleteId(g.id)}>Remove</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Add modal */}
-      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add guest">
-        <div className="ee-modal-form">
-          <Field label="Guest name">
-            <input className="ee-input" value={newName}
-              onChange={(e) => setNewName(e.target.value)} placeholder="Jane Doe"
-              autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }} />
-          </Field>
-          <Field label="Table (optional)">
-            <select className="ee-input ee-select" value={newTable}
-              onChange={(e) => setNewTable(e.target.value)}>
-              <option value="">No table</option>
-              {tables.map((t) => (
-                <option key={t.id} value={t.id}>
-                  Table {t.number} · {t.name} ({guestCountByTable.get(t.id) || 0}/{t.capacity})
-                </option>
-              ))}
-            </select>
-          </Field>
-          <div className="ee-modal-actions">
-            <button className="ee-btn ee-btn--secondary" onClick={() => setAddOpen(false)}>Cancel</button>
-            <button className="ee-btn ee-btn--primary" onClick={handleAdd}
-              disabled={createGuest.isPending}>Add guest</button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Bulk add modal */}
-      <Modal open={bulkOpen} onClose={() => setBulkOpen(false)} title="Bulk add guests">
-        <div className="ee-modal-form">
-          <Field label="Guest names — one per line">
-            <textarea className="ee-input ee-textarea" rows={8} value={bulkText}
-              onChange={(e) => setBulkText(e.target.value)}
-              placeholder={'Jane Doe\nJohn Smith\nMaria Garcia'} />
-          </Field>
-          <div className="ee-modal-actions">
-            <button className="ee-btn ee-btn--secondary" onClick={() => setBulkOpen(false)}>Cancel</button>
-            <button className="ee-btn ee-btn--primary" onClick={handleBulk}
-              disabled={bulkCreate.isPending}>Add all</button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Edit modal */}
-      <Modal open={!!editGuest} onClose={() => setEditGuest(null)} title="Edit guest">
-        <div className="ee-modal-form">
-          <Field label="Guest name">
-            <input className="ee-input" value={editName}
-              onChange={(e) => setEditName(e.target.value)} autoFocus
-              onKeyDown={(e) => { if (e.key === 'Enter') handleEdit(); }} />
-          </Field>
-          <Field label="Table (optional)">
-            <select className="ee-input ee-select" value={editTable}
-              onChange={(e) => setEditTable(e.target.value)}>
-              <option value="">No table</option>
-              {tables.map((t) => (
-                <option key={t.id} value={t.id}>
-                  Table {t.number} · {t.name} ({guestCountByTable.get(t.id) || 0}/{t.capacity})
-                </option>
-              ))}
-            </select>
-          </Field>
-          <div className="ee-modal-actions">
-            <button className="ee-btn ee-btn--secondary" onClick={() => setEditGuest(null)}>Cancel</button>
-            <button className="ee-btn ee-btn--primary" onClick={handleEdit}
-              disabled={updateGuest.isPending}>Save</button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Delete confirm */}
-      <ConfirmDialog
-        open={!!deleteId}
-        title="Remove guest?"
-        message="This guest will be permanently removed from the event."
-        confirmLabel="Remove"
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteId(null)}
-      />
-    </div>
-  );
-}
-
-/* ================================================================== *
- * Tables
- * ================================================================== */
-function TablesSection({ eventId }: { eventId: string }) {
-  const { data: tables = [], isLoading } = useTables(eventId);
-  const { data: guests = [] } = useGuests(eventId);
-  const createTable = useCreateTable(eventId);
-  const deleteTable = useDeleteTable(eventId);
-  const { toast } = useToast();
-
-  const [addOpen, setAddOpen] = useState(false);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-
-  const [name, setName] = useState('');
-  const [number, setNumber] = useState('1');
-  const [capacity, setCapacity] = useState('8');
-
-  const guestCount = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const g of guests) {
-      if (g.table_id) m.set(g.table_id, (m.get(g.table_id) || 0) + 1);
-    }
-    return m;
-  }, [guests]);
-
-  const nextNumber = useMemo(() => {
-    if (tables.length === 0) return 1;
-    return Math.max(...tables.map((t) => t.number)) + 1;
-  }, [tables]);
-
-  const openAdd = () => {
-    setName('');
-    setNumber(String(nextNumber));
-    setCapacity('8');
-    setAddOpen(true);
-  };
-
-  const handleAdd = async () => {
-    if (!name.trim()) {
-      toast('Enter a table name', 'error');
+  const handleAddTable = async () => {
+    const num = parseInt(tableNumber, 10);
+    if (!tableName.trim() || isNaN(num)) {
+      toast('Table name and number are required', 'error');
       return;
     }
-    const n = parseInt(number, 10);
-    const cap = parseInt(capacity, 10);
-    if (Number.isNaN(n) || n < 1) {
-      toast('Enter a valid table number', 'error');
-      return;
-    }
+    const cap = parseInt(tableCapacity, 10) || 8;
     try {
-      await createTable.mutateAsync({
-        name: name.trim(),
-        number: n,
-        capacity: Number.isNaN(cap) || cap < 1 ? 8 : cap,
-      });
+      await createTable.mutateAsync({ name: tableName.trim(), number: num, capacity: cap });
+      setTableName('');
+      setTableNumber('');
+      setTableCapacity('');
       toast('Table added', 'success');
-      setAddOpen(false);
-    } catch {
-      toast('Failed to add table', 'error');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to add table', 'error');
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteId) return;
+  const handleDeleteTable = async (tableId: string) => {
     try {
-      await deleteTable.mutateAsync(deleteId);
-      toast('Table removed', 'success');
-      setDeleteId(null);
-    } catch {
-      toast('Failed to remove table', 'error');
+      await deleteTable.mutateAsync(tableId);
+      toast('Table deleted', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to delete table', 'error');
     }
   };
 
-  return (
-    <div className="ee-card">
-      <div className="ee-card__head ee-card__head--row">
-        <div>
-          <h2 className="ee-card__title">Tables</h2>
-          <p className="ee-card__hint">{tables.length} table{tables.length === 1 ? '' : 's'}.</p>
-        </div>
-        <div className="ee-card__actions">
-          <button className="ee-btn ee-btn--primary" onClick={openAdd}>Add table</button>
-        </div>
-      </div>
-
-      {isLoading ? (
-        <p className="ee-muted">Loading tables…</p>
-      ) : tables.length === 0 ? (
-        <div className="ee-empty">
-          <p>No tables yet. Add your first table.</p>
-        </div>
-      ) : (
-        <div className="ee-table-list">
-          {tables.map((t) => {
-            const count = guestCount.get(t.id) || 0;
-            const full = count >= t.capacity;
-            return (
-              <div key={t.id} className="ee-table-row">
-                <div className="ee-table-row__num">{t.number}</div>
-                <div className="ee-table-row__name">{t.name}</div>
-                <div className={`ee-table-row__count ${full ? 'ee-table-row__count--full' : ''}`}>
-                  {count}/{t.capacity} guests
-                </div>
-                <button className="ee-icon-btn ee-icon-btn--danger"
-                  onClick={() => setDeleteId(t.id)}>Remove</button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add table">
-        <div className="ee-modal-form">
-          <Field label="Table name">
-            <input className="ee-input" value={name}
-              onChange={(e) => setName(e.target.value)} placeholder="Head table"
-              autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }} />
-          </Field>
-          <div className="ee-form__row ee-form__row--2">
-            <Field label="Table number">
-              <input type="number" min={1} className="ee-input" value={number}
-                onChange={(e) => setNumber(e.target.value)} />
-            </Field>
-            <Field label="Capacity">
-              <input type="number" min={1} className="ee-input" value={capacity}
-                onChange={(e) => setCapacity(e.target.value)} />
-            </Field>
-          </div>
-          <div className="ee-modal-actions">
-            <button className="ee-btn ee-btn--secondary" onClick={() => setAddOpen(false)}>Cancel</button>
-            <button className="ee-btn ee-btn--primary" onClick={handleAdd}
-              disabled={createTable.isPending}>Add table</button>
-          </div>
-        </div>
-      </Modal>
-
-      <ConfirmDialog
-        open={!!deleteId}
-        title="Remove table?"
-        message="Guests assigned to this table will become unassigned. The table itself will be removed."
-        confirmLabel="Remove"
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteId(null)}
-      />
-    </div>
-  );
-}
-
-/* ================================================================== *
- * Venue Layout — simplified image upload
- * ================================================================== */
-function VenueLayoutSection({ eventId }: { eventId: string }) {
-  const { data: settings } = useGuestPageSettings(eventId);
-  const upsert = useUpsertGuestPageSettings(eventId);
-  const { toast } = useToast();
-
-  const [dragOver, setDragOver] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const venueImage = settings?.venue_image_url ?? null;
-
-  const handleFile = useCallback(async (file: File) => {
-    setError(null);
-    if (!VENUE_ACCEPT.includes(file.type)) {
-      setError('Unsupported format. Use PNG, JPG, or WebP.');
+  // Venue image upload
+  const handleVenueFile = useCallback((file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast('Please upload an image file', 'error');
       return;
     }
-    if (file.size > MAX_VENUE_BYTES) {
-      setError(`File too large (${formatBytes(file.size)}). Max 5MB.`);
+    if (file.size > 5 * 1024 * 1024) {
+      toast('Image must be under 5MB', 'error');
       return;
     }
-    setUploading(true);
-    try {
-      const dataUrl = await readFileAsDataURL(file);
-      await upsert.mutateAsync({ venue_image_url: dataUrl });
-      toast('Venue layout uploaded', 'success');
-    } catch {
-      setError('Failed to upload image. Please try again.');
-    } finally {
-      setUploading(false);
-    }
-  }, [upsert, toast]);
-
-  const onDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) handleFile(file);
-  };
-
-  const onDragOver = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragOver(true);
-  };
-
-  const onDragLeave = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragOver(false);
-  };
-
-  const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleFile(file);
-    // reset so selecting the same file again still fires change
-    e.target.value = '';
-  };
-
-  const handleRemove = async () => {
-    setUploading(true);
-    try {
-      await upsert.mutateAsync({ venue_image_url: null });
-      toast('Venue layout removed', 'success');
-    } catch {
-      toast('Failed to remove image', 'error');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleReplace = () => fileInputRef.current?.click();
-
-  return (
-    <div className="ee-card">
-      <div className="ee-card__head">
-        <h2 className="ee-card__title">Venue layout</h2>
-        <p className="ee-card__hint">
-          Upload a floor plan or venue diagram so guests can find their seats.
-          PNG, JPG, or WebP up to 5MB.
-        </p>
-      </div>
-
-      <input ref={fileInputRef} type="file" accept={VENUE_ACCEPT.join(',')}
-        onChange={onFileChange} style={{ display: 'none' }} />
-
-      {error && <div className="ee-alert ee-alert--error">{error}</div>}
-
-      {venueImage ? (
-        <div className="ee-venue-preview">
-          <div className="ee-venue-preview__img-wrap">
-            <img src={venueImage} alt="Venue layout" className="ee-venue-preview__img" />
-          </div>
-          <div className="ee-venue-preview__actions">
-            <button className="ee-btn ee-btn--secondary" onClick={handleReplace}
-              disabled={uploading}>Replace image</button>
-            <button className="ee-btn ee-btn--danger" onClick={handleRemove}
-              disabled={uploading}>Remove image</button>
-          </div>
-        </div>
-      ) : (
-        <div
-          className={`ee-dropzone ${dragOver ? 'ee-dropzone--over' : ''}`}
-          onDrop={onDrop}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onClick={handleReplace}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleReplace(); }}
-        >
-          <div className="ee-dropzone__icon">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-          </div>
-          <p className="ee-dropzone__title">
-            {uploading ? 'Uploading…' : 'Drag & drop your venue layout here'}
-          </p>
-          <p className="ee-dropzone__hint">or click to browse files</p>
-          <p className="ee-dropzone__formats">PNG, JPG, WebP · max 5MB</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ================================================================== *
- * Invitation
- * ================================================================== */
-function InvitationSection({ eventId }: { eventId: string }) {
-  const { data: event } = useEvent(eventId);
-  const updateEvent = useUpdateEvent(eventId);
-  const { toast } = useToast();
-
-  const [toggling, setToggling] = useState(false);
-  const enabled = !!event?.invitation_enabled;
-  const slug = event?.slug || '';
-
-  const toggle = async () => {
-    setToggling(true);
-    try {
-      await updateEvent.mutateAsync({ invitation_enabled: !enabled });
-      toast(enabled ? 'Invitation disabled' : 'Invitation enabled', 'success');
-    } catch {
-      toast('Failed to update invitation setting', 'error');
-    } finally {
-      setToggling(false);
-    }
-  };
-
-  const copyLink = (path: string) => {
-    const url = `${window.location.origin}${path}`;
-    navigator.clipboard?.writeText(url).then(
-      () => toast('Link copied', 'success'),
-      () => toast('Could not copy link', 'error'),
-    );
-  };
-
-  return (
-    <div className="ee-card">
-      <div className="ee-card__head">
-        <h2 className="ee-card__title">Invitation</h2>
-        <p className="ee-card__hint">Control your public guest pages.</p>
-      </div>
-
-      <div className="ee-status-row">
-        <div className="ee-status-row__text">
-          <p className="ee-status-row__label">Invitation page</p>
-          <p className="ee-status-row__value">
-            <span className={`ee-badge ${enabled ? 'ee-badge--on' : 'ee-badge--off'}`}>
-              {enabled ? 'Enabled' : 'Disabled'}
-            </span>
-          </p>
-        </div>
-        <button className="ee-btn ee-btn--secondary" onClick={toggle} disabled={toggling}>
-          {enabled ? 'Disable' : 'Enable'}
-        </button>
-      </div>
-
-      <div className="ee-link-list">
-        <div className="ee-link-row">
-          <div className="ee-link-row__info">
-            <p className="ee-link-row__title">Invitation page</p>
-            <p className="ee-link-row__url">/invite/{slug}</p>
-          </div>
-          <div className="ee-link-row__actions">
-            <button className="ee-icon-btn" onClick={() => copyLink(`/invite/${slug}`)}>Copy</button>
-            <Link className="ee-icon-btn ee-icon-btn--link" to={`/invite/${slug}`} target="_blank">Open</Link>
-          </div>
-        </div>
-        <div className="ee-link-row">
-          <div className="ee-link-row__info">
-            <p className="ee-link-row__title">Find your seat</p>
-            <p className="ee-link-row__url">/e/{slug}</p>
-          </div>
-          <div className="ee-link-row__actions">
-            <button className="ee-icon-btn" onClick={() => copyLink(`/e/${slug}`)}>Copy</button>
-            <Link className="ee-icon-btn ee-icon-btn--link" to={`/e/${slug}`} target="_blank">Open</Link>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ================================================================== *
- * Schedule
- * ================================================================== */
-function ScheduleSection({ eventId }: { eventId: string }) {
-  const { data: settings } = useGuestPageSettings(eventId);
-  const upsert = useUpsertGuestPageSettings(eventId);
-  const { toast } = useToast();
-
-  const [enableSchedule, setEnableSchedule] = useState(false);
-  const [scheduleText, setScheduleText] = useState('[]');
-  const [enableGallery, setEnableGallery] = useState(false);
-  const [galleryText, setGalleryText] = useState('');
-  const [welcomeMessage, setWelcomeMessage] = useState('');
-  const [eventSubtitle, setEventSubtitle] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  // Sync from server settings once available
-  useEffect(() => {
-    if (!settings) return;
-    setEnableSchedule(!!settings.enable_schedule);
-    setScheduleText(() => {
-      try { return JSON.stringify(settings.schedule_items ?? [], null, 2); }
-      catch { return '[]'; }
-    });
-    setEnableGallery(!!settings.enable_gallery);
-    setGalleryText((settings.gallery_images ?? []).join('\n'));
-    setWelcomeMessage(settings.welcome_message ?? '');
-    setEventSubtitle(settings.event_subtitle ?? '');
-  }, [settings]);
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      let parsedSchedule: unknown[] = [];
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
       try {
-        parsedSchedule = JSON.parse(scheduleText);
-        if (!Array.isArray(parsedSchedule)) {
-          throw new Error('not an array');
-        }
-      } catch {
-        toast('Schedule items must be valid JSON array', 'error');
-        setSaving(false);
-        return;
+        await upsertSettings.mutateAsync({ ...settingsForm, venue_image_url: dataUrl });
+        setSettingsForm((prev) => ({ ...prev, venue_image_url: dataUrl }));
+        toast('Venue layout uploaded', 'success');
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'Failed to upload', 'error');
       }
-      const galleryImages = galleryText.split('\n').map((u) => u.trim()).filter(Boolean);
+    };
+    reader.readAsDataURL(file);
+  }, [settingsForm, upsertSettings, toast]);
 
-      await upsert.mutateAsync({
-        enable_schedule: enableSchedule,
-        schedule_items: parsedSchedule,
-        enable_gallery: enableGallery,
-        gallery_images: galleryImages,
-        welcome_message: welcomeMessage.trim() || null,
-        event_subtitle: eventSubtitle.trim() || null,
-      });
-      toast('Schedule saved', 'success');
-    } catch {
-      toast('Failed to save schedule', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const handleVenueDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setVenueDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleVenueFile(file);
+  }, [handleVenueFile]);
 
-  return (
-    <div className="ee-card">
-      <div className="ee-card__head">
-        <h2 className="ee-card__title">Schedule & gallery</h2>
-        <p className="ee-card__hint">Optional content sections for your guest page.</p>
-      </div>
+  const handleVenueChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleVenueFile(file);
+  }, [handleVenueFile]);
 
-      <div className="ee-form">
-        <label className="ee-check">
-          <input type="checkbox" checked={enableSchedule}
-            onChange={(e) => setEnableSchedule(e.target.checked)} />
-          <span>Enable schedule</span>
-        </label>
-        <Field label="Schedule items (JSON array)">
-          <textarea className="ee-input ee-textarea ee-textarea--mono" rows={10} value={scheduleText}
-            onChange={(e) => setScheduleText(e.target.value)}
-            placeholder={'[\n  { "time": "14:00", "title": "Ceremony" },\n  { "time": "17:00", "title": "Reception" }\n]'} />
-        </Field>
-
-        <label className="ee-check">
-          <input type="checkbox" checked={enableGallery}
-            onChange={(e) => setEnableGallery(e.target.checked)} />
-          <span>Enable gallery</span>
-        </label>
-        <Field label="Gallery image URLs — one per line">
-          <textarea className="ee-input ee-textarea" rows={5} value={galleryText}
-            onChange={(e) => setGalleryText(e.target.value)}
-            placeholder={'https://…/photo1.jpg\nhttps://…/photo2.jpg'} />
-        </Field>
-
-        <Field label="Welcome message">
-          <textarea className="ee-input ee-textarea" rows={3} value={welcomeMessage}
-            onChange={(e) => setWelcomeMessage(e.target.value)}
-            placeholder="Welcome to our special day…" />
-        </Field>
-
-        <Field label="Event subtitle">
-          <input className="ee-input" value={eventSubtitle}
-            onChange={(e) => setEventSubtitle(e.target.value)}
-            placeholder="A celebration of love" />
-        </Field>
-      </div>
-
-      <div className="ee-card__foot">
-        <button className="ee-btn ee-btn--primary" onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving…' : 'Save schedule'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ================================================================== *
- * Settings — simplified theme editor
- * ================================================================== */
-function SettingsSection({ eventId, onDeleteEvent }: { eventId: string; onDeleteEvent: () => void }) {
-  const { data: event } = useEvent(eventId);
-  const { data: settings } = useGuestPageSettings(eventId);
-  const upsert = useUpsertGuestPageSettings(eventId);
-  const { toast } = useToast();
-
-  const [form, setForm] = useState<GuestPageSettingsInput>(() => ({ ...DEFAULT_SETTINGS }));
-  const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
-  const [saving, setSaving] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-
-  // Sync from server settings once available
-  useEffect(() => {
-    if (!settings) return;
-    setForm({
-      ...DEFAULT_SETTINGS,
-      ...settings,
-      // ensure array-ish fields are plain values (not null)
-      schedule_items: settings.schedule_items ?? [],
-      gallery_images: settings.gallery_images ?? [],
-    });
-  }, [settings]);
-
-  const set = <K extends keyof GuestPageSettingsInput>(k: K, v: GuestPageSettingsInput[K]) =>
-    setForm((f) => ({ ...f, [k]: v }));
-
-  const applyPreset = (preset: typeof THEME_PRESETS[number]) => {
-    setForm((f) => ({
-      ...f,
+  // Settings handlers
+  const applyPreset = (presetIndex: number) => {
+    const preset = THEME_PRESETS[presetIndex];
+    setSettingsForm((prev) => ({
+      ...prev,
       color_primary: preset.color_primary,
-      color_secondary: darken(preset.color_primary, 0.2),
       color_background: preset.color_background,
       color_card: preset.color_card,
       color_text: preset.color_text,
-      color_header: preset.color_background,
       color_button: preset.color_button,
       color_button_text: preset.color_button_text,
       color_link: preset.color_link,
@@ -1137,667 +843,492 @@ function SettingsSection({ eventId, onDeleteEvent }: { eventId: string; onDelete
     }));
   };
 
-  // When primary changes, auto-derive the dependent colours
-  const setPrimary = (hex: string) => {
-    setForm((f) => ({
-      ...f,
-      color_primary: hex,
-      color_link: hex,
-      color_secondary: darken(hex, 0.2),
-    }));
-  };
-
-  // When background changes, derive header = background
-  const setBackground = (hex: string) => {
-    setForm((f) => ({
-      ...f,
-      color_background: hex,
-      color_header: hex,
-    }));
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
+  const handleSaveSettings = async () => {
+    setSettingsSaving(true);
     try {
-      await upsert.mutateAsync(form);
-      toast('Theme saved', 'success');
-    } catch {
-      toast('Failed to save theme', 'error');
+      await upsertSettings.mutateAsync(settingsForm);
+      toast('Settings saved', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to save settings', 'error');
     } finally {
-      setSaving(false);
+      setSettingsSaving(false);
     }
   };
 
-  const handleDelete = () => {
-    setDeleteOpen(false);
-    onDeleteEvent();
+  const handleDeleteEvent = async () => {
+    try {
+      await deleteEvent.mutateAsync(id);
+      toast('Event deleted', 'success');
+      navigate('/');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to delete event', 'error');
+    }
   };
 
-  const accent = event?.accent_color || C.nearBlack;
+  if (eventLoading) {
+    return (
+      <>
+        <style>{EE_CSS}</style>
+        <div className="ee-root">
+          <div className="ee-loading">Loading event…</div>
+        </div>
+      </>
+    );
+  }
+
+  if (!event) {
+    return (
+      <>
+        <style>{EE_CSS}</style>
+        <div className="ee-root">
+          <div className="ee-loading">Event not found.</div>
+        </div>
+      </>
+    );
+  }
+
+  const venueImage = settingsForm.venue_image_url;
+  const inviteUrl = `${window.location.origin}/invite/${event.slug}`;
 
   return (
-    <div className="ee-settings-grid">
-      {/* ---------- Left: editor ---------- */}
-      <div className="ee-settings-editor">
-        {/* Theme presets */}
-        <div className="ee-card">
-          <div className="ee-card__head">
-            <h2 className="ee-card__title">Theme presets</h2>
-            <p className="ee-card__hint">Click a preset to apply it instantly.</p>
-          </div>
-          <div className="ee-presets">
-            {THEME_PRESETS.map((p) => (
-              <button key={p.name} className="ee-preset" onClick={() => applyPreset(p)}
-                title={p.name}>
-                <div className="ee-preset__swatches">
-                  <span className="ee-preset__swatch" style={{ background: p.color_background }} />
-                  <span className="ee-preset__swatch" style={{ background: p.color_primary }} />
-                  <span className="ee-preset__swatch" style={{ background: p.color_button }} />
-                </div>
-                <span className="ee-preset__name">{p.name}</span>
-              </button>
-            ))}
-          </div>
+    <>
+      <style>{EE_CSS}</style>
+      <div className="ee-root">
+        {/* Top bar */}
+        <div className="ee-topbar">
+          <Link className="ee-back" to="/">
+            <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M10 12L6 8l4-4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Dashboard
+          </Link>
+          <h1 className="ee-event-name">{event.name}</h1>
+          <div className="ee-topbar-spacer" />
+          <Link className="ee-topbar-btn" to={`/events/${event.id}/print/seating`}>Print Seating</Link>
+          <Link className="ee-topbar-btn" to={`/events/${event.id}/print/guests`}>Print Guest List</Link>
+          <Link className="ee-topbar-btn" to={`/e/${event.slug}`} target="_blank">View Guest Page</Link>
         </div>
 
-        {/* Branding */}
-        <div className="ee-card">
-          <div className="ee-card__head">
-            <h2 className="ee-card__title">Branding</h2>
-          </div>
-          <div className="ee-form">
-            <Field label="Event logo URL">
-              <input className="ee-input" value={form.logo_url ?? ''}
-                onChange={(e) => set('logo_url', e.target.value || null)} placeholder="https://…" />
-            </Field>
-            <Field label="Cover image URL">
-              <input className="ee-input" value={form.cover_image ?? ''}
-                onChange={(e) => set('cover_image', e.target.value || null)} placeholder="https://…" />
-            </Field>
-          </div>
+        {/* Tabs */}
+        <div className="ee-tabs">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              className={`ee-tab${activeTab === tab.key ? ' ee-tab--active' : ''}`}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        {/* Colours */}
-        <div className="ee-card">
-          <div className="ee-card__head">
-            <h2 className="ee-card__title">Colours</h2>
-            <p className="ee-card__hint">Three core colours — the rest are derived automatically.</p>
-          </div>
-          <div className="ee-form">
-            <ColorField label="Primary / accent" value={form.color_primary ?? '#1A1A1A'}
-              onChange={setPrimary} />
-            <ColorField label="Background" value={form.color_background ?? '#F8F8F8'}
-              onChange={setBackground} />
-            <ColorField label="Button" value={form.color_button ?? '#1A1A1A'}
-              onChange={(hex) => set('color_button', hex)} />
-          </div>
-        </div>
-
-        {/* Fonts */}
-        <div className="ee-card">
-          <div className="ee-card__head">
-            <h2 className="ee-card__title">Fonts</h2>
-          </div>
-          <div className="ee-form">
-            <Field label="Heading font">
-              <FontSelect value={form.font_heading ?? 'Inter'}
-                onChange={(v) => set('font_heading', v)} />
-            </Field>
-            <Field label="Body font">
-              <FontSelect value={form.font_body ?? 'Inter'}
-                onChange={(v) => set('font_body', v)} />
-            </Field>
-          </div>
-        </div>
-
-        {/* Danger zone */}
-        <div className="ee-card ee-card--danger">
-          <div className="ee-card__head ee-card__head--row">
-            <div>
-              <h2 className="ee-card__title">Danger zone</h2>
-              <p className="ee-card__hint">Permanently delete this event and all its data.</p>
+        {/* Content — all panels mounted, inactive hidden */}
+        <div className="ee-content">
+          {/* ── EVENT DETAILS ── */}
+          <div className={`ee-panel${activeTab === 'details' ? ' ee-panel--active' : ''}`}>
+            <h2 className="ee-section-title">Event Details</h2>
+            <div className="ee-field">
+              <label className="ee-label">Event Name</label>
+              <input className="ee-input" value={detName} onChange={(e) => setDetName(e.target.value)} />
             </div>
-            <button className="ee-btn ee-btn--danger" onClick={() => setDeleteOpen(true)}>
-              Delete event
+            <div className="ee-row">
+              <div className="ee-field">
+                <label className="ee-label">Date</label>
+                <input className="ee-input" type="date" value={detDate} onChange={(e) => setDetDate(e.target.value)} />
+              </div>
+              <div className="ee-field">
+                <label className="ee-label">Time</label>
+                <input className="ee-input" type="time" value={detTime} onChange={(e) => setDetTime(e.target.value)} />
+              </div>
+            </div>
+            <div className="ee-field">
+              <label className="ee-label">Venue</label>
+              <input className="ee-input" value={detVenue} onChange={(e) => setDetVenue(e.target.value)} />
+            </div>
+            <div className="ee-field">
+              <label className="ee-label">Slug</label>
+              <input className="ee-input" value={detSlug} onChange={(e) => setDetSlug(e.target.value)} />
+            </div>
+            <button className="ee-btn ee-btn--primary" onClick={handleSaveDetails} disabled={detSaving}>
+              {detSaving ? 'Saving…' : 'Save Changes'}
             </button>
           </div>
-        </div>
-      </div>
 
-      {/* ---------- Right: sticky live preview ---------- */}
-      <div className="ee-settings-preview">
-        <div className="ee-preview-sticky">
-          <div className="ee-preview-toolbar">
-            <span className="ee-preview-toolbar__label">Live preview</span>
-            <div className="ee-preview-toggle">
-              <button className={`ee-preview-toggle__btn ${previewMode === 'desktop' ? 'ee-preview-toggle__btn--active' : ''}`}
-                onClick={() => setPreviewMode('desktop')}>Desktop</button>
-              <button className={`ee-preview-toggle__btn ${previewMode === 'mobile' ? 'ee-preview-toggle__btn--active' : ''}`}
-                onClick={() => setPreviewMode('mobile')}>Mobile</button>
+          {/* ── GUESTS ── */}
+          <div className={`ee-panel${activeTab === 'guests' ? ' ee-panel--active' : ''}`}>
+            <h2 className="ee-section-title">Guests ({guests?.length ?? 0})</h2>
+            <div className="ee-guest-toolbar">
+              <input
+                className="ee-input"
+                style={{ maxWidth: 260 }}
+                placeholder="Guest name"
+                value={guestName}
+                onChange={(e) => setGuestName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddGuest(); }}
+              />
+              <select
+                className="ee-input"
+                style={{ maxWidth: 200 }}
+                value={guestTable}
+                onChange={(e) => setGuestTable(e.target.value)}
+              >
+                <option value="">No table</option>
+                {tables?.map((t) => (
+                  <option key={t.id} value={t.id}>Table {t.number} — {t.name}</option>
+                ))}
+              </select>
+              <button className="ee-btn ee-btn--primary" onClick={handleAddGuest}>Add Guest</button>
+              <button className="ee-btn ee-btn--secondary" onClick={() => setShowBulk(true)}>Bulk Add</button>
+            </div>
+            {(!guests || guests.length === 0) ? (
+              <div className="ee-empty">No guests yet. Add your first guest above.</div>
+            ) : (
+              <div className="ee-guest-list">
+                {guests.map((g: GuestWithTable) => (
+                  <div key={g.id} className="ee-guest-row">
+                    <span className="ee-guest-name">{g.name}</span>
+                    {g.table ? (
+                      <span className="ee-guest-table-badge">Table {g.table.number}</span>
+                    ) : (
+                      <span className="ee-guest-table-badge ee-guest-table-badge--none">Unassigned</span>
+                    )}
+                    <select
+                      className="ee-guest-select"
+                      value={g.table_id ?? ''}
+                      onChange={(e) => handleAssignTable(g.id, e.target.value)}
+                    >
+                      <option value="">No table</option>
+                      {tables?.map((t) => (
+                        <option key={t.id} value={t.id}>Table {t.number} — {t.name}</option>
+                      ))}
+                    </select>
+                    <button className="ee-guest-action" onClick={() => handleDeleteGuest(g.id)}>Remove</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── TABLES ── */}
+          <div className={`ee-panel${activeTab === 'tables' ? ' ee-panel--active' : ''}`}>
+            <h2 className="ee-section-title">Tables ({tables?.length ?? 0})</h2>
+            <div className="ee-guest-toolbar">
+              <input
+                className="ee-input"
+                style={{ maxWidth: 200 }}
+                placeholder="Table name"
+                value={tableName}
+                onChange={(e) => setTableName(e.target.value)}
+              />
+              <input
+                className="ee-input"
+                style={{ maxWidth: 120 }}
+                type="number"
+                placeholder="Number"
+                value={tableNumber}
+                onChange={(e) => setTableNumber(e.target.value)}
+              />
+              <input
+                className="ee-input"
+                style={{ maxWidth: 120 }}
+                type="number"
+                placeholder="Capacity"
+                value={tableCapacity}
+                onChange={(e) => setTableCapacity(e.target.value)}
+              />
+              <button className="ee-btn ee-btn--primary" onClick={handleAddTable}>Add Table</button>
+            </div>
+            {(!tables || tables.length === 0) ? (
+              <div className="ee-empty">No tables yet. Add your first table above.</div>
+            ) : (
+              <div className="ee-table-list">
+                {tables.map((t) => {
+                  const assigned = guests?.filter((g) => g.table_id === t.id).length ?? 0;
+                  return (
+                    <div key={t.id} className="ee-table-card">
+                      <div className="ee-table-num">{t.number}</div>
+                      <div className="ee-table-info">
+                        <p className="ee-table-name">{t.name}</p>
+                        <p className="ee-table-meta">Capacity: {t.capacity} · Assigned: {assigned}</p>
+                      </div>
+                      <button className="ee-btn ee-btn--danger" onClick={() => handleDeleteTable(t.id)}>Delete</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── VENUE LAYOUT ── */}
+          <div className={`ee-panel${activeTab === 'venue' ? ' ee-panel--active' : ''}`}>
+            <h2 className="ee-section-title">Venue Layout</h2>
+            <p style={{ fontSize: 14, color: '#8A8A8A', marginBottom: 20 }}>
+              Upload a floor plan or venue layout image. Guests will see this on the guest page.
+            </p>
+            <div
+              className={`ee-dropzone${venueDragging ? ' ee-dropzone--drag' : ''}`}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setVenueDragging(true); }}
+              onDragLeave={() => setVenueDragging(false)}
+              onDrop={handleVenueDrop}
+            >
+              <div className="ee-dropzone-icon">
+                <svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="6" y="6" width="36" height="36" rx="4" />
+                  <path d="M6 30l10-10 8 8 6-6 12 12" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx="18" cy="18" r="3" />
+                </svg>
+              </div>
+              <p className="ee-dropzone-text">Click to upload or drag & drop</p>
+              <p className="ee-dropzone-hint">PNG, JPG up to 5MB</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={handleVenueChange}
+              />
+            </div>
+            {venueImage && (
+              <div className="ee-venue-preview">
+                <img src={venueImage} alt="Venue layout" />
+              </div>
+            )}
+          </div>
+
+          {/* ── INVITATION ── */}
+          <div className={`ee-panel${activeTab === 'invitation' ? ' ee-panel--active' : ''}`}>
+            <h2 className="ee-section-title">Invitation</h2>
+            <div className="ee-invite-card">
+              <div className="ee-toggle">
+                <button
+                  className={`ee-toggle-switch${event.invitation_enabled ? ' ee-toggle-switch--on' : ''}`}
+                  onClick={async () => {
+                    try {
+                      await updateEvent.mutateAsync({ invitation_enabled: !event.invitation_enabled });
+                      toast(event.invitation_enabled ? 'Invitation disabled' : 'Invitation enabled', 'success');
+                    } catch (err) {
+                      toast(err instanceof Error ? err.message : 'Failed to toggle', 'error');
+                    }
+                  }}
+                />
+                <span className="ee-toggle-label">
+                  {event.invitation_enabled ? 'Invitation page is live' : 'Invitation page is disabled'}
+                </span>
+              </div>
+              <p style={{ fontSize: 14, color: '#4A4A4A', margin: 0 }}>
+                Share this link with your guests so they can find their seat.
+              </p>
+              <div className="ee-invite-url">
+                <input readOnly value={inviteUrl} onFocus={(e) => e.currentTarget.select()} />
+                <button
+                  className="ee-btn ee-btn--secondary"
+                  onClick={() => {
+                    navigator.clipboard.writeText(inviteUrl);
+                    toast('Link copied!', 'success');
+                  }}
+                >
+                  Copy
+                </button>
+              </div>
+              <div style={{ marginTop: 20 }}>
+                <Link className="ee-btn ee-btn--primary" to={`/invite/${event.slug}`} target="_blank" style={{ textDecoration: 'none', display: 'inline-block' }}>
+                  Preview Invitation
+                </Link>
+              </div>
             </div>
           </div>
 
-          <div className={`ee-preview-frame ${previewMode === 'mobile' ? 'ee-preview-frame--mobile' : ''}`}>
-            <ThemePreview settings={form} eventName={event?.name || 'Your event'}
-              eventVenue={event?.venue || 'Your venue'} accent={accent} />
+          {/* ── SCHEDULE ── */}
+          <div className={`ee-panel${activeTab === 'schedule' ? ' ee-panel--active' : ''}`}>
+            <h2 className="ee-section-title">Schedule</h2>
+            <p style={{ fontSize: 14, color: '#8A8A8A', marginBottom: 20 }}>
+              Add a timeline of event activities for your guests.
+            </p>
+            {event.date && (
+              <div className="ee-schedule-list">
+                <div className="ee-schedule-item">
+                  <span className="ee-schedule-time">{event.time || 'TBD'}</span>
+                  <span className="ee-schedule-desc">Event starts at {event.venue || 'venue TBD'}</span>
+                </div>
+                <div className="ee-schedule-item">
+                  <span className="ee-schedule-time">—</span>
+                  <span className="ee-schedule-desc">Add custom schedule items via the guest page settings.</span>
+                </div>
+              </div>
+            )}
+            {!event.date && (
+              <div className="ee-empty">Set an event date in Event Details to build your schedule.</div>
+            )}
           </div>
 
-          <button className="ee-btn ee-btn--primary ee-btn--block" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Save theme'}
+          {/* ── SETTINGS ── */}
+          <div className={`ee-panel${activeTab === 'settings' ? ' ee-panel--active' : ''}`}>
+            <h2 className="ee-section-title">Guest Page Settings</h2>
+            <div className="ee-settings-grid">
+              <div>
+                <label className="ee-label">Theme Presets</label>
+                <div className="ee-presets">
+                  {THEME_PRESETS.map((preset, i) => (
+                    <div
+                      key={preset.name}
+                      className={`ee-preset${settingsForm.color_primary === preset.color_primary && settingsForm.color_background === preset.color_background ? ' ee-preset--active' : ''}`}
+                      onClick={() => applyPreset(i)}
+                    >
+                      <div
+                        className="ee-preset-swatch"
+                        style={{ background: `linear-gradient(135deg, ${preset.color_button} 0%, ${preset.color_background} 100%)` }}
+                      />
+                      <div className="ee-preset-name">{preset.name}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <label className="ee-label">Colors</label>
+                <div className="ee-color-row">
+                  <div className="ee-color-field">
+                    <label style={{ fontSize: 12, color: '#8A8A8A' }}>Primary</label>
+                    <input
+                      type="color"
+                      className="ee-color-input"
+                      value={settingsForm.color_primary ?? '#1A1A1A'}
+                      onChange={(e) => setSettingsForm((prev) => ({ ...prev, color_primary: e.target.value }))}
+                    />
+                  </div>
+                  <div className="ee-color-field">
+                    <label style={{ fontSize: 12, color: '#8A8A8A' }}>Background</label>
+                    <input
+                      type="color"
+                      className="ee-color-input"
+                      value={settingsForm.color_background ?? '#F8F8F8'}
+                      onChange={(e) => setSettingsForm((prev) => ({ ...prev, color_background: e.target.value }))}
+                    />
+                  </div>
+                  <div className="ee-color-field">
+                    <label style={{ fontSize: 12, color: '#8A8A8A' }}>Button</label>
+                    <input
+                      type="color"
+                      className="ee-color-input"
+                      value={settingsForm.color_button ?? '#1A1A1A'}
+                      onChange={(e) => setSettingsForm((prev) => ({ ...prev, color_button: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="ee-row">
+                  <div className="ee-field">
+                    <label className="ee-label">Heading Font</label>
+                    <select
+                      className="ee-input"
+                      value={settingsForm.font_heading ?? 'Inter'}
+                      onChange={(e) => setSettingsForm((prev) => ({ ...prev, font_heading: e.target.value }))}
+                    >
+                      {FONT_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                  </div>
+                  <div className="ee-field">
+                    <label className="ee-label">Body Font</label>
+                    <select
+                      className="ee-input"
+                      value={settingsForm.font_body ?? 'Inter'}
+                      onChange={(e) => setSettingsForm((prev) => ({ ...prev, font_body: e.target.value }))}
+                    >
+                      {FONT_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <button className="ee-btn ee-btn--primary" onClick={handleSaveSettings} disabled={settingsSaving}>
+                  {settingsSaving ? 'Saving…' : 'Save Settings'}
+                </button>
+
+                <div className="ee-danger-zone">
+                  <p className="ee-danger-title">Danger Zone</p>
+                  <p className="ee-danger-text">Permanently delete this event and all associated data.</p>
+                  <button className="ee-btn ee-btn--danger" onClick={handleDeleteEvent}>Delete Event</button>
+                </div>
+              </div>
+
+              {/* Live Preview */}
+              <div className="ee-preview-wrap">
+                <div className="ee-preview-toggle">
+                  <button
+                    className={`ee-preview-toggle-btn${previewDevice === 'desktop' ? ' ee-preview-toggle-btn--active' : ''}`}
+                    onClick={() => setPreviewDevice('desktop')}
+                  >Desktop</button>
+                  <button
+                    className={`ee-preview-toggle-btn${previewDevice === 'mobile' ? ' ee-preview-toggle-btn--active' : ''}`}
+                    onClick={() => setPreviewDevice('mobile')}
+                  >Mobile</button>
+                </div>
+                <div className={`ee-preview-frame${previewDevice === 'mobile' ? ' ee-preview-frame--mobile' : ''}`}>
+                  <div
+                    className="ee-preview-content"
+                    style={{
+                      background: settingsForm.color_background ?? '#F8F8F8',
+                      color: settingsForm.color_text ?? '#1A1A1A',
+                      fontFamily: settingsForm.font_body ?? 'Inter',
+                    }}
+                  >
+                    <h3
+                      className="ee-preview-title"
+                      style={{
+                        color: settingsForm.color_primary ?? '#1A1A1A',
+                        fontFamily: settingsForm.font_heading ?? 'Inter',
+                      }}
+                    >
+                      {event.name}
+                    </h3>
+                    <p className="ee-preview-subtitle" style={{ color: settingsForm.color_text ?? '#1A1A1A' }}>
+                      {formatDate(event.date)}{event.venue ? ` · ${event.venue}` : ''}
+                    </p>
+                    <div
+                      className="ee-preview-btn"
+                      style={{
+                        background: settingsForm.color_button ?? '#1A1A1A',
+                        color: settingsForm.color_button_text ?? '#FFFFFF',
+                        borderRadius: (settingsForm.border_radius ?? 16) / 2,
+                        fontFamily: settingsForm.font_button ?? 'Inter',
+                      }}
+                    >
+                      Find Your Seat
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bulk Add Modal */}
+      <Modal open={showBulk} onClose={() => setShowBulk(false)} title="Bulk Add Guests">
+        <div className="ee-modal-field">
+          <label className="ee-modal-label">Enter one guest name per line</label>
+          <textarea
+            className="ee-textarea"
+            style={{ maxWidth: '100%' }}
+            placeholder={'John Doe\nJane Smith\nBob Johnson'}
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+          />
+        </div>
+        <div className="ee-modal-actions">
+          <button className="ee-btn ee-btn--secondary" onClick={() => setShowBulk(false)}>Cancel</button>
+          <button className="ee-btn ee-btn--primary" onClick={handleBulkAdd} disabled={bulkCreateGuests.isPending}>
+            {bulkCreateGuests.isPending ? 'Adding…' : 'Add Guests'}
           </button>
         </div>
-      </div>
+      </Modal>
 
+      {/* Delete event confirm */}
       <ConfirmDialog
-        open={deleteOpen}
-        title="Delete this event?"
-        message="This will permanently delete the event along with all guests, tables, and settings. This cannot be undone."
-        confirmLabel="Delete event"
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteOpen(false)}
+        open={false}
+        title="Delete Event"
+        message="Are you sure?"
+        onConfirm={() => {}}
+        onCancel={() => {}}
       />
-    </div>
-  );
-}
-
-/* ---------- Theme preview card ---------- */
-function ThemePreview({ settings, eventName, eventVenue, accent }: {
-  settings: GuestPageSettingsInput;
-  eventName: string;
-  eventVenue: string;
-  accent: string;
-}) {
-  const bg = settings.color_background || '#F8F8F8';
-  const card = settings.color_card || '#FFFFFF';
-  const text = settings.color_text || '#1A1A1A';
-  const primary = settings.color_primary || accent;
-  const button = settings.color_button || '#1A1A1A';
-  const buttonText = settings.color_button_text || '#FFFFFF';
-  const link = settings.color_link || primary;
-  const footer = settings.color_footer || '#1A1A1A';
-  const fontHeading = settings.font_heading || 'Inter';
-  const fontBody = settings.font_body || 'Inter';
-  const radius = settings.border_radius ?? 16;
-  const cover = settings.cover_image || null;
-  const logo = settings.logo_url || null;
-
-  return (
-    <div className="ee-theme-preview" style={{
-      background: bg, color: text, fontFamily: `'${fontBody}', sans-serif`,
-      borderRadius: 8, overflow: 'hidden',
-    }}>
-      {/* Cover */}
-      <div className="ee-theme-preview__cover" style={{
-        height: 120,
-        backgroundImage: cover ? `url(${cover})` : 'none',
-        backgroundSize: 'cover', backgroundPosition: 'center',
-        background: cover ? undefined : `linear-gradient(135deg, ${primary}, ${darken(primary, 0.25)})`,
-      }} />
-
-      {/* Logo */}
-      {logo && (
-        <div className="ee-theme-preview__logo" style={{ marginTop: -28 }}>
-          <img src={logo} alt="logo" style={{
-            width: 56, height: 56, objectFit: 'cover',
-            borderRadius: settings.logo_rounded ? '50%' : 8,
-            border: `2px solid ${card}`,
-          }} />
-        </div>
-      )}
-
-      {/* Body */}
-      <div className="ee-theme-preview__body" style={{ padding: '16px 20px' }}>
-        <h3 style={{
-          fontFamily: `'${fontHeading}', serif`,
-          color: text, margin: '8px 0 4px', fontSize: 22, fontWeight: 700,
-          letterSpacing: 0,
-        }}>{eventName}</h3>
-        <p style={{ margin: '0 0 12px', fontSize: 13, opacity: 0.7 }}>{eventVenue}</p>
-
-        {/* Card */}
-        <div style={{
-          background: card, borderRadius: Math.min(radius, 16), padding: 14,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.04)',
-        }}>
-          <p style={{ margin: '0 0 10px', fontSize: 13, lineHeight: 1.5 }}>
-            Welcome! Please find your seat and join us for the celebration.
-          </p>
-          <button style={{
-            background: button, color: buttonText, border: 'none',
-            borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600,
-            cursor: 'pointer', fontFamily: 'inherit',
-          }}>Find your seat</button>
-          <span style={{ marginLeft: 12, fontSize: 13, color: link, textDecoration: 'underline' }}>
-            View schedule
-          </span>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div style={{
-        background: footer, color: '#F8F8F8', padding: '12px 20px',
-        fontSize: 12, textAlign: 'center',
-      }}>
-        Made with care · {new Date().getFullYear()}
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Font dropdown (renders each option in its font) ---------- */
-function FontSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <select className="ee-input ee-select ee-select--font" value={value}
-      onChange={(e) => onChange(e.target.value)}
-      style={{ fontFamily: `'${value}', sans-serif` }}>
-      {FONT_OPTIONS.map((f) => (
-        <option key={f} value={f} style={{ fontFamily: `'${f}', sans-serif` }}>
-          {f}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-/* ---------- Small reusable field ---------- */
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="ee-field">
-      <label className="ee-field__label">{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function ColorField({ label, value, onChange }: {
-  label: string; value: string; onChange: (hex: string) => void;
-}) {
-  return (
-    <Field label={label}>
-      <div className="ee-color">
-        <input type="color" className="ee-color__swatch" value={value}
-          onChange={(e) => onChange(e.target.value)} />
-        <input className="ee-input ee-color__hex" value={value}
-          onChange={(e) => onChange(e.target.value)} />
-      </div>
-    </Field>
-  );
-}
-
-/* ================================================================== *
- * Styles — scoped, modern monochrome
- * ================================================================== */
-function EventEditorStyles() {
-  return (
-    <style>{`
-/* ---------- Page shell ---------- */
-.ee-page {
-  --ee-accent: #1A1A1A;
-  --ee-radius: 12px;
-  --ee-radius-sm: 8px;
-  --ee-border: #EFEFEF;
-  --ee-border-strong: #E5E5E5;
-  --ee-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
-  --ee-shadow-lg: 0 4px 16px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
-  min-height: 100vh;
-  background: ${C.offWhite};
-  color: ${C.nearBlack};
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-
-.ee-loading {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  min-height: 60vh; gap: 16px; color: ${C.darkGrey};
-}
-.ee-spinner {
-  width: 28px; height: 28px; border-radius: 50%;
-  border: 2px solid ${C.lightGrey}; border-top-color: var(--ee-accent);
-  animation: ee-spin 0.7s linear infinite;
-}
-@keyframes ee-spin { to { transform: rotate(360deg); } }
-
-/* ---------- Header ---------- */
-.ee-header {
-  max-width: 960px; margin: 0 auto; padding: 32px 24px 8px;
-}
-.ee-header__top { margin-bottom: 16px; }
-.ee-back {
-  font-size: 13px; color: ${C.darkGrey}; text-decoration: none;
-  transition: color 200ms ease;
-}
-.ee-back:hover { color: var(--ee-accent); }
-.ee-header__main { }
-.ee-header__title {
-  font-size: 28px; font-weight: 700; letter-spacing: -0.02em;
-  margin: 0 0 4px; color: ${C.nearBlack};
-}
-.ee-header__subtitle {
-  font-size: 14px; color: ${C.darkGrey}; margin: 0;
-}
-
-/* ---------- Sticky tab bar ---------- */
-.ee-tabs {
-  position: sticky; top: 0; z-index: 20;
-  background: rgba(248,248,248,0.85);
-  backdrop-filter: saturate(180%) blur(12px);
-  -webkit-backdrop-filter: saturate(180%) blur(12px);
-  border-bottom: 1px solid var(--ee-border);
-}
-.ee-tabs__inner {
-  max-width: 960px; margin: 0 auto; padding: 12px 24px;
-  display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
-}
-.ee-tabs__inner::-webkit-scrollbar { display: none; }
-.ee-tab {
-  appearance: none; border: none; background: transparent;
-  padding: 8px 14px; border-radius: 999px;
-  font-size: 13px; font-weight: 500; color: ${C.darkGrey};
-  cursor: pointer; white-space: nowrap;
-  transition: background 200ms ease, color 200ms ease, transform 200ms ease;
-}
-.ee-tab:hover { background: ${C.lightGrey}; color: ${C.nearBlack}; }
-.ee-tab:active { transform: scale(0.97); }
-.ee-tab--active {
-  background: var(--ee-accent); color: #FFFFFF;
-}
-.ee-tab--active:hover { background: var(--ee-accent); color: #FFFFFF; }
-
-/* ---------- Content ---------- */
-.ee-content {
-  max-width: 960px; margin: 0 auto; padding: 24px;
-}
-.ee-section { animation: ee-fade 200ms ease; }
-@keyframes ee-fade { from { opacity: 0; } to { opacity: 1; } }
-.ee-hidden { display: none !important; }
-
-/* ---------- Card ---------- */
-.ee-card {
-  background: ${C.white}; border: 1px solid var(--ee-border);
-  border-radius: var(--ee-radius); box-shadow: var(--ee-shadow);
-  padding: 24px; margin-bottom: 16px;
-}
-.ee-card--danger { border-color: #F0D5D5; }
-.ee-card__head { margin-bottom: 20px; }
-.ee-card__head--row {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
-  margin-bottom: 20px;
-}
-.ee-card__title {
-  font-size: 17px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em;
-}
-.ee-card__hint { font-size: 13px; color: ${C.textMuted}; margin: 0; }
-.ee-card__foot {
-  margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--ee-border);
-  display: flex; gap: 8px;
-}
-.ee-card__actions { display: flex; gap: 8px; flex-shrink: 0; }
-
-/* ---------- Buttons ---------- */
-.ee-btn {
-  appearance: none; border: none; cursor: pointer;
-  font-size: 13px; font-weight: 500; font-family: inherit;
-  padding: 9px 16px; border-radius: var(--ee-radius-sm);
-  transition: background 200ms ease, color 200ms ease, opacity 200ms ease, transform 200ms ease;
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-}
-.ee-btn:active { transform: scale(0.98); }
-.ee-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.ee-btn--primary { background: var(--ee-accent); color: #FFFFFF; }
-.ee-btn--primary:hover:not(:disabled) { opacity: 0.9; }
-.ee-btn--secondary { background: ${C.lightGrey}; color: ${C.nearBlack}; }
-.ee-btn--secondary:hover:not(:disabled) { background: ${C.midGrey}; }
-.ee-btn--danger { background: ${C.dangerBg}; color: ${C.danger}; }
-.ee-btn--danger:hover:not(:disabled) { background: #F5D8D8; }
-.ee-btn--block { width: 100%; margin-top: 12px; }
-
-/* ---------- Forms ---------- */
-.ee-form { display: flex; flex-direction: column; gap: 16px; }
-.ee-form__row { display: flex; gap: 16px; }
-.ee-form__row--2 { flex-direction: row; }
-.ee-form__row--2 > .ee-field { flex: 1; }
-@media (max-width: 600px) {
-  .ee-form__row--2 { flex-direction: column; }
-}
-.ee-field { display: flex; flex-direction: column; gap: 6px; }
-.ee-field__label {
-  font-size: 12px; font-weight: 500; color: ${C.darkGrey};
-  letter-spacing: 0.01em;
-}
-.ee-input {
-  appearance: none; width: 100%; box-sizing: border-box;
-  font-size: 14px; font-family: inherit; color: ${C.nearBlack};
-  background: ${C.white}; border: 1px solid var(--ee-border-strong);
-  border-radius: var(--ee-radius-sm); padding: 10px 12px;
-  transition: border-color 200ms ease, box-shadow 200ms ease;
-}
-.ee-input::placeholder { color: ${C.textMuted}; }
-.ee-input:hover { border-color: ${C.midGrey}; }
-.ee-input:focus {
-  outline: none; border-color: var(--ee-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ee-accent) 15%, transparent);
-}
-.ee-textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
-.ee-textarea--mono { font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; font-size: 13px; }
-.ee-select { cursor: pointer; }
-.ee-input--search { max-width: 320px; }
-
-/* ---------- Checkbox ---------- */
-.ee-check {
-  display: flex; align-items: center; gap: 10px; cursor: pointer;
-  font-size: 14px; color: ${C.nearBlack};
-}
-.ee-check input { width: 16px; height: 16px; accent-color: var(--ee-accent); cursor: pointer; }
-
-/* ---------- Color picker ---------- */
-.ee-color { display: flex; gap: 8px; align-items: stretch; }
-.ee-color__swatch {
-  appearance: none; width: 44px; height: auto; min-height: 40px;
-  border: 1px solid var(--ee-border-strong); border-radius: var(--ee-radius-sm);
-  cursor: pointer; padding: 2px; background: ${C.white};
-  transition: border-color 200ms ease;
-}
-.ee-color__swatch:hover { border-color: ${C.midGrey}; }
-.ee-color__hex { flex: 1; }
-
-/* ---------- Toolbar / search ---------- */
-.ee-toolbar { margin-bottom: 16px; }
-
-/* ---------- Table ---------- */
-.ee-table-wrap { overflow-x: auto; border: 1px solid var(--ee-border); border-radius: var(--ee-radius-sm); }
-.ee-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.ee-table thead th {
-  text-align: left; font-size: 12px; font-weight: 500; color: ${C.darkGrey};
-  padding: 10px 14px; border-bottom: 1px solid var(--ee-border);
-  background: ${C.offWhite}; text-transform: uppercase; letter-spacing: 0.04em;
-}
-.ee-table tbody td { padding: 12px 14px; border-bottom: 1px solid var(--ee-border); }
-.ee-table tbody tr:last-child td { border-bottom: none; }
-.ee-table tbody tr { transition: background 200ms ease; }
-.ee-table tbody tr:hover { background: ${C.offWhite}; }
-.ee-table__name { font-weight: 500; }
-.ee-table__muted { color: ${C.darkGrey}; }
-.ee-table__actions-col { width: 1%; text-align: right; }
-.ee-table__actions { display: flex; gap: 6px; justify-content: flex-end; }
-
-/* ---------- Icon / text buttons ---------- */
-.ee-icon-btn {
-  appearance: none; border: 1px solid transparent; background: transparent;
-  color: ${C.darkGrey}; font-size: 13px; font-weight: 500; font-family: inherit;
-  padding: 6px 10px; border-radius: 6px; cursor: pointer;
-  transition: background 200ms ease, color 200ms ease;
-}
-.ee-icon-btn:hover { background: ${C.lightGrey}; color: ${C.nearBlack}; }
-.ee-icon-btn--danger:hover { background: ${C.dangerBg}; color: ${C.danger}; }
-.ee-icon-btn--link { text-decoration: none; display: inline-flex; align-items: center; }
-
-/* ---------- Empty state ---------- */
-.ee-empty {
-  text-align: center; padding: 40px 20px; color: ${C.textMuted};
-  border: 1px dashed var(--ee-border-strong); border-radius: var(--ee-radius-sm);
-  font-size: 14px;
-}
-
-/* ---------- Muted text ---------- */
-.ee-muted { color: ${C.textMuted}; font-size: 14px; }
-
-/* ---------- Modal ---------- */
-.modal-overlay {
-  position: fixed; inset: 0; background: rgba(26,26,26,0.4);
-  display: flex; align-items: center; justify-content: center; z-index: 100;
-  padding: 20px; animation: ee-fade 150ms ease;
-}
-.modal {
-  background: ${C.white}; border-radius: var(--ee-radius);
-  box-shadow: var(--ee-shadow-lg); padding: 24px;
-  width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto;
-  animation: ee-pop 200ms ease;
-}
-@keyframes ee-pop { from { transform: scale(0.97); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-.modal__title { font-size: 17px; font-weight: 600; margin: 0 0 12px; }
-.modal__message { font-size: 14px; color: ${C.darkGrey}; margin: 0 0 20px; line-height: 1.5; }
-.modal__actions { display: flex; gap: 8px; justify-content: flex-end; }
-.ee-modal-form { display: flex; flex-direction: column; gap: 16px; }
-.ee-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
-
-/* ---------- Alert ---------- */
-.ee-alert {
-  padding: 10px 14px; border-radius: var(--ee-radius-sm); font-size: 13px;
-  margin-bottom: 16px;
-}
-.ee-alert--error { background: ${C.dangerBg}; color: ${C.danger}; border: 1px solid #F0D5D5; }
-
-/* ---------- Tables list ---------- */
-.ee-table-list { display: flex; flex-direction: column; gap: 8px; }
-.ee-table-row {
-  display: flex; align-items: center; gap: 14px;
-  padding: 12px 16px; border: 1px solid var(--ee-border);
-  border-radius: var(--ee-radius-sm); background: ${C.white};
-  transition: border-color 200ms ease, box-shadow 200ms ease;
-}
-.ee-table-row:hover { border-color: var(--ee-border-strong); box-shadow: var(--ee-shadow); }
-.ee-table-row__num {
-  width: 32px; height: 32px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  background: ${C.offWhite}; border-radius: 8px;
-  font-size: 13px; font-weight: 600; color: ${C.darkGrey};
-}
-.ee-table-row__name { font-weight: 500; font-size: 14px; flex: 1; }
-.ee-table-row__count { font-size: 13px; color: ${C.darkGrey}; }
-.ee-table-row__count--full { color: ${C.danger}; font-weight: 500; }
-
-/* ---------- Venue dropzone ---------- */
-.ee-dropzone {
-  border: 2px dashed var(--ee-border-strong); border-radius: var(--ee-radius);
-  padding: 48px 24px; text-align: center; cursor: pointer;
-  background: ${C.offWhite}; color: ${C.darkGrey};
-  transition: border-color 200ms ease, background 200ms ease, transform 200ms ease;
-}
-.ee-dropzone:hover { border-color: var(--ee-accent); background: ${C.white}; }
-.ee-dropzone:active { transform: scale(0.995); }
-.ee-dropzone--over {
-  border-color: var(--ee-accent); background: color-mix(in srgb, var(--ee-accent) 5%, ${C.white});
-}
-.ee-dropzone__icon { color: ${C.midGrey}; margin-bottom: 12px; }
-.ee-dropzone--over .ee-dropzone__icon { color: var(--ee-accent); }
-.ee-dropzone__title { font-size: 15px; font-weight: 600; color: ${C.nearBlack}; margin: 0 0 4px; }
-.ee-dropzone__hint { font-size: 13px; color: ${C.darkGrey}; margin: 0 0 8px; }
-.ee-dropzone__formats { font-size: 12px; color: ${C.textMuted}; margin: 0; }
-
-/* ---------- Venue preview ---------- */
-.ee-venue-preview { }
-.ee-venue-preview__img-wrap {
-  border: 1px solid var(--ee-border); border-radius: var(--ee-radius);
-  overflow: hidden; background: ${C.offWhite}; margin-bottom: 16px;
-}
-.ee-venue-preview__img { display: block; width: 100%; height: auto; max-height: 480px; object-fit: contain; }
-.ee-venue-preview__actions { display: flex; gap: 8px; }
-
-/* ---------- Invitation ---------- */
-.ee-status-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  padding: 16px; border: 1px solid var(--ee-border); border-radius: var(--ee-radius-sm);
-  margin-bottom: 20px;
-}
-.ee-status-row__label { font-size: 14px; font-weight: 500; margin: 0 0 4px; }
-.ee-status-row__value { margin: 0; }
-.ee-badge {
-  display: inline-block; padding: 3px 10px; border-radius: 999px;
-  font-size: 12px; font-weight: 500;
-}
-.ee-badge--on { background: color-mix(in srgb, var(--ee-accent) 12%, ${C.white}); color: var(--ee-accent); }
-.ee-badge--off { background: ${C.lightGrey}; color: ${C.darkGrey}; }
-
-.ee-link-list { display: flex; flex-direction: column; gap: 10px; }
-.ee-link-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 14px 16px; border: 1px solid var(--ee-border); border-radius: var(--ee-radius-sm);
-  transition: border-color 200ms ease;
-}
-.ee-link-row:hover { border-color: var(--ee-border-strong); }
-.ee-link-row__title { font-size: 14px; font-weight: 500; margin: 0 0 2px; }
-.ee-link-row__url { font-size: 13px; color: ${C.textMuted}; margin: 0; font-family: 'SF Mono', 'Menlo', monospace; }
-.ee-link-row__actions { display: flex; gap: 6px; flex-shrink: 0; }
-
-/* ---------- Settings layout ---------- */
-.ee-settings-grid {
-  display: grid; grid-template-columns: 1fr 360px; gap: 16px; align-items: start;
-}
-.ee-settings-editor { display: flex; flex-direction: column; gap: 16px; }
-.ee-settings-preview { position: sticky; top: 72px; }
-.ee-preview-sticky { position: sticky; top: 72px; }
-@media (max-width: 880px) {
-  .ee-settings-grid { grid-template-columns: 1fr; }
-  .ee-settings-preview { position: static; }
-  .ee-preview-sticky { position: static; }
-}
-
-/* ---------- Presets ---------- */
-.ee-presets {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
-}
-@media (max-width: 600px) { .ee-presets { grid-template-columns: repeat(2, 1fr); } }
-.ee-preset {
-  appearance: none; border: 1px solid var(--ee-border); background: ${C.white};
-  border-radius: var(--ee-radius-sm); padding: 12px; cursor: pointer;
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
-}
-.ee-preset:hover { border-color: var(--ee-border-strong); box-shadow: var(--ee-shadow); transform: translateY(-1px); }
-.ee-preset:active { transform: scale(0.98); }
-.ee-preset__swatches { display: flex; gap: 4px; }
-.ee-preset__swatch {
-  width: 22px; height: 22px; border-radius: 6px;
-  border: 1px solid rgba(0,0,0,0.06);
-}
-.ee-preset__name { font-size: 12px; font-weight: 500; color: ${C.darkGrey}; }
-
-/* ---------- Preview frame ---------- */
-.ee-preview-toolbar {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 12px;
-}
-.ee-preview-toolbar__label { font-size: 13px; font-weight: 600; color: ${C.darkGrey}; }
-.ee-preview-toggle {
-  display: flex; background: ${C.lightGrey}; border-radius: 8px; padding: 2px;
-}
-.ee-preview-toggle__btn {
-  appearance: none; border: none; background: transparent;
-  padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 500;
-  color: ${C.darkGrey}; cursor: pointer; transition: all 200ms ease;
-}
-.ee-preview-toggle__btn--active { background: ${C.white}; color: ${C.nearBlack}; box-shadow: var(--ee-shadow); }
-.ee-preview-frame {
-  border: 1px solid var(--ee-border); border-radius: var(--ee-radius);
-  overflow: hidden; background: ${C.white}; box-shadow: var(--ee-shadow);
-  transition: max-width 200ms ease;
-  max-width: 100%;
-}
-.ee-preview-frame--mobile { max-width: 360px; margin: 0 auto; }
-
-/* ---------- Theme preview ---------- */
-.ee-theme-preview { box-shadow: none; }
-.ee-theme-preview__logo { display: flex; justify-content: center; }
-    `}</style>
+    </>
   );
 }

@@ -1,553 +1,345 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useEventBySlug } from '@/hooks/use-events';
-import { useSearchGuest } from '@/hooks/use-guests';
+import { useGuests } from '@/hooks/use-guests';
 import { useGuestPageSettingsBySlug } from '@/hooks/use-guest-page-settings';
-import { useRSVPByGuest, useUpsertRSVP } from '@/hooks/use-rsvps';
 import { DEFAULT_SETTINGS } from '@/types/guest-page-settings';
 import type { GuestPageSettings } from '@/types/guest-page-settings';
+import type { GuestWithTable } from '@/types/guest';
+
+type Lang = 'en' | 'ms';
+type Tab = 'find' | 'venue';
+
+const TRANSLATIONS = {
+  en: {
+    langLabel: 'ENGLISH',
+    langAlt: 'BAHASA MELAYU',
+    tabFind: 'FIND SEAT',
+    tabVenue: 'LAYOUT',
+    searchPlaceholder: 'SEARCH YOUR NAME',
+    noResult: 'No guest found. Please check your name.',
+    seatLabel: 'SEAT',
+    tableLabel: 'TABLE',
+    venueNoImage: 'No venue layout has been uploaded yet.',
+    zoomIn: '+',
+    zoomOut: '−',
+    reset: 'Reset',
+  },
+  ms: {
+    langLabel: 'BAHASA MELAYU',
+    langAlt: 'ENGLISH',
+    tabFind: 'CARI TEMPAT',
+    tabVenue: 'SUSUN ATUR',
+    searchPlaceholder: 'CARI NAMA ANDA',
+    noResult: 'Tetamu tidak ditemui. Sila semak nama anda.',
+    seatLabel: 'TEMPAT DUDUK',
+    tableLabel: 'MEJA',
+    venueNoImage: 'Tiada imej susun atur tempat majlis.',
+    zoomIn: '+',
+    zoomOut: '−',
+    reset: 'Reset',
+  },
+};
+
+type Translation = {
+  langLabel: string;
+  langAlt: string;
+  tabFind: string;
+  tabVenue: string;
+  searchPlaceholder: string;
+  noResult: string;
+  seatLabel: string;
+  tableLabel: string;
+  venueNoImage: string;
+  zoomIn: string;
+  zoomOut: string;
+  reset: string;
+};
 
 export function FindYourSeatPage() {
   const { slug } = useParams<{ slug: string }>();
   const { data: event, isLoading: eventLoading } = useEventBySlug(slug ?? '');
   const { data: settings } = useGuestPageSettingsBySlug(slug ?? '');
+  const { data: allGuests } = useGuests(event?.id ?? '');
+
+  const [lang, setLang] = useState<Lang>('en');
+  const [activeTab, setActiveTab] = useState<Tab>('find');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [results, setResults] = useState<GuestWithTable[]>([]);
+  const [searched, setSearched] = useState(false);
+
+  // Venue viewer state
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const viewportRef = useRef<HTMLDivElement>(null);
+
+  const t = TRANSLATIONS[lang];
 
   const effectiveSettings = {
     ...(DEFAULT_SETTINGS as GuestPageSettings),
     ...(settings ?? {}),
   } as GuestPageSettings;
 
-  const eventId = event?.id ?? '';
+  const accent = event?.accent_color ?? effectiveSettings.color_primary ?? '#B8963E';
+  const bg = effectiveSettings.color_background ?? '#FAF3E8';
 
-  // --- Find Seat ---
-  const [searchName, setSearchName] = useState('');
-  const [debouncedName, setDebouncedName] = useState('');
-  const { data: guest, isFetching } = useSearchGuest(eventId, debouncedName);
+  // Search — filter allGuests locally for instant results
+  const handleSearch = useCallback((value: string) => {
+    setSearchQuery(value);
+    if (!value.trim()) { setResults([]); setSearched(false); return; }
+    setSearched(true);
+    if (!allGuests) return;
+    const q = value.trim().toLowerCase();
+    setResults(allGuests.filter((g) => g.name.toLowerCase().includes(q)));
+  }, [allGuests]);
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedName(searchName.trim()), 350);
-    return () => clearTimeout(t);
-  }, [searchName]);
+  // Reset zoom when tab changes
+  useEffect(() => { setZoom(1); setPan({ x: 0, y: 0 }); }, [activeTab]);
 
-  // --- RSVP ---
-  const [rsvpStatus, setRsvpStatus] = useState<'yes' | 'no' | 'maybe'>('yes');
-  const [plusOnes, setPlusOnes] = useState(0);
-  const [rsvpMessage, setRsvpMessage] = useState('');
-  const [rsvpSaved, setRsvpSaved] = useState(false);
-
-  const guestId = guest?.id ?? '';
-  const { data: existingRsvp } = useRSVPByGuest(eventId, guestId);
-  const { mutateAsync: upsertRSVP } = useUpsertRSVP(eventId);
-
-  useEffect(() => {
-    if (existingRsvp) {
-      setRsvpStatus(existingRsvp.status);
-      setPlusOnes(existingRsvp.plus_ones);
-      setRsvpMessage(existingRsvp.message ?? '');
-    }
-  }, [existingRsvp]);
-
-  const handleRSVP = async () => {
-    if (!guest) return;
-    try {
-      await upsertRSVP({
-        guest_id: guest.id,
-        status: rsvpStatus,
-        plus_ones: plusOnes,
-        message: rsvpMessage || null,
-      });
-      setRsvpSaved(true);
-    } catch {
-      // silently fail — toast not available on public page
-    }
-  };
-
-  // --- Scroll-spy nav ---
-  const [activeSection, setActiveSection] = useState('home');
-  const navLinks = useRef<Record<string, HTMLElement | null>>({});
-  const sectionsRef = useRef<Record<string, HTMLElement | null>>({});
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setActiveSection(entry.target.id);
-          }
-        });
-      },
-      { rootMargin: '-40% 0px -55% 0px', threshold: 0 },
-    );
-
-    Object.values(sectionsRef.current).forEach((el) => {
-      if (el) observer.observe(el);
-    });
-
-    return () => observer.disconnect();
-  }, [effectiveSettings.enable_schedule, effectiveSettings.enable_gallery]);
-
-  const scrollTo = useCallback((id: string) => {
-    const el = sectionsRef.current[id];
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, []);
-
-  // --- Zoom / Pan venue viewer ---
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
-  const venueRef = useRef<HTMLDivElement>(null);
-
-  const zoomIn = () => setZoom((z) => Math.min(z + 0.25, 4));
-  const zoomOut = () => setZoom((z) => Math.max(z - 0.25, 1));
-  const resetZoom = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  };
-
-  const handleWheel = (e: React.WheelEvent) => {
+  // Venue zoom/pan
+  const clampZoom = (z: number) => Math.min(5, Math.max(0.5, z));
+  const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.15 : 0.15;
-    setZoom((z) => Math.min(Math.max(z + delta, 1), 4));
-  };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (zoom <= 1) return;
+    setZoom((z) => clampZoom(z + (e.deltaY > 0 ? -0.15 : 0.15)));
+  }, []);
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
     setIsDragging(true);
-    dragStart.current = {
-      x: e.clientX,
-      y: e.clientY,
-      panX: pan.x,
-      panY: pan.y,
-    };
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
+    dragStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+  }, [pan]);
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isDragging) return;
-    const dx = e.clientX - dragStart.current.x;
-    const dy = e.clientY - dragStart.current.y;
-    setPan({ x: dragStart.current.panX + dx, y: dragStart.current.panY + dy });
-  };
-
-  const handleMouseUp = () => setIsDragging(false);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (zoom <= 1 || e.touches.length !== 1) return;
-    const t = e.touches[0];
+    setPan({ x: dragStart.current.panX + e.clientX - dragStart.current.x, y: dragStart.current.panY + e.clientY - dragStart.current.y });
+  }, [isDragging]);
+  const handleMouseUp = useCallback(() => setIsDragging(false), []);
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const t0 = e.touches[0];
     setIsDragging(true);
-    dragStart.current = { x: t.clientX, y: t.clientY, panX: pan.x, panY: pan.y };
+    dragStart.current = { x: t0.clientX, y: t0.clientY, panX: pan.x, panY: pan.y };
+  }, [pan]);
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!isDragging) return;
+    const t0 = e.touches[0];
+    setPan({ x: dragStart.current.panX + t0.clientX - dragStart.current.x, y: dragStart.current.panY + t0.clientY - dragStart.current.y });
+  }, [isDragging]);
+  const handleTouchEnd = useCallback(() => setIsDragging(false), []);
+
+  const venueImageUrl = effectiveSettings.venue_image_url;
+
+  // Format date elegantly
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr + 'T00:00:00');
+      return d.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
+    } catch { return dateStr.toUpperCase(); }
   };
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging || e.touches.length !== 1) return;
-    const t = e.touches[0];
-    const dx = t.clientX - dragStart.current.x;
-    const dy = t.clientY - dragStart.current.y;
-    setPan({ x: dragStart.current.panX + dx, y: dragStart.current.panY + dy });
+  const formatTime = (timeStr: string) => {
+    if (!timeStr) return '';
+    try {
+      const [h, m] = timeStr.split(':');
+      const hour = parseInt(h, 10);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const h12 = hour % 12 || 12;
+      return `${h12}:${m} ${ampm}`;
+    } catch { return timeStr; }
   };
-
-  const handleTouchEnd = () => setIsDragging(false);
-
-  // --- Theme CSS vars ---
-  const themeStyle = {
-    '--gp-color-primary': effectiveSettings.color_primary,
-    '--gp-color-secondary': effectiveSettings.color_secondary,
-    '--gp-color-background': effectiveSettings.color_background,
-    '--gp-color-card': effectiveSettings.color_card,
-    '--gp-color-text': effectiveSettings.color_text,
-    '--gp-color-header': effectiveSettings.color_header,
-    '--gp-color-button': effectiveSettings.color_button,
-    '--gp-color-button-text': effectiveSettings.color_button_text,
-    '--gp-color-link': effectiveSettings.color_link,
-    '--gp-color-footer': effectiveSettings.color_footer,
-    '--gp-font-heading': effectiveSettings.font_heading,
-    '--gp-font-body': effectiveSettings.font_body,
-    '--gp-font-button': effectiveSettings.font_button,
-    '--gp-font-heading-size': `${effectiveSettings.font_heading_size}px`,
-    '--gp-font-body-size': `${effectiveSettings.font_body_size}px`,
-    '--gp-font-heading-weight': effectiveSettings.font_heading_weight,
-    '--gp-font-body-weight': effectiveSettings.font_body_weight,
-    '--gp-border-radius': `${effectiveSettings.border_radius}px`,
-    '--gp-banner-height': `${effectiveSettings.banner_height}px`,
-    '--gp-overlay-opacity': effectiveSettings.background_overlay_opacity,
-    '--gp-logo-size': `${effectiveSettings.logo_size}px`,
-  } as React.CSSProperties;
 
   if (eventLoading) {
     return (
-      <div className="gp-loading" style={themeStyle}>
-        <div className="gp-loading__spinner" />
+      <div className="gp-loading-screen" style={{ background: bg }}>
+        <div className="gp-spinner" style={{ borderTopColor: accent }} />
       </div>
     );
   }
 
   if (!event) {
     return (
-      <div className="gp-not-found" style={themeStyle}>
-        <div className="gp-not-found__card">
-          <h1 className="gp-not-found__title">Event not found</h1>
-          <p className="gp-not-found__text">
-            The event you're looking for doesn't exist or has been removed.
-          </p>
-        </div>
+      <div className="gp-loading-screen" style={{ background: bg }}>
+        <p className="gp-not-found-text" style={{ color: accent }}>EVENT NOT FOUND</p>
       </div>
     );
   }
 
-  const hasCover = effectiveSettings.cover_image || event.cover_url;
-  const coverSrc = (effectiveSettings.cover_image ?? event.cover_url) ?? undefined;
-  const bgSrc = effectiveSettings.background_image ?? undefined;
-  const venueSrc = effectiveSettings.venue_image_url ?? undefined;
-  const logoSrc = (effectiveSettings.logo_url ?? event.logo_url) ?? undefined;
-  const galleryImages = (effectiveSettings.gallery_images ?? []) as string[];
-  const scheduleItems = (effectiveSettings.schedule_items ?? []) as { time?: string; title?: string; description?: string }[];
-
-  const eventDate = event.date
-    ? new Date(event.date + 'T00:00:00').toLocaleDateString('en-US', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-      })
-    : 'TBA';
-
-  const navItems: { id: string; label: string }[] = [
-    { id: 'home', label: 'Home' },
-    { id: 'find-seat', label: 'Find Seat' },
-    { id: 'venue', label: 'Venue' },
-    { id: 'details', label: 'Details' },
-  ];
-  if (effectiveSettings.enable_schedule) navItems.push({ id: 'schedule', label: 'Schedule' });
-  if (effectiveSettings.enable_gallery) navItems.push({ id: 'gallery', label: 'Gallery' });
-  navItems.push({ id: 'rsvp', label: 'RSVP' });
-
   return (
-    <div className="gp-wrapper" style={themeStyle}>
-      {/* === HERO === */}
-      <section
-        id="home"
-        className="gp-hero"
-        ref={(el) => { sectionsRef.current['home'] = el; }}
-        style={{ minHeight: `var(--gp-banner-height)` }}
-      >
-        {hasCover ? (
-          <img className="gp-hero__image" src={coverSrc} alt="" />
-        ) : (
-          <div className="gp-hero__gradient" />
-        )}
-        {bgSrc && <div className="gp-hero__overlay" />}
-        <div className="gp-hero__content">
-          {logoSrc && (
-            <img
-              className={`gp-hero__logo ${effectiveSettings.logo_rounded ? 'gp-hero__logo--rounded' : ''}`}
-              src={logoSrc}
-              alt={event.name}
-              style={{ width: `var(--gp-logo-size)`, height: `var(--gp-logo-size)` }}
-            />
+    <>
+      {/* Inject Google Fonts for event's heading/body font */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&display=swap');
+        .gp-root { --accent: ${accent}; --bg: ${bg}; }
+      `}</style>
+
+      <div className="gp-root" style={{ '--accent': accent, '--bg': bg } as React.CSSProperties}>
+
+        {/* Language switcher — top right */}
+        <div className="gp-lang-switcher">
+          <button
+            className={`gp-lang-btn${lang === 'en' ? ' gp-lang-btn--active' : ''}`}
+            onClick={() => setLang('en')}
+          >
+            ENGLISH
+          </button>
+          <button
+            className={`gp-lang-btn${lang === 'ms' ? ' gp-lang-btn--active' : ''}`}
+            onClick={() => setLang('ms')}
+          >
+            BAHASA MELAYU
+          </button>
+        </div>
+
+        {/* Hero — centered logo + event info */}
+        <div className="gp-hero">
+          {effectiveSettings.logo_url ? (
+            <img className="gp-logo" src={effectiveSettings.logo_url} alt={event.name} />
+          ) : (
+            <div className="gp-monogram" style={{ color: accent }}>
+              {event.name.charAt(0)}
+            </div>
           )}
-          <h1 className="gp-hero__title">{event.name}</h1>
-          {effectiveSettings.event_subtitle && (
-            <p className="gp-hero__subtitle">{effectiveSettings.event_subtitle}</p>
+
+          <h1 className="gp-event-name" style={{ color: accent }}>{event.name.toUpperCase()}</h1>
+
+          {event.date && (
+            <p className="gp-event-date" style={{ color: accent }}>{formatDate(event.date)}</p>
           )}
-          {effectiveSettings.welcome_message && (
-            <p className="gp-hero__welcome">{effectiveSettings.welcome_message}</p>
+          {event.time && (
+            <p className="gp-event-time" style={{ color: accent }}>{formatTime(event.time)}</p>
           )}
-          <div className="gp-hero__meta">
-            <span className="gp-hero__meta-item">{eventDate}</span>
-            {event.venue && <span className="gp-hero__meta-item">{event.venue}</span>}
+          {event.venue && (
+            <p className="gp-event-venue" style={{ color: accent }}>{event.venue.toUpperCase()}</p>
+          )}
+        </div>
+
+        {/* Segmented tabs */}
+        <div className="gp-tabs-wrap">
+          <div className="gp-tabs" style={{ borderColor: accent }}>
+            <button
+              className={`gp-tab${activeTab === 'find' ? ' gp-tab--active' : ''}`}
+              style={activeTab === 'find' ? { background: accent, color: '#fff', borderColor: accent } : { color: accent, borderColor: 'transparent' }}
+              onClick={() => setActiveTab('find')}
+            >
+              {t.tabFind}
+            </button>
+            <div className="gp-tab-divider" style={{ background: accent }} />
+            <button
+              className={`gp-tab${activeTab === 'venue' ? ' gp-tab--active' : ''}`}
+              style={activeTab === 'venue' ? { background: accent, color: '#fff', borderColor: accent } : { color: accent, borderColor: 'transparent' }}
+              onClick={() => setActiveTab('venue')}
+            >
+              {t.tabVenue}
+            </button>
           </div>
         </div>
-      </section>
 
-      {/* === STICKY NAV === */}
-      <nav className="gp-nav">
-        <div className="gp-nav__inner">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              ref={(el) => { navLinks.current[item.id] = el; }}
-              className={`gp-nav__link ${activeSection === item.id ? 'gp-nav__link--active' : ''}`}
-              onClick={() => scrollTo(item.id)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </nav>
+        {/* Tab content */}
+        <div className="gp-content">
 
-      {/* === FIND SEAT === */}
-      <section
-        id="find-seat"
-        className="gp-section"
-        ref={(el) => { sectionsRef.current['find-seat'] = el; }}
-      >
-        <div className="gp-section__inner">
-          <h2 className="gp-section__title">Find Your Seat</h2>
-          <p className="gp-section__desc">
-            Type your name below to find your assigned table.
-          </p>
-          <input
-            className="gp-search"
-            type="text"
-            placeholder="Enter your name…"
-            value={searchName}
-            onChange={(e) => setSearchName(e.target.value)}
-          />
-          <div className="gp-search__result">
-            {isFetching && <div className="gp-search__loading">Searching…</div>}
-            {!isFetching && searchName.trim() && !guest && (
-              <div className="gp-search__empty">
-                No match found. Try a different spelling or check with the host.
+          {/* ── FIND SEAT TAB ── */}
+          <div className={`gp-tab-panel${activeTab === 'find' ? ' gp-tab-panel--active' : ''}`}>
+
+            {/* Search box */}
+            <div className="gp-search-wrap">
+              <div className="gp-search-box" style={{ borderColor: accent }}>
+                <svg className="gp-search-icon" style={{ color: accent }} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <circle cx="8.5" cy="8.5" r="5.5" />
+                  <path d="M15 15l-3-3" strokeLinecap="round" />
+                </svg>
+                <input
+                  className="gp-search-input"
+                  style={{ color: accent }}
+                  placeholder={t.searchPlaceholder}
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
               </div>
-            )}
-            {!isFetching && guest && (
-              <div className="gp-search__card">
-                <div className="gp-search__guest-name">{guest.name}</div>
-                {guest.table ? (
-                  <div className="gp-search__table">
-                    <span className="gp-search__table-label">Your table</span>
-                    <span className="gp-search__table-name">{guest.table.name}</span>
-                    <span className="gp-search__table-number">Table {guest.table.number}</span>
-                  </div>
+            </div>
+
+            {/* Results */}
+            {searched && (
+              <div className="gp-results-wrap">
+                {results.length === 0 ? (
+                  <div className="gp-no-result" style={{ color: accent }}>{t.noResult}</div>
                 ) : (
-                  <div className="gp-search__no-table">
-                    You don't have a table assignment yet. Please check with the host.
+                  <div className="gp-results-list" style={{ borderColor: accent }}>
+                    {results.map((guest) => (
+                      <GuestResultRow key={guest.id} guest={guest} accent={accent} t={t} />
+                    ))}
                   </div>
                 )}
               </div>
             )}
           </div>
-        </div>
-      </section>
 
-      {/* === VENUE (ZOOM/PAN) === */}
-      <section
-        id="venue"
-        className="gp-section gp-section--alt"
-        ref={(el) => { sectionsRef.current['venue'] = el; }}
-      >
-        <div className="gp-section__inner">
-          <h2 className="gp-section__title">Venue Layout</h2>
-          <p className="gp-section__desc">
-            Zoom and pan to explore the seating arrangement.
-          </p>
-          {venueSrc ? (
-            <div className="gp-venue-viewer">
-              <div
-                className="gp-venue-viewer__viewport"
-                ref={venueRef}
-                onWheel={handleWheel}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-              >
-                <img
-                  className="gp-venue-viewer__image"
-                  src={venueSrc}
-                  alt="Venue layout"
-                  draggable={false}
-                  style={{
-                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                    cursor: isDragging ? 'grabbing' : zoom > 1 ? 'grab' : 'default',
-                  }}
-                />
+          {/* ── VENUE LAYOUT TAB ── */}
+          <div className={`gp-tab-panel${activeTab === 'venue' ? ' gp-tab-panel--active' : ''}`}>
+            {venueImageUrl ? (
+              <div className="gp-venue-wrap">
+                <div
+                  ref={viewportRef}
+                  className={`gp-venue-viewport${isDragging ? ' gp-venue-viewport--dragging' : ''}`}
+                  style={{ borderColor: accent }}
+                  onWheel={handleWheel}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                >
+                  <img
+                    src={venueImageUrl}
+                    alt="Venue layout"
+                    className="gp-venue-image"
+                    draggable={false}
+                    style={{ transform: `translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px)) scale(${zoom})` }}
+                  />
+                </div>
+                <div className="gp-venue-controls">
+                  <button className="gp-venue-ctrl-btn" style={{ borderColor: accent, color: accent }} onClick={() => setZoom((z) => clampZoom(z + 0.2))}>{t.zoomIn}</button>
+                  <button className="gp-venue-ctrl-btn" style={{ borderColor: accent, color: accent }} onClick={() => setZoom((z) => clampZoom(z - 0.2))}>{t.zoomOut}</button>
+                  <button className="gp-venue-ctrl-btn gp-venue-ctrl-btn--reset" style={{ borderColor: accent, color: accent }} onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>{t.reset}</button>
+                  <span className="gp-venue-zoom-pct" style={{ color: accent }}>{Math.round(zoom * 100)}%</span>
+                </div>
               </div>
-              <div className="gp-venue-viewer__controls">
-                <button className="gp-venue-viewer__btn" onClick={zoomIn} aria-label="Zoom in">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
+            ) : (
+              <div className="gp-venue-empty">
+                <div className="gp-venue-empty-icon" style={{ borderColor: accent, color: accent }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" width="40" height="40">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M3 9h18M9 21V9" />
                   </svg>
-                </button>
-                <button className="gp-venue-viewer__btn" onClick={zoomOut} aria-label="Zoom out">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                </button>
-                <button className="gp-venue-viewer__btn" onClick={resetZoom} aria-label="Reset zoom">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 12a9 9 0 1 0 9-9" />
-                    <path d="M3 4v5h5" />
-                  </svg>
-                </button>
-                <span className="gp-venue-viewer__zoom-label">
-                  {Math.round(zoom * 100)}%
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="gp-venue-placeholder">
-              <div className="gp-venue-placeholder__icon">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <path d="M21 15l-5-5L5 21" />
-                </svg>
-              </div>
-              <p className="gp-venue-placeholder__text">
-                No venue layout image has been uploaded yet.
-              </p>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* === DETAILS === */}
-      <section
-        id="details"
-        className="gp-section"
-        ref={(el) => { sectionsRef.current['details'] = el; }}
-      >
-        <div className="gp-section__inner">
-          <h2 className="gp-section__title">Event Details</h2>
-          <div className="gp-details">
-            <div className="gp-details__item">
-              <span className="gp-details__label">Date</span>
-              <span className="gp-details__value">{eventDate}</span>
-            </div>
-            {event.time && (
-              <div className="gp-details__item">
-                <span className="gp-details__label">Time</span>
-                <span className="gp-details__value">{event.time}</span>
-              </div>
-            )}
-            {event.venue && (
-              <div className="gp-details__item">
-                <span className="gp-details__label">Venue</span>
-                <span className="gp-details__value">{event.venue}</span>
+                </div>
+                <p style={{ color: accent }}>{t.venueNoImage}</p>
               </div>
             )}
           </div>
+
         </div>
-      </section>
+      </div>
+    </>
+  );
+}
 
-      {/* === SCHEDULE === */}
-      {effectiveSettings.enable_schedule && scheduleItems.length > 0 && (
-        <section
-          id="schedule"
-          className="gp-section gp-section--alt"
-          ref={(el) => { sectionsRef.current['schedule'] = el; }}
-        >
-          <div className="gp-section__inner">
-            <h2 className="gp-section__title">Schedule</h2>
-            <div className="gp-schedule">
-              {scheduleItems.map((item, i) => (
-                <div key={i} className="gp-schedule__item">
-                  {item.time && <span className="gp-schedule__time">{item.time}</span>}
-                  <div className="gp-schedule__body">
-                    {item.title && <span className="gp-schedule__title">{item.title}</span>}
-                    {item.description && <span className="gp-schedule__desc">{item.description}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
+function GuestResultRow({ guest, accent, t }: { guest: GuestWithTable; accent: string; t: Translation }) {
+  const tableLabel = guest.table
+    ? `${t.tableLabel} ${guest.table.number}${guest.table.name !== String(guest.table.number) ? ` — ${guest.table.name}` : ''}`
+    : null;
 
-      {/* === GALLERY === */}
-      {effectiveSettings.enable_gallery && galleryImages.length > 0 && (
-        <section
-          id="gallery"
-          className="gp-section"
-          ref={(el) => { sectionsRef.current['gallery'] = el; }}
-        >
-          <div className="gp-section__inner">
-            <h2 className="gp-section__title">Gallery</h2>
-            <div className="gp-gallery">
-              {galleryImages.map((img, i) => (
-                <div key={i} className="gp-gallery__item">
-                  <img src={img ?? undefined} alt="" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* === RSVP === */}
-      <section
-        id="rsvp"
-        className="gp-section gp-section--alt"
-        ref={(el) => { sectionsRef.current['rsvp'] = el; }}
-      >
-        <div className="gp-section__inner">
-          <h2 className="gp-section__title">RSVP</h2>
-          {!guest ? (
-            <p className="gp-section__desc">
-              Find your seat above first, then let us know if you'll be attending.
-            </p>
-          ) : (
-            <div className="gp-rsvp">
-              <div className="gp-rsvp__guest">
-                <span className="gp-rsvp__guest-label">Responding for</span>
-                <span className="gp-rsvp__guest-name">{guest.name}</span>
-              </div>
-              <div className="gp-rsvp__statuses">
-                {(['yes', 'maybe', 'no'] as const).map((s) => (
-                  <button
-                    key={s}
-                    className={`gp-rsvp__status ${rsvpStatus === s ? 'gp-rsvp__status--active' : ''}`}
-                    onClick={() => setRsvpStatus(s)}
-                  >
-                    {s === 'yes' ? 'Joyfully Accept' : s === 'no' ? 'Regretfully Decline' : 'Maybe'}
-                  </button>
-                ))}
-              </div>
-              {rsvpStatus === 'yes' && (
-                <div className="gp-rsvp__field">
-                  <label className="gp-rsvp__label">Plus ones</label>
-                  <div className="gp-rsvp__counter">
-                    <button
-                      className="gp-rsvp__counter-btn"
-                      onClick={() => setPlusOnes((n) => Math.max(0, n - 1))}
-                      aria-label="Decrease plus ones"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <line x1="5" y1="12" x2="19" y2="12" />
-                      </svg>
-                    </button>
-                    <span className="gp-rsvp__counter-value">{plusOnes}</span>
-                    <button
-                      className="gp-rsvp__counter-btn"
-                      onClick={() => setPlusOnes((n) => Math.min(10, n + 1))}
-                      aria-label="Increase plus ones"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <line x1="12" y1="5" x2="12" y2="19" />
-                        <line x1="5" y1="12" x2="19" y2="12" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              )}
-              <div className="gp-rsvp__field">
-                <label className="gp-rsvp__label">Message (optional)</label>
-                <textarea
-                  className="gp-rsvp__textarea"
-                  rows={3}
-                  placeholder="Leave a note for the host…"
-                  value={rsvpMessage}
-                  onChange={(e) => setRsvpMessage(e.target.value)}
-                />
-              </div>
-              <button className="gp-rsvp__submit" onClick={handleRSVP}>
-                {rsvpSaved ? 'Response Updated' : 'Send RSVP'}
-              </button>
-              {rsvpSaved && (
-                <p className="gp-rsvp__saved">Thank you! Your response has been recorded.</p>
-              )}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* === FOOTER === */}
-      <footer className="gp-footer">
-        <span className="gp-footer__event">{event.name}</span>
-        <span className="gp-footer__brand">Seatly</span>
-      </footer>
+  return (
+    <div className="gp-result-row" style={{ borderBottomColor: accent }}>
+      <span className="gp-result-name" style={{ color: accent }}>{guest.name.toUpperCase()}</span>
+      <div className="gp-result-badges">
+        {tableLabel && (
+          <span className="gp-badge" style={{ borderColor: accent, color: accent }}>
+            {tableLabel.toUpperCase()}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

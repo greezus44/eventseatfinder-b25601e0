@@ -10,20 +10,16 @@ import { PrintSeatingChartPage } from '@/pages/print-seating-chart-page';
 import { PrintGuestListPage } from '@/pages/print-guest-list-page';
 
 export function Router() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/e/:slug" element={<FindYourSeatPage />} />
-        <Route path="/invite/:slug" element={<InvitationPage />} />
-        <Route element={<ProtectedLayout><AppLayout /></ProtectedLayout>}>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/events/:eventId" element={<EventEditorPage />} />
-          <Route path="/events/:eventId/print/seating" element={<PrintSeatingChartPage />} />
-          <Route path="/events/:eventId/print/guests" element={<PrintGuestListPage />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
-  );
+  return (<BrowserRouter><Routes>
+    <Route path="/login" element={<LoginPage />} />
+    <Route path="/e/:slug" element={<FindYourSeatPage />} />
+    <Route path="/invite/:slug" element={<InvitationPage />} />
+    <Route element={<ProtectedLayout><AppLayout /></ProtectedLayout>}>
+      <Route path="/" element={<DashboardPage />} />
+      <Route path="/events/:eventId" element={<EventEditorPage />} />
+      <Route path="/events/:eventId/print/seating" element={<PrintSeatingChartPage />} />
+      <Route path="/events/:eventId/print/guests" element={<PrintGuestListPage />} />
+    </Route>
+    <Route path="*" element={<Navigate to="/" replace />} />
+  </Routes></BrowserRouter>);
 }
