@@ -1,114 +1,81 @@
 export interface FontOption {
-  label: string;
-  value: string;
-  css: string;
+  name: string;
+  cssName: string;
 }
 
 export const GOOGLE_FONTS: FontOption[] = [
-  { label: 'Inter', value: 'Inter', css: 'Inter:wght@300;400;500;600;700' },
-  {
-    label: 'Playfair Display',
-    value: 'Playfair Display',
-    css: 'Playfair+Display:wght@400;500;600;700',
-  },
-  {
-    label: 'Cormorant Garamond',
-    value: 'Cormorant Garamond',
-    css: 'Cormorant+Garamond:wght@300;400;500;600;700',
-  },
-  {
-    label: 'Montserrat',
-    value: 'Montserrat',
-    css: 'Montserrat:wght@300;400;500;600;700',
-  },
-  { label: 'Lora', value: 'Lora', css: 'Lora:wght@400;500;600;700' },
-  {
-    label: 'Merriweather',
-    value: 'Merriweather',
-    css: 'Merriweather:wght@300;400;700',
-  },
-  {
-    label: 'Poppins',
-    value: 'Poppins',
-    css: 'Poppins:wght@300;400;500;600;700',
-  },
-  { label: 'Roboto', value: 'Roboto', css: 'Roboto:wght@300;400;500;700' },
-  {
-    label: 'Open Sans',
-    value: 'Open Sans',
-    css: 'Open+Sans:wght@300;400;500;600;700',
-  },
-  {
-    label: 'Source Sans 3',
-    value: 'Source Sans 3',
-    css: 'Source+Sans+3:wght@300;400;500;600;700',
-  },
-  {
-    label: 'Work Sans',
-    value: 'Work Sans',
-    css: 'Work+Sans:wght@300;400;500;600;700',
-  },
-  {
-    label: 'DM Serif Display',
-    value: 'DM Serif Display',
-    css: 'DM+Serif+Display:wght@400',
-  },
-  {
-    label: 'EB Garamond',
-    value: 'EB Garamond',
-    css: 'EB+Garamond:wght@400;500;600;700',
-  },
-  {
-    label: 'Nunito Sans',
-    value: 'Nunito Sans',
-    css: 'Nunito+Sans:wght@300;400;600;700',
-  },
-  {
-    label: 'Crimson Text',
-    value: 'Crimson Text',
-    css: 'Crimson+Text:wght@400;600;700',
-  },
-  {
-    label: 'Josefin Sans',
-    value: 'Josefin Sans',
-    css: 'Josefin+Sans:wght@300;400;500;600;700',
-  },
-  { label: 'Karla', value: 'Karla', css: 'Karla:wght@300;400;500;700' },
-  { label: 'Mulish', value: 'Mulish', css: 'Mulish:wght@300;400;500;600;700' },
-  {
-    label: 'Spectral',
-    value: 'Spectral',
-    css: 'Spectral:wght@300;400;500;600;700',
-  },
-  {
-    label: 'Fraunces',
-    value: 'Fraunces',
-    css: 'Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700',
-  },
+  { name: 'Inter', cssName: 'Inter' },
+  { name: 'Roboto', cssName: 'Roboto' },
+  { name: 'Open Sans', cssName: 'Open Sans' },
+  { name: 'Lato', cssName: 'Lato' },
+  { name: 'Montserrat', cssName: 'Montserrat' },
+  { name: 'Poppins', cssName: 'Poppins' },
+  { name: 'Playfair Display', cssName: 'Playfair Display' },
+  { name: 'Merriweather', cssName: 'Merriweather' },
+  { name: 'Lora', cssName: 'Lora' },
+  { name: 'Nunito', cssName: 'Nunito' },
+  { name: 'Raleway', cssName: 'Raleway' },
+  { name: 'Oswald', cssName: 'Oswald' },
+  { name: 'Cormorant Garamond', cssName: 'Cormorant Garamond' },
+  { name: 'Dancing Script', cssName: 'Dancing Script' },
+  { name: 'Bebas Neue', cssName: 'Bebas Neue' },
+  { name: 'Quicksand', cssName: 'Quicksand' },
+  { name: 'PT Serif', cssName: 'PT Serif' },
+  { name: 'Work Sans', cssName: 'Work Sans' },
+  { name: 'DM Serif Display', cssName: 'DM Serif Display' },
+  { name: 'Cinzel', cssName: 'Cinzel' },
 ];
 
-export const FONT_WEIGHTS = [
-  { label: 'Light 300', value: 300 },
-  { label: 'Regular 400', value: 400 },
-  { label: 'Medium 500', value: 500 },
-  { label: 'SemiBold 600', value: 600 },
-  { label: 'Bold 700', value: 700 },
+export const FONT_WEIGHTS: number[] = [
+  100, 200, 300, 400, 500, 600, 700, 800, 900,
 ];
 
-export const FONT_SIZE_OPTIONS = [
-  10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 40, 44,
-  48, 52, 56, 60, 64, 72,
+export const FONT_SIZE_OPTIONS: number[] = [
+  12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 44, 48, 56, 64, 72, 80, 96,
 ];
 
-export function getFontLinkTag(): string {
-  const families = GOOGLE_FONTS.map((f) => `family=${f.css}`).join('&');
-  return `<link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin /><link href="https://fonts.googleapis.com/css2?${families}&display=swap" rel="stylesheet" />`;
+/**
+ * Returns a <link> tag string for loading the given Google Fonts.
+ * De-duplicates font names.
+ */
+export function getFontLinkTag(fontFamilies: string[]): string {
+  const unique = Array.from(
+    new Set(
+      fontFamilies.filter(
+        (f) => f && GOOGLE_FONTS.some((gf) => gf.name === f)
+      )
+    )
+  );
+  if (unique.length === 0) return '';
+  const families = unique
+    .map((f) => {
+      const cssName = GOOGLE_FONTS.find((gf) => gf.name === f)?.cssName ?? f;
+      return `family=${cssName.replace(/ /g, '+')}:wght@300;400;500;600;700;800`;
+    })
+    .join('&');
+  return `https://fonts.googleapis.com/css2?${families}&display=swap`;
 }
 
-export function getFontCss(fontFamily: string): string {
-  const font = GOOGLE_FONTS.find(
-    (f) => f.value === fontFamily || f.label === fontFamily
-  );
-  if (!font) return '';
-  return `@import url('https://fonts.googleapis.com/css2?family=${font.css}&display=swap');`;
+/**
+ * Returns a CSS font-family declaration string for the given font name.
+ */
+export function getFontCss(fontFamily: string | null | undefined): string {
+  if (!fontFamily) return "'Inter', sans-serif";
+  const cssName =
+    GOOGLE_FONTS.find((gf) => gf.name === fontFamily)?.cssName ?? fontFamily;
+  return `'${cssName}', sans-serif`;
+}
+
+/**
+ * Returns a CSS font-size string (e.g. "32px") or a fallback.
+ */
+export function getFontSize(size: number | null | undefined): string {
+  return size ? `${size}px` : '16px';
+}
+
+/**
+ * Returns a CSS font-weight string or a fallback.
+ */
+export function getFontWeight(weight: number | null | undefined): string {
+  return weight ? String(weight) : '400';
 }

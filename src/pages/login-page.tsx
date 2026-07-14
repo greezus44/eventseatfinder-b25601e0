@@ -1,95 +1,90 @@
-import { useState, FormEvent } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/providers/auth-provider';
-import { useToast } from '@/providers/toast-provider';
 
 export function LoginPage() {
-  const { signIn, signUp } = useAuth();
-  const toast = useToast();
   const navigate = useNavigate();
-
-  const [isSignUp, setIsSignUp] = useState(false);
+  const { signIn, signUp } = useAuth();
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
-
-    const result = isSignUp
-      ? await signUp(email, password)
-      : await signIn(email, password);
-
+    const result =
+      mode === 'signin'
+        ? await signIn(email, password)
+        : await signUp(email, password);
     setLoading(false);
-
     if (result.error) {
       setError(result.error);
-      return;
-    }
-
-    if (isSignUp) {
-      toast('Account created. Please sign in.', 'success');
-      setIsSignUp(false);
-      setEmail('');
-      setPassword('');
     } else {
-      navigate('/');
+      navigate('/dashboard');
     }
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <h1 className="auth-title">Seatly</h1>
-        <p className="auth-subtitle">
-          {isSignUp ? 'Create your account' : 'Sign in to your account'}
+    <div className="login-page">
+      <div className="login-card">
+        <h1 className="login-title">◆ Seatly</h1>
+        <p className="login-subtitle">
+          {mode === 'signin' ? 'Welcome back' : 'Create your account'}
         </p>
-
-        {error && <div className="auth-error">{error}</div>}
-
+        {error && <div className="login-error">{error}</div>}
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label">Email</label>
+            <label htmlFor="email">Email</label>
             <input
+              id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               required
+              autoComplete="email"
             />
           </div>
           <div className="form-group">
-            <label className="form-label">Password</label>
+            <label htmlFor="password">Password</label>
             <input
+              id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
+              autoComplete={
+                mode === 'signin' ? 'current-password' : 'new-password'
+              }
             />
           </div>
           <button
             type="submit"
-            className="btn btn-primary w-full"
+            className="btn btn-primary btn-block"
             disabled={loading}
           >
             {loading
-              ? 'Please wait...'
-              : isSignUp
-                ? 'Sign Up'
-                : 'Sign In'}
+              ? 'Please wait…'
+              : mode === 'signin'
+                ? 'Sign In'
+                : 'Sign Up'}
           </button>
         </form>
-
-        <div className="auth-toggle">
-          {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
-          <button onClick={() => setIsSignUp(!isSignUp)}>
-            {isSignUp ? 'Sign In' : 'Sign Up'}
+        <p className="login-toggle">
+          {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
+          <button
+            onClick={() => {
+              setMode(mode === 'signin' ? 'signup' : 'signin');
+              setError(null);
+            }}
+          >
+            {mode === 'signin' ? 'Sign up' : 'Sign in'}
           </button>
-        </div>
+        </p>
       </div>
     </div>
   );

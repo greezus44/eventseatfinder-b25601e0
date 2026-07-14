@@ -1,74 +1,66 @@
+import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useEvent } from '@/hooks/use-events';
 import { useGuests } from '@/hooks/use-guests';
 import { useTables } from '@/hooks/use-tables';
 
 export function PrintGuestListPage() {
-  const { id } = useParams<{ id: string }>();
-  const { data: event } = useEvent(id);
-  const { data: guests } = useGuests(id);
-  const { data: tables } = useTables(id);
+  const { eventId } = useParams<{ eventId: string }>();
+  const { data: event } = useEvent(eventId ?? '');
+  const { data: guests, isLoading: guestsLoading } = useGuests(eventId ?? '');
+  const { data: tables } = useTables(eventId ?? '');
 
-  if (!event) {
-    return (
-      <div className="print-page">
-        <p className="empty-state">Loading...</p>
-      </div>
-    );
-  }
-
-  const tableNameMap = new Map<string, string>();
-  (tables ?? []).forEach((t) => {
-    tableNameMap.set(t.id, `Table ${t.number} — ${t.name}`);
-  });
-
-  const sortedGuests = [...(guests ?? [])].sort((a, b) =>
-    a.name.localeCompare(b.name)
-  );
+  const tableNameMap = React.useMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of tables ?? []) m.set(t.id, t.name);
+    return m;
+  }, [tables]);
 
   return (
     <div className="print-page">
-      <div className="no-print flex gap-2 mb-4">
-        <Link to={`/events/${id}`} className="btn btn-secondary">
-          Back to Event
+      <div className="print-header">
+        <h1 className="print-title">{event?.name ?? 'Event'}</h1>
+        <p className="print-subtitle">Guest List</p>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+        <Link to={`/events/${eventId}`} className="btn btn-secondary btn-sm">
+          ← Back to Editor
         </Link>
-        <button className="btn btn-primary" onClick={() => window.print()}>
+        <button className="btn btn-primary btn-sm" onClick={() => window.print()}>
           Print
         </button>
       </div>
 
-      <h1 className="print-page-title">{event.name}</h1>
-      <p className="print-page-subtitle">
-        Guest List ({sortedGuests.length} guests)
-        {event.date ? ` • ${event.date}` : ''}
-        {event.venue ? ` • ${event.venue}` : ''}
-      </p>
-
-      {sortedGuests.length === 0 ? (
-        <div className="empty-state">No guests yet.</div>
+      {guestsLoading ? (
+        <div className="empty-state">
+          <div className="spinner" style={{ margin: '0 auto 16px' }} />
+          <p className="loading-text">Loading…</p>
+        </div>
+      ) : !guests || guests.length === 0 ? (
+        <div className="empty-state">
+          <p className="empty-state-title">No guests</p>
+          <p>Add guests to see the guest list.</p>
+        </div>
       ) : (
-        <table className="print-table">
-          <thead>
-            <tr>
-              <th style={{ width: '40px' }}>#</th>
-              <th>Name</th>
-              <th>Table</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedGuests.map((guest, i) => (
-              <tr key={guest.id}>
-                <td>{i + 1}</td>
-                <td>{guest.name}</td>
-                <td>
-                  {guest.table_id
-                    ? tableNameMap.get(guest.table_id) ?? '—'
-                    : '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="print-table-card">
+          <div className="print-table-name">
+            Guest List ({guests.length} guests)
+          </div>
+          {guests.map((g, i) => (
+            <div key={g.id} className="print-guest-row">
+              <span>
+                {g.name}
+                {g.table_id && (
+                  <span style={{ color: 'var(--gray-500)', marginLeft: 8 }}>
+                    · {tableNameMap.get(g.table_id) ?? 'Unknown table'}
+                  </span>
+                )}
+              </span>
+              <span className="print-guest-number">#{i + 1}</span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

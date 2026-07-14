@@ -4,18 +4,17 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { Table, TableInput } from '@/types';
+import type { Table, TableInput } from '@/types';
 
-export function useTables(eventId: string | undefined) {
+export function useTables(eventId: string) {
   return useQuery({
     queryKey: ['tables', eventId],
     queryFn: async () => {
-      if (!eventId) return [];
       const { data, error } = await supabase
         .from('tables')
         .select('*')
         .eq('event_id', eventId)
-        .order('number', { ascending: true });
+        .order('name', { ascending: true });
       if (error) throw error;
       return data as Table[];
     },
@@ -24,10 +23,12 @@ export function useTables(eventId: string | undefined) {
 }
 
 export function useCreateTable() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { eventId: string } & TableInput) => {
-      const { eventId, ...input } = params;
+    mutationFn: async ({
+      eventId,
+      ...input
+    }: { eventId: string } & TableInput) => {
       const { data, error } = await supabase
         .from('tables')
         .insert({ event_id: eventId, ...input })
@@ -36,17 +37,20 @@ export function useCreateTable() {
       if (error) throw error;
       return data as Table;
     },
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ['tables', data.event_id] });
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['tables', variables.eventId] });
     },
   });
 }
 
 export function useUpdateTable() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { id: string } & Partial<TableInput> & { eventId?: string }) => {
-      const { id, eventId, ...input } = params;
+    mutationFn: async ({
+      eventId,
+      id,
+      ...input
+    }: { eventId: string; id: string } & TableInput) => {
       const { data, error } = await supabase
         .from('tables')
         .update(input)
@@ -54,43 +58,38 @@ export function useUpdateTable() {
         .select()
         .single();
       if (error) throw error;
-      return { data: data as Table, eventId };
+      return data as Table;
     },
     onSuccess: (_data, variables) => {
-      if (variables.eventId) {
-        qc.invalidateQueries({ queryKey: ['tables', variables.eventId] });
-      }
+      queryClient.invalidateQueries({ queryKey: ['tables', variables.eventId] });
     },
   });
 }
 
 export function useDeleteTable() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { id: string; eventId: string }) => {
-      const { error } = await supabase
-        .from('tables')
-        .delete()
-        .eq('id', params.id);
+    mutationFn: async ({ id, eventId }: { id: string; eventId: string }) => {
+      const { error } = await supabase.from('tables').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ['tables', variables.eventId] });
+      queryClient.invalidateQueries({ queryKey: ['tables', variables.eventId] });
     },
   });
 }
 
 export function useBulkCreateTables() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: {
+    mutationFn: async ({
+      event_id,
+      tables,
+    }: {
       event_id: string;
       tables: TableInput[];
     }) => {
-      const payload = params.tables.map((t) => ({
-        event_id: params.event_id,
-        ...t,
-      }));
+      const payload = tables.map((t) => ({ event_id, ...t }));
       const { data, error } = await supabase
         .from('tables')
         .insert(payload)
@@ -99,7 +98,7 @@ export function useBulkCreateTables() {
       return data as Table[];
     },
     onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ['tables', variables.event_id] });
+      queryClient.invalidateQueries({ queryKey: ['tables', variables.event_id] });
     },
   });
 }

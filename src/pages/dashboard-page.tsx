@@ -1,151 +1,159 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useEvents, useCreateEvent, useDeleteEvent } from '@/hooks/use-events';
 import { useAuth } from '@/providers/auth-provider';
 import { useToast } from '@/providers/toast-provider';
 import { useConfirmDialog } from '@/components/confirm-dialog';
-import {
-  useEvents,
-  useCreateEvent,
-  useDeleteEvent,
-} from '@/hooks/use-events';
-import { Event } from '@/types';
+import { classifyError } from '@/lib/guest-import';
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const toast = useToast();
-  const navigate = useNavigate();
   const { confirm, dialog } = useConfirmDialog();
   const { data: events, isLoading } = useEvents();
   const createEvent = useCreateEvent();
   const deleteEvent = useDeleteEvent();
 
   const [showCreate, setShowCreate] = useState(false);
-  const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newSlug, setNewSlug] = useState('');
 
-  const handleCreate = async () => {
-    if (!name.trim() || !slug.trim() || !user) return;
+  const slugify = (s: string) =>
+    s
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-');
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    const slug = newSlug || slugify(newName);
+    if (!slug) {
+      toast('Please enter a slug', 'error');
+      return;
+    }
     try {
-      const created = await createEvent.mutateAsync({
-        name: name.trim(),
-        slug: slug.trim(),
+      await createEvent.mutateAsync({
+        name: newName,
+        slug,
         user_id: user.id,
-        invitation_enabled: false,
       });
       toast('Event created', 'success');
+      setNewName('');
+      setNewSlug('');
       setShowCreate(false);
-      setName('');
-      setSlug('');
-      navigate(`/events/${created.id}`);
     } catch (err) {
-      toast(
-        err instanceof Error ? err.message : 'Failed to create event',
-        'error'
-      );
+      const { message } = classifyError(err);
+      toast(message, 'error');
     }
   };
 
-  const handleDelete = (event: Event) => {
-    confirm({
-      title: 'Delete Event',
-      message: `Are you sure you want to delete "${event.name}"? This cannot be undone.`,
-      confirmLabel: 'Delete',
-      onConfirm: async () => {
-        try {
-          await deleteEvent.mutateAsync(event.id);
-          toast('Event deleted', 'success');
-        } catch (err) {
-          toast(
-            err instanceof Error ? err.message : 'Failed to delete event',
-            'error'
-          );
-        }
-      },
+  const handleDelete = async (id: string, name: string) => {
+    const ok = await confirm({
+      title: 'Delete event',
+      message: `Are you sure you want to delete "${name}"? This cannot be undone.`,
+      confirmText: 'Delete',
     });
-  };
-
-  const formatDate = (event: Event) => {
-    const parts: string[] = [];
-    if (event.date) parts.push(event.date);
-    if (event.time) parts.push(event.time);
-    if (event.venue) parts.push(event.venue);
-    return parts.join(' • ');
+    if (!ok) return;
+    try {
+      await deleteEvent.mutateAsync(id);
+      toast('Event deleted', 'success');
+    } catch (err) {
+      const { message } = classifyError(err);
+      toast(message, 'error');
+    }
   };
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="page-title">Your Events</h1>
+      <div className="dashboard-header">
+        <h1 className="dashboard-title">Your Events</h1>
         <button
           className="btn btn-primary"
           onClick={() => setShowCreate(!showCreate)}
         >
-          New Event
+          {showCreate ? 'Cancel' : '+ New Event'}
         </button>
       </div>
 
-      {dialog()}
+      {dialog}
 
       {showCreate && (
-        <div className="card mb-4">
-          <div className="form-group">
-            <label className="form-label">Event Name</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="My Wedding"
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Slug</label>
-            <input
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              placeholder="my-wedding"
-            />
-          </div>
-          <div className="flex gap-2">
+        <div className="card" style={{ marginBottom: 24 }}>
+          <form onSubmit={handleCreate}>
+            <div className="form-group">
+              <label htmlFor="event-name">Event Name</label>
+              <input
+                id="event-name"
+                value={newName}
+                onChange={(e) => {
+                  setNewName(e.target.value);
+                  setNewSlug(slugify(e.target.value));
+                }}
+                placeholder="My Wedding"
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="event-slug">URL Slug</label>
+              <input
+                id="event-slug"
+                value={newSlug}
+                onChange={(e) => setNewSlug(slugify(e.target.value))}
+                placeholder="my-wedding"
+                required
+              />
+            </div>
             <button
+              type="submit"
               className="btn btn-primary"
-              onClick={handleCreate}
               disabled={createEvent.isPending}
             >
-              Create
+              {createEvent.isPending ? 'Creating…' : 'Create Event'}
             </button>
-            <button className="btn btn-secondary" onClick={() => setShowCreate(false)}>
-              Cancel
-            </button>
-          </div>
+          </form>
         </div>
       )}
 
       {isLoading ? (
-        <div className="empty-state">Loading events...</div>
+        <div className="empty-state">
+          <div className="spinner" style={{ margin: '0 auto 16px' }} />
+          <p className="loading-text">Loading events…</p>
+        </div>
       ) : !events || events.length === 0 ? (
         <div className="empty-state">
-          No events yet. Click "New Event" to get started.
+          <p className="empty-state-title">No events yet</p>
+          <p>Create your first event to get started.</p>
         </div>
       ) : (
-        <div className="event-list">
+        <div className="grid grid-auto">
           {events.map((event) => (
             <div key={event.id} className="event-card">
               <div
+                className="event-card-name"
+                style={{ cursor: 'pointer' }}
                 onClick={() => navigate(`/events/${event.id}`)}
-                style={{ cursor: 'pointer', flex: 1 }}
               >
-                <div className="event-card-name">{event.name}</div>
-                <div className="event-card-meta">{formatDate(event)}</div>
+                {event.name}
               </div>
+              <div className="event-card-meta">
+                {event.date && <span>{event.date}</span>}
+                {event.venue && <span> · {event.venue}</span>}
+              </div>
+              <div className="event-card-meta">/e/{event.slug}</div>
               <div className="event-card-actions">
                 <button
-                  className="btn btn-secondary"
+                  className="btn btn-secondary btn-sm"
                   onClick={() => navigate(`/events/${event.id}`)}
                 >
                   Edit
                 </button>
                 <button
-                  className="btn btn-danger"
-                  onClick={() => handleDelete(event)}
+                  className="btn btn-danger btn-sm"
+                  onClick={() => handleDelete(event.id, event.name)}
                 >
                   Delete
                 </button>

@@ -4,63 +4,54 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { CheckIn } from '@/types';
+import type { CheckIn } from '@/types';
 
-export function useCheckIns(eventId: string | undefined) {
+export function useCheckIns(guestId: string) {
   return useQuery({
-    queryKey: ['check-ins', eventId],
+    queryKey: ['check-ins', guestId],
     queryFn: async () => {
-      if (!eventId) return [];
       const { data, error } = await supabase
         .from('check_ins')
         .select('*')
-        .eq('event_id', eventId)
-        .order('checked_in_at', { ascending: false });
+        .eq('guest_id', guestId)
+        .maybeSingle();
       if (error) throw error;
-      return data as CheckIn[];
+      return data as CheckIn | null;
     },
-    enabled: !!eventId,
+    enabled: !!guestId,
   });
 }
 
 export function useCreateCheckIn() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: {
-      eventId: string;
-      guestId: string;
-      plusOnesActual: number;
-    }) => {
+    mutationFn: async (guestId: string) => {
       const { data, error } = await supabase
         .from('check_ins')
-        .insert({
-          event_id: params.eventId,
-          guest_id: params.guestId,
-          plus_ones_actual: params.plusOnesActual,
-        })
+        .insert({ guest_id: guestId })
         .select()
-        .single();
+        .maybeSingle();
       if (error) throw error;
-      return data as CheckIn;
+      return data as CheckIn | null;
     },
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ['check-ins', data.event_id] });
+    onSuccess: (_data, guestId) => {
+      queryClient.invalidateQueries({ queryKey: ['check-ins', guestId] });
     },
   });
 }
 
 export function useDeleteCheckIn() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { id: string; eventId: string }) => {
+    mutationFn: async (guestId: string) => {
       const { error } = await supabase
         .from('check_ins')
         .delete()
-        .eq('id', params.id);
+        .eq('guest_id', guestId);
       if (error) throw error;
     },
-    onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ['check-ins', variables.eventId] });
+    onSuccess: (_data, guestId) => {
+      queryClient.invalidateQueries({ queryKey: ['check-ins', guestId] });
     },
   });
 }

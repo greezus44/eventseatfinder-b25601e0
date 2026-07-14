@@ -1,53 +1,96 @@
-import { useState, useCallback, ReactNode } from 'react';
+import React, { useState, useCallback } from 'react';
 
 interface ConfirmOptions {
-  title: string;
+  title?: string;
   message: string;
-  confirmLabel?: string;
-  onConfirm: () => void;
+  confirmText?: string;
+  cancelText?: string;
 }
 
-export function useConfirmDialog() {
-  const [options, setOptions] = useState<ConfirmOptions | null>(null);
+interface ConfirmDialogState extends ConfirmOptions {
+  open: boolean;
+  resolve: (value: boolean) => void;
+}
 
-  const confirm = useCallback((opts: ConfirmOptions) => {
-    setOptions(opts);
+interface UseConfirmDialogReturn {
+  confirm: (options: ConfirmOptions) => Promise<boolean>;
+  dialog: React.ReactNode;
+}
+
+export function useConfirmDialog(): UseConfirmDialogReturn {
+  const [state, setState] = useState<ConfirmDialogState | null>(null);
+
+  const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
+    return new Promise((resolve) => {
+      setState({ ...options, open: true, resolve });
+    });
   }, []);
 
-  const handleConfirm = useCallback(() => {
-    options?.onConfirm();
-    setOptions(null);
-  }, [options]);
-
-  const handleCancel = useCallback(() => {
-    setOptions(null);
-  }, []);
-
-  const dialog = (): ReactNode => {
-    if (!options) return null;
-    return (
-      <div className="confirm-dialog-overlay">
-        <div className="confirm-dialog">
-          <h2 className="confirm-dialog-title">{options.title}</h2>
-          <p className="confirm-dialog-message">{options.message}</p>
-          <div className="confirm-dialog-actions">
-            <button
-              className="btn btn-secondary"
-              onClick={handleCancel}
-            >
-              Cancel
-            </button>
-            <button
-              className="btn btn-primary"
-              onClick={handleConfirm}
-            >
-              {options.confirmLabel ?? 'Confirm'}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  const handleClose = (result: boolean) => {
+    if (state) {
+      state.resolve(result);
+      setState(null);
+    }
   };
 
+  const dialog = state ? (
+    <div className="confirm-overlay" onClick={() => handleClose(false)}>
+      <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+        {state.title && <h2 className="confirm-title">{state.title}</h2>}
+        <p className="confirm-message">{state.message}</p>
+        <div className="confirm-actions">
+          <button
+            className="btn btn-secondary"
+            onClick={() => handleClose(false)}
+          >
+            {state.cancelText ?? 'Cancel'}
+          </button>
+          <button
+            className="btn btn-danger"
+            onClick={() => handleClose(true)}
+          >
+            {state.confirmText ?? 'Confirm'}
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   return { confirm, dialog };
+}
+
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmText,
+  cancelText,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title?: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="confirm-overlay" onClick={onCancel}>
+      <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+        {title && <h2 className="confirm-title">{title}</h2>}
+        <p className="confirm-message">{message}</p>
+        <div className="confirm-actions">
+          <button className="btn btn-secondary" onClick={onCancel}>
+            {cancelText ?? 'Cancel'}
+          </button>
+          <button className="btn btn-danger" onClick={onConfirm}>
+            {confirmText ?? 'Confirm'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

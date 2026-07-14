@@ -4,28 +4,12 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { GuestPageSettings, GuestPageSettingsInput, Event } from '@/types';
+import type { GuestPageSettings, GuestPageSettingsInput } from '@/types';
 
-export type GuestPageSettingsWithEvent = GuestPageSettings & {
-  event: Pick<
-    Event,
-    | 'id'
-    | 'name'
-    | 'slug'
-    | 'date'
-    | 'time'
-    | 'venue'
-    | 'logo_url'
-    | 'cover_url'
-    | 'accent_color'
-  >;
-};
-
-export function useGuestPageSettings(eventId: string | undefined) {
+export function useGuestPageSettings(eventId: string) {
   return useQuery({
     queryKey: ['guest-page-settings', eventId],
     queryFn: async () => {
-      if (!eventId) return null;
       const { data, error } = await supabase
         .from('guest_page_settings')
         .select('*')
@@ -38,60 +22,40 @@ export function useGuestPageSettings(eventId: string | undefined) {
   });
 }
 
-export function useGuestPageSettingsBySlug(slug: string | undefined) {
+export function useGuestPageSettingsBySlug(slug: string) {
   return useQuery({
-    queryKey: ['guest-page-settings-by-slug', slug],
+    queryKey: ['guest-page-settings-slug', slug],
     queryFn: async () => {
-      if (!slug) return null;
       const { data, error } = await supabase
         .from('guest_page_settings')
-        .select(
-          '*, event:events(id, name, slug, date, time, venue, logo_url, cover_url, accent_color)'
-        )
+        .select('*, event:events(*)')
         .eq('event.slug', slug)
         .maybeSingle();
       if (error) throw error;
-      return data as GuestPageSettingsWithEvent | null;
+      return data as (GuestPageSettings & { event: any }) | null;
     },
     enabled: !!slug,
   });
 }
 
 export function useUpsertGuestPageSettings() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { eventId: string } & GuestPageSettingsInput) => {
-      const { eventId, ...input } = params;
-
-      const { data: existing } = await supabase
+    mutationFn: async (input: GuestPageSettingsInput) => {
+      const { data, error } = await supabase
         .from('guest_page_settings')
-        .select('id')
-        .eq('event_id', eventId)
+        .upsert(input)
+        .select()
         .maybeSingle();
-
-      if (existing) {
-        const { data, error } = await supabase
-          .from('guest_page_settings')
-          .update(input)
-          .eq('event_id', eventId)
-          .select()
-          .single();
-        if (error) throw error;
-        return data as GuestPageSettings;
-      } else {
-        const { data, error } = await supabase
-          .from('guest_page_settings')
-          .insert({ event_id: eventId, ...input })
-          .select()
-          .single();
-        if (error) throw error;
-        return data as GuestPageSettings;
-      }
+      if (error) throw error;
+      return data as GuestPageSettings | null;
     },
-    onSuccess: (data) => {
-      qc.invalidateQueries({
-        queryKey: ['guest-page-settings', data.event_id],
-      });
+    onSuccess: (_data, variables) => {
+      if (variables.event_id) {
+        queryClient.invalidateQueries({
+          queryKey: ['guest-page-settings', variables.event_id],
+        });
+      }
     },
   });
 }

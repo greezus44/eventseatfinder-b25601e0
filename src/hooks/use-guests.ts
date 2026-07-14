@@ -4,18 +4,17 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { Guest, GuestInput } from '@/types';
+import type { Guest, GuestInput } from '@/types';
 
-export function useGuests(eventId: string | undefined) {
+export function useGuests(eventId: string) {
   return useQuery({
     queryKey: ['guests', eventId],
     queryFn: async () => {
-      if (!eventId) return [];
       const { data, error } = await supabase
         .from('guests')
         .select('*')
         .eq('event_id', eventId)
-        .order('created_at', { ascending: true });
+        .order('name', { ascending: true });
       if (error) throw error;
       return data as Guest[];
     },
@@ -24,10 +23,12 @@ export function useGuests(eventId: string | undefined) {
 }
 
 export function useCreateGuest() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { eventId: string } & GuestInput) => {
-      const { eventId, ...input } = params;
+    mutationFn: async ({
+      eventId,
+      ...input
+    }: { eventId: string } & GuestInput) => {
       const { data, error } = await supabase
         .from('guests')
         .insert({ event_id: eventId, ...input })
@@ -36,49 +37,48 @@ export function useCreateGuest() {
       if (error) throw error;
       return data as Guest;
     },
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ['guests', data.event_id] });
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['guests', variables.eventId] });
     },
   });
 }
 
 export function useDeleteGuest() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { id: string; eventId: string }) => {
-      const { error } = await supabase
-        .from('guests')
-        .delete()
-        .eq('id', params.id);
+    mutationFn: async ({ id, eventId }: { id: string; eventId: string }) => {
+      const { error } = await supabase.from('guests').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ['guests', variables.eventId] });
+      queryClient.invalidateQueries({ queryKey: ['guests', variables.eventId] });
     },
   });
 }
 
 export function useBulkCreateGuests() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: {
+    mutationFn: async ({
+      eventId,
+      guests,
+    }: {
       eventId: string;
       guests: GuestInput[];
     }) => {
-      const batchSize = 500;
+      const BATCH_SIZE = 500;
       const results: Guest[] = [];
-      for (let i = 0; i < params.guests.length; i += batchSize) {
-        const batch = params.guests.slice(i, i + batchSize);
-        const payload = batch.map((g) => ({
-          event_id: params.eventId,
+      for (let i = 0; i < guests.length; i += BATCH_SIZE) {
+        const batch = guests.slice(i, i + BATCH_SIZE).map((g) => ({
+          event_id: eventId,
           ...g,
         }));
         console.log(
-          `Inserting guests batch ${Math.floor(i / batchSize) + 1}: ${batch.length} guests`
+          `Inserting batch ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} guests)`
         );
         const { data, error } = await supabase
           .from('guests')
-          .insert(payload)
+          .insert(batch)
           .select();
         if (error) throw error;
         if (data) results.push(...(data as Guest[]));
@@ -86,7 +86,7 @@ export function useBulkCreateGuests() {
       return results;
     },
     onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ['guests', variables.eventId] });
+      queryClient.invalidateQueries({ queryKey: ['guests', variables.eventId] });
     },
   });
 }

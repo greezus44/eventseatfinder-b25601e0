@@ -4,7 +4,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { Event, EventInput } from '@/types';
+import type { Event, EventInput } from '@/types';
 
 export function useEvents() {
   return useQuery({
@@ -20,11 +20,10 @@ export function useEvents() {
   });
 }
 
-export function useEvent(id: string | undefined) {
+export function useEvent(id: string) {
   return useQuery({
     queryKey: ['event', id],
     queryFn: async () => {
-      if (!id) return null;
       const { data, error } = await supabase
         .from('events')
         .select('*')
@@ -38,7 +37,7 @@ export function useEvent(id: string | undefined) {
 }
 
 export function useCreateEvent() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: EventInput & { user_id: string }) => {
       const { data, error } = await supabase
@@ -50,16 +49,15 @@ export function useCreateEvent() {
       return data as Event;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
     },
   });
 }
 
 export function useUpdateEvent() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { id: string } & EventInput) => {
-      const { id, ...input } = params;
+    mutationFn: async ({ id, ...input }: { id: string } & EventInput) => {
       const { data, error } = await supabase
         .from('events')
         .update(input)
@@ -69,39 +67,36 @@ export function useUpdateEvent() {
       if (error) throw error;
       return data as Event;
     },
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ['events'] });
-      qc.invalidateQueries({ queryKey: ['event', data.id] });
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['event', variables.id] });
     },
   });
 }
 
 export function useDeleteEvent() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('events').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
     },
   });
 }
 
-export function useCheckSlugAvailability(slug: string, currentEventId?: string) {
-  return useQuery({
-    queryKey: ['slug-availability', slug, currentEventId],
-    queryFn: async () => {
-      if (!slug) return { available: false };
-      let query = supabase.from('events').select('id').eq('slug', slug);
-      if (currentEventId) {
-        query = query.neq('id', currentEventId);
-      }
-      const { data, error } = await query.maybeSingle();
+export function useCheckSlugAvailability() {
+  return useMutation({
+    mutationFn: async (slug: string) => {
+      const { data, error } = await supabase
+        .from('events')
+        .select('id')
+        .eq('slug', slug)
+        .maybeSingle();
       if (error) throw error;
-      return { available: !data };
+      return !data; // true = available
     },
-    enabled: !!slug,
   });
 }

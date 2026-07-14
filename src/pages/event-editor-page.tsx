@@ -1,881 +1,1044 @@
-import { useState, useRef, useEffect, FormEvent } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useEvent, useUpdateEvent, useDeleteEvent, useCheckSlugAvailability } from '@/hooks/use-events';
-import { useGuests, useCreateGuest, useDeleteGuest, useBulkCreateGuests } from '@/hooks/use-guests';
+import QRCode from 'qrcode';
+import { useEvent, useUpdateEvent, useCheckSlugAvailability } from '@/hooks/use-events';
+import {
+  useGuests,
+  useCreateGuest,
+  useDeleteGuest,
+  useBulkCreateGuests,
+} from '@/hooks/use-guests';
 import { useTables, useCreateTable, useUpdateTable, useDeleteTable, useBulkCreateTables } from '@/hooks/use-tables';
 import { useGuestPageSettings, useUpsertGuestPageSettings } from '@/hooks/use-guest-page-settings';
 import { useToast } from '@/providers/toast-provider';
 import { useConfirmDialog } from '@/components/confirm-dialog';
-import QRCode from 'qrcode';
-import type { TableInput, GuestPageSettingsInput } from '@/types';
-import { GOOGLE_FONTS, FONT_WEIGHTS, FONT_SIZE_OPTIONS } from '@/lib/fonts';
-import { parseFile, matchGuestsToTables, buildGuestPayload, classifyError } from '@/lib/guest-import';
+import { classifyError, parseFile, matchGuestsToTables, buildGuestPayload } from '@/lib/guest-import';
+import {
+  GOOGLE_FONTS,
+  FONT_WEIGHTS,
+  FONT_SIZE_OPTIONS,
+  getFontLinkTag,
+  getFontCss,
+  getFontSize,
+  getFontWeight,
+} from '@/lib/fonts';
+import type { GuestPageSettingsInput, TableInput } from '@/types';
 
-const TABS = [
-  { id: 'settings', label: 'Event Settings' },
-  { id: 'guests', label: 'Guests' },
-  { id: 'tables', label: 'Tables' },
-  { id: 'layout', label: 'Venue Layout' },
-  { id: 'theme', label: 'Theme Editor' },
-  { id: 'share', label: 'Share' },
-] as const;
-
-type TabId = (typeof TABS)[number]['id'];
+type Tab = 'settings' | 'guests' | 'tables' | 'layout' | 'theme' | 'share';
 
 export function EventEditorPage() {
-  const { id: eventId } = useParams<{ id: string }>();
+  const { eventId } = useParams<{ eventId: string }>();
   const navigate = useNavigate();
   const toast = useToast();
   const { confirm, dialog } = useConfirmDialog();
-  const [activeTab, setActiveTab] = useState<TabId>('settings');
 
-  const { data: event, isLoading: eventLoading } = useEvent(eventId);
-  const { data: guests, isLoading: guestsLoading } = useGuests(eventId);
-  const { data: tables, isLoading: tablesLoading } = useTables(eventId);
-  const { data: settings } = useGuestPageSettings(eventId);
+  const [activeTab, setActiveTab] = useState<Tab>('settings');
 
-  const updateEvent = useUpdateEvent();
-  const deleteEvent = useDeleteEvent();
+  const { data: event, isLoading: eventLoading } = useEvent(eventId ?? '');
 
   if (eventLoading) {
     return (
-      <div className="loading-screen">
-        <div className="loading-spinner" />
-        <p>Loading...</p>
+      <div className="full-center">
+        <div className="spinner" />
       </div>
     );
   }
 
   if (!event) {
-    return <div className="empty-state">Event not found.</div>;
+    return (
+      <div className="empty-state">
+        <p className="empty-state-title">Event not found</p>
+        <Link to="/dashboard">Back to dashboard</Link>
+      </div>
+    );
   }
 
-  const handleDelete = () => {
-    confirm({
-      title: 'Delete Event',
-      message: `Delete "${event.name}"? This cannot be undone.`,
-      confirmLabel: 'Delete',
-      onConfirm: async () => {
-        try {
-          await deleteEvent.mutateAsync(event.id);
-          toast('Event deleted');
-          navigate('/');
-        } catch (err) {
-          toast(classifyError(err).message, 'error');
-        }
-      },
-    });
-  };
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'settings', label: 'Settings' },
+    { key: 'guests', label: 'Guests' },
+    { key: 'tables', label: 'Tables' },
+    { key: 'layout', label: 'Layout' },
+    { key: 'theme', label: 'Theme' },
+    { key: 'share', label: 'Share' },
+  ];
 
   return (
-    <>
-      <style>{eeStyles}</style>
-      <div className="ee-container">
-        <div className="ee-header">
-          <div>
-            <h1 className="ee-title">{event.name}</h1>
-            <p className="ee-subtitle">
-              {event.date ? new Date(event.date).toLocaleDateString() : 'No date set'}
-              {event.venue ? ` • ${event.venue}` : ''}
-            </p>
-          </div>
-          <div className="ee-header-actions">
-            <Link to={`/events/${eventId}/print/seating-chart`} className="btn btn-secondary">Seating Chart</Link>
-            <Link to={`/events/${eventId}/print/guest-list`} className="btn btn-secondary">Guest List</Link>
-            <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
-          </div>
-        </div>
-
-        <div className="ee-tabs">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              className={`ee-tab ${activeTab === tab.id ? 'ee-tab-active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="ee-content">
-          {activeTab === 'settings' && (
-            <SettingsTab event={event} updateEvent={updateEvent} toast={toast} />
-          )}
-          {activeTab === 'guests' && (
-            <GuestsTab eventId={event.id} guests={guests} tables={tables} guestsLoading={guestsLoading} toast={toast} confirm={confirm} dialog={dialog} />
-          )}
-          {activeTab === 'tables' && (
-            <TablesTab eventId={event.id} tables={tables} tablesLoading={tablesLoading} toast={toast} confirm={confirm} dialog={dialog} />
-          )}
-          {activeTab === 'layout' && (
-            <LayoutTab eventId={event.id} tables={tables} toast={toast} />
-          )}
-          {activeTab === 'theme' && (
-            <ThemeTab eventId={event.id} settings={settings} toast={toast} />
-          )}
-          {activeTab === 'share' && (
-            <ShareTab event={event} updateEvent={updateEvent} toast={toast} />
-          )}
-        </div>
+    <div>
+      {dialog}
+      <div className="editor-header">
+        <Link to="/dashboard" className="editor-back">
+          ← Back to events
+        </Link>
+        <h1 className="editor-title">{event.name}</h1>
       </div>
-      {dialog()}
-    </>
+
+      <div className="tabs">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            className={`tab ${activeTab === t.key ? 'tab-active' : ''}`}
+            onClick={() => setActiveTab(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="tab-content">
+        {activeTab === 'settings' && (
+          <SettingsTab eventId={event.id} event={event} toast={toast} />
+        )}
+        {activeTab === 'guests' && (
+          <GuestsTab eventId={event.id} toast={toast} confirm={confirm} />
+        )}
+        {activeTab === 'tables' && (
+          <TablesTab eventId={event.id} toast={toast} confirm={confirm} />
+        )}
+        {activeTab === 'layout' && <LayoutTab eventId={event.id} toast={toast} />}
+        {activeTab === 'theme' && <ThemeTab eventId={event.id} toast={toast} />}
+        {activeTab === 'share' && <ShareTab event={event} toast={toast} />}
+      </div>
+    </div>
   );
 }
 
-type EventData = NonNullable<ReturnType<typeof useEvent>['data']>;
-type UpdateEventMut = ReturnType<typeof useUpdateEvent>;
-type ToastFn = (msg: string, type?: 'success' | 'error' | 'info') => void;
-
-function SettingsTab({ event, updateEvent, toast }: { event: EventData; updateEvent: UpdateEventMut; toast: ToastFn }) {
-  const [name, setName] = useState(event.name);
+// ── Settings Tab ─────────────────────────────────────────
+function SettingsTab({
+  eventId,
+  event,
+  toast,
+}: {
+  eventId: string;
+  event: any;
+  toast: (message: string, type?: 'success' | 'error' | 'info') => void;
+}) {
+  const updateEvent = useUpdateEvent();
+  const [name, setName] = useState(event.name ?? '');
   const [date, setDate] = useState(event.date ?? '');
   const [time, setTime] = useState(event.time ?? '');
   const [venue, setVenue] = useState(event.venue ?? '');
 
-  const dirty = name !== event.name || date !== (event.date ?? '') || time !== (event.time ?? '') || venue !== (event.venue ?? '');
+  const isDirty =
+    name !== (event.name ?? '') ||
+    date !== (event.date ?? '') ||
+    time !== (event.time ?? '') ||
+    venue !== (event.venue ?? '');
 
-  const handleSave = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) {
-      toast('Event name is required', 'error');
-      return;
-    }
+  const handleSave = async () => {
     try {
       await updateEvent.mutateAsync({
-        id: event.id,
-        name: name.trim(),
+        id: eventId,
+        name,
         date: date || null,
         time: time || null,
         venue: venue || null,
       });
-      toast('Event settings saved');
+      toast('Settings saved', 'success');
     } catch (err) {
-      toast(classifyError(err).message, 'error');
-    }
-  };
-
-  return (
-    <form onSubmit={handleSave} className="card">
-      <h2 className="ee-section-title">Event Details</h2>
-      <div className="ee-form-grid">
-        <div className="form-group">
-          <label className="form-label">Event Name</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Date</label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Time</label>
-          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Venue</label>
-          <input value={venue} onChange={(e) => setVenue(e.target.value)} />
-        </div>
-      </div>
-      <button type="submit" className="btn btn-primary" disabled={updateEvent.isPending || !dirty}>
-        {updateEvent.isPending ? 'Saving...' : 'Save Changes'}
-      </button>
-    </form>
-  );
-}
-
-function GuestsTab({ eventId, guests, tables, guestsLoading, toast, confirm, dialog }: {
-  eventId: string;
-  guests: ReturnType<typeof useGuests>['data'];
-  tables: ReturnType<typeof useTables>['data'];
-  guestsLoading: boolean;
-  toast: ToastFn;
-  confirm: ReturnType<typeof useConfirmDialog>['confirm'];
-  dialog: ReturnType<typeof useConfirmDialog>['dialog'];
-}) {
-  const createGuest = useCreateGuest();
-  const deleteGuest = useDeleteGuest();
-  const bulkCreateGuests = useBulkCreateGuests();
-  const [showAdd, setShowAdd] = useState(false);
-  const [newGuestName, setNewGuestName] = useState('');
-  const [newGuestTable, setNewGuestTable] = useState('');
-  const [search, setSearch] = useState('');
-  const [importStage, setImportStage] = useState<string>('idle');
-  const [importMsg, setImportMsg] = useState<string>('');
-  const [importError, setImportError] = useState<string>('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const filteredGuests = (guests ?? []).filter((g) =>
-    g.name.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const handleAddGuest = async () => {
-    if (!newGuestName.trim()) {
-      toast('Please enter a guest name', 'error');
-      return;
-    }
-    try {
-      await createGuest.mutateAsync({ eventId, name: newGuestName.trim(), table_id: newGuestTable || null });
-      toast('Guest added');
-      setNewGuestName('');
-      setNewGuestTable('');
-      setShowAdd(false);
-    } catch (err) {
-      toast(classifyError(err).message, 'error');
-    }
-  };
-
-  const handleDeleteGuest = (id: string, name: string) => {
-    confirm({
-      title: 'Delete Guest',
-      message: `Remove "${name}" from the guest list?`,
-      confirmLabel: 'Delete',
-      onConfirm: async () => {
-        try {
-          await deleteGuest.mutateAsync({ id, eventId });
-          toast('Guest deleted');
-        } catch (err) {
-          toast(classifyError(err).message, 'error');
-        }
-      },
-    });
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setImportStage('uploading');
-    setImportError('');
-    setImportMsg('');
-
-    try {
-      setImportStage('parsing');
-      const parsed = await parseFile(file);
-      console.log('[Import] Parsed rows:', parsed.length);
-
-      if (parsed.length === 0) {
-        setImportError('File is empty or has no data rows.');
-        setImportStage('error');
-        return;
-      }
-
-      setImportStage('matching');
-      const mapped = matchGuestsToTables(parsed, tables ?? []);
-      console.log('[Import] Mapped guests:', mapped.length);
-
-      const payload = buildGuestPayload(mapped, eventId);
-      if (payload.length === 0) {
-        setImportError('No valid guests found. Ensure the file has a "Name" column.');
-        setImportStage('error');
-        return;
-      }
-
-      console.log('[Import] Sending to database:', { count: payload.length, eventId });
-      setImportStage('importing');
-      const result = await bulkCreateGuests.mutateAsync({ eventId, guests: payload });
-      console.log('[Import] Database response:', result.length);
-
-      setImportStage('complete');
-      setImportMsg(`Import complete: ${result.length} guests imported.`);
-      toast(`Imported ${result.length} guests`);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    } catch (err) {
-      console.error('[Import] Error:', err);
-      const classified = classifyError(err);
-      setImportError(classified.message);
-      setImportStage('error');
-      toast(classified.message, 'error');
-    }
-  };
-
-  const stageLabels: Record<string, string> = {
-    idle: '',
-    uploading: 'Uploading...',
-    parsing: 'Parsing file...',
-    matching: 'Matching tables...',
-    importing: 'Importing guests...',
-    complete: 'Import complete.',
-    error: 'Import failed.',
-  };
-
-  return (
-    <div>
-      <div className="card">
-        <div className="ee-row-space">
-          <h2 className="ee-section-title">Guests ({guests?.length ?? 0})</h2>
-          <div className="ee-row-gap">
-            <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>Bulk Import</button>
-            <button className="btn btn-primary" onClick={() => setShowAdd(!showAdd)}>Add Guest</button>
-          </div>
-        </div>
-        <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" style={{ display: 'none' }} onChange={handleFileUpload} />
-
-        {importStage !== 'idle' && (
-          <div className={`ee-import-status ${importStage === 'error' ? 'ee-import-error' : importStage === 'complete' ? 'ee-import-success' : ''}`}>
-            <p style={{ fontWeight: 600, marginBottom: '4px' }}>{stageLabels[importStage]}</p>
-            {importError && <p style={{ fontSize: '13px', whiteSpace: 'pre-wrap' }}>{importError}</p>}
-            {importMsg && <p style={{ fontSize: '13px' }}>{importMsg}</p>}
-          </div>
-        )}
-
-        {showAdd && (
-          <div className="ee-add-form">
-            <input className="ee-flex-input" placeholder="Guest name" value={newGuestName} onChange={(e) => setNewGuestName(e.target.value)} />
-            <select className="ee-flex-input" value={newGuestTable} onChange={(e) => setNewGuestTable(e.target.value)}>
-              <option value="">No table</option>
-              {tables?.map((t) => <option key={t.id} value={t.id}>Table {t.number} — {t.name}</option>)}
-            </select>
-            <button className="btn btn-primary" onClick={handleAddGuest} disabled={createGuest.isPending}>
-              {createGuest.isPending ? 'Adding...' : 'Add'}
-            </button>
-          </div>
-        )}
-
-        <input className="ee-search" placeholder="Search guests..." value={search} onChange={(e) => setSearch(e.target.value)} />
-
-        {guestsLoading ? (
-          <p className="ee-muted">Loading guests...</p>
-        ) : filteredGuests.length === 0 ? (
-          <p className="ee-muted">No guests found. Add one or import a file.</p>
-        ) : (
-          <div className="ee-list">
-            {filteredGuests.map((g) => {
-              const table = tables?.find((t) => t.id === g.table_id);
-              return (
-                <div key={g.id} className="ee-list-row">
-                  <span className="ee-list-name">{g.name}</span>
-                  {table && <span className="ee-list-meta">Table {table.number} — {table.name}</span>}
-                  <button className="btn btn-danger ee-btn-sm" onClick={() => handleDeleteGuest(g.id, g.name)}>Remove</button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-      {dialog()}
-    </div>
-  );
-}
-
-function TablesTab({ eventId, tables, tablesLoading, toast, confirm, dialog }: {
-  eventId: string;
-  tables: ReturnType<typeof useTables>['data'];
-  tablesLoading: boolean;
-  toast: ToastFn;
-  confirm: ReturnType<typeof useConfirmDialog>['confirm'];
-  dialog: ReturnType<typeof useConfirmDialog>['dialog'];
-}) {
-  const createTable = useCreateTable();
-  const deleteTable = useDeleteTable();
-  const bulkCreateTables = useBulkCreateTables();
-  const [showAdd, setShowAdd] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newNumber, setNewNumber] = useState('');
-  const [newCapacity, setNewCapacity] = useState('');
-
-  const handleAdd = async () => {
-    if (!newName.trim() || !newNumber) {
-      toast('Please fill in name and number', 'error');
-      return;
-    }
-    try {
-      await createTable.mutateAsync({ eventId, name: newName.trim(), number: parseInt(newNumber), capacity: parseInt(newCapacity) || 0 });
-      toast('Table added');
-      setNewName(''); setNewNumber(''); setNewCapacity('');
-      setShowAdd(false);
-    } catch (err) {
-      toast(classifyError(err).message, 'error');
-    }
-  };
-
-  const handleDelete = (id: string, name: string) => {
-    confirm({
-      title: 'Delete Table',
-      message: `Delete "Table ${name}"?`,
-      confirmLabel: 'Delete',
-      onConfirm: async () => {
-        try {
-          await deleteTable.mutateAsync({ id, eventId });
-          toast('Table deleted');
-        } catch (err) {
-          toast(classifyError(err).message, 'error');
-        }
-      },
-    });
-  };
-
-  const handleBulkCreate = async () => {
-    const maxNum = tables?.length ? Math.max(...tables.map((t) => t.number)) : 0;
-    const newTables: TableInput[] = [];
-    for (let i = 1; i <= 10; i++) {
-      newTables.push({ name: `Table ${maxNum + i}`, number: maxNum + i, capacity: 8 });
-    }
-    try {
-      await bulkCreateTables.mutateAsync({ event_id: eventId, tables: newTables });
-      toast(`Added ${newTables.length} tables`);
-    } catch (err) {
-      toast(classifyError(err).message, 'error');
+      const { message } = classifyError(err);
+      toast(message, 'error');
     }
   };
 
   return (
     <div className="card">
-      <div className="ee-row-space">
-        <h2 className="ee-section-title">Tables ({tables?.length ?? 0})</h2>
-        <div className="ee-row-gap">
-          <button className="btn btn-secondary" onClick={handleBulkCreate} disabled={bulkCreateTables.isPending}>Add 10 Tables</button>
-          <button className="btn btn-primary" onClick={() => setShowAdd(!showAdd)}>Add Table</button>
+      <div className="form-group">
+        <label htmlFor="name">Event Name</label>
+        <input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="form-row">
+        <div className="form-group">
+          <label htmlFor="date">Date</label>
+          <input
+            id="date"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="time">Time</label>
+          <input
+            id="time"
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="form-group">
+        <label htmlFor="venue">Venue</label>
+        <input
+          id="venue"
+          value={venue}
+          onChange={(e) => setVenue(e.target.value)}
+          placeholder="Venue name"
+        />
+      </div>
+      <button
+        className="btn btn-primary"
+        onClick={handleSave}
+        disabled={!isDirty || updateEvent.isPending}
+      >
+        {updateEvent.isPending ? 'Saving…' : 'Save Settings'}
+      </button>
+    </div>
+  );
+}
+
+// ── Guests Tab ───────────────────────────────────────────
+function GuestsTab({
+  eventId,
+  toast,
+  confirm,
+}: {
+  eventId: string;
+  toast: (message: string, type?: 'success' | 'error' | 'info') => void;
+  confirm: (o: { title?: string; message: string; confirmText?: string }) => Promise<boolean>;
+}) {
+  const { data: guests, isLoading } = useGuests(eventId);
+  const { data: tables } = useTables(eventId);
+  const createGuest = useCreateGuest();
+  const deleteGuest = useDeleteGuest();
+  const bulkCreate = useBulkCreateGuests();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [newName, setNewName] = useState('');
+  const [search, setSearch] = useState('');
+  const [importing, setImporting] = useState(false);
+
+  const tableNameMap = React.useMemo(() => {
+    const m = new Map<string, string>();
+    if (tables) for (const t of tables) m.set(t.id, t.name);
+    return m;
+  }, [tables]);
+
+  const filtered = (guests ?? []).filter((g) =>
+    g.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    try {
+      await createGuest.mutateAsync({ eventId, name: newName.trim(), table_id: null });
+      setNewName('');
+      toast('Guest added', 'success');
+    } catch (err) {
+      const { message } = classifyError(err);
+      toast(message, 'error');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    const ok = await confirm({
+      title: 'Delete guest',
+      message: 'Are you sure you want to remove this guest?',
+      confirmText: 'Delete',
+    });
+    if (!ok) return;
+    try {
+      await deleteGuest.mutateAsync({ id, eventId });
+      toast('Guest removed', 'success');
+    } catch (err) {
+      const { message } = classifyError(err);
+      toast(message, 'error');
+    }
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    try {
+      const rows = await parseFile(file);
+      const matchResult = matchGuestsToTables(
+        rows,
+        (tables ?? []).map((t) => ({ id: t.id, name: t.name }))
+      );
+      const payload = buildGuestPayload(matchResult);
+      if (payload.length === 0) {
+        toast('No guests found in file', 'error');
+        return;
+      }
+      await bulkCreate.mutateAsync({ eventId, guests: payload });
+      toast(
+        `Imported ${payload.length} guests${matchResult.unmatched.length > 0 ? ` (${matchResult.unmatched.length} unmatched tables)` : ''}`,
+        'success'
+      );
+    } catch (err) {
+      const { message } = classifyError(err);
+      toast(message, 'error');
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <form onSubmit={handleAdd} style={{ display: 'flex', gap: 8 }}>
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Guest name"
+          />
+          <button type="submit" className="btn btn-primary" style={{ flexShrink: 0 }}>
+            Add Guest
+          </button>
+        </form>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            className="search-input"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search guests…"
+            style={{ flex: 1 }}
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            onChange={handleImport}
+            style={{ display: 'none' }}
+          />
+          <button
+            className="btn btn-secondary"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+          >
+            {importing ? 'Importing…' : 'Bulk Import'}
+          </button>
         </div>
       </div>
 
-      {showAdd && (
-        <div className="ee-add-form" style={{ marginTop: '16px' }}>
-          <input className="ee-flex-input" placeholder="Table name" value={newName} onChange={(e) => setNewName(e.target.value)} />
-          <input className="ee-flex-input" placeholder="Number" type="number" value={newNumber} onChange={(e) => setNewNumber(e.target.value)} />
-          <input className="ee-flex-input" placeholder="Capacity" type="number" value={newCapacity} onChange={(e) => setNewCapacity(e.target.value)} />
-          <button className="btn btn-primary" onClick={handleAdd} disabled={createTable.isPending}>
-            {createTable.isPending ? 'Adding...' : 'Add'}
-          </button>
+      {isLoading ? (
+        <div className="empty-state">
+          <div className="spinner" style={{ margin: '0 auto 16px' }} />
+          <p className="loading-text">Loading guests…</p>
         </div>
-      )}
-
-      {tablesLoading ? (
-        <p className="ee-muted">Loading tables...</p>
-      ) : !tables || tables.length === 0 ? (
-        <p className="ee-muted">No tables yet.</p>
+      ) : !filtered.length ? (
+        <div className="empty-state">
+          <p className="empty-state-title">No guests</p>
+          <p>Add guests individually or import from a file.</p>
+        </div>
       ) : (
-        <div className="ee-list" style={{ marginTop: '16px' }}>
-          {tables.map((t) => (
-            <div key={t.id} className="ee-list-row">
-              <span className="ee-list-name">Table {t.number} — {t.name}</span>
-              <span className="ee-list-meta">Cap: {t.capacity}</span>
-              <button className="btn btn-danger ee-btn-sm" onClick={() => handleDelete(t.id, t.name)}>Delete</button>
+        <div>
+          {filtered.map((g) => (
+            <div key={g.id} className="list-item">
+              <div>
+                <div className="list-item-name">{g.name}</div>
+                <div className="list-item-meta">
+                  {g.table_id ? tableNameMap.get(g.table_id) ?? 'Unknown table' : 'No table assigned'}
+                </div>
+              </div>
+              <div className="list-item-actions">
+                <button
+                  className="btn btn-danger btn-sm"
+                  onClick={() => handleDelete(g.id)}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>
       )}
-      {dialog()}
     </div>
   );
 }
 
-function LayoutTab({ eventId, tables, toast }: { eventId: string; tables: ReturnType<typeof useTables>['data']; toast: ToastFn }) {
-  const updateTable = useUpdateTable();
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+// ── Tables Tab ───────────────────────────────────────────
+function TablesTab({
+  eventId,
+  toast,
+  confirm,
+}: {
+  eventId: string;
+  toast: (message: string, type?: 'success' | 'error' | 'info') => void;
+  confirm: (o: { title?: string; message: string; confirmText?: string }) => Promise<boolean>;
+}) {
+  const { data: tables, isLoading } = useTables(eventId);
+  const createTable = useCreateTable();
+  const deleteTable = useDeleteTable();
+  const bulkCreateTables = useBulkCreateTables();
 
-  const handleDrop = async (e: React.DragEvent) => {
+  const [newName, setNewName] = useState('');
+  const [newCapacity, setNewCapacity] = useState(8);
+
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!draggingId || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    if (!newName.trim()) return;
     try {
-      await updateTable.mutateAsync({ id: draggingId, position_x: x, position_y: y });
+      await createTable.mutateAsync({
+        eventId,
+        name: newName.trim(),
+        capacity: newCapacity,
+        x: null,
+        y: null,
+      });
+      setNewName('');
+      toast('Table added', 'success');
     } catch (err) {
-      toast(classifyError(err).message, 'error');
-    }
-    setDraggingId(null);
-  };
-
-  return (
-    <div className="card">
-      <h2 className="ee-section-title">Venue Layout</h2>
-      <p className="ee-muted" style={{ marginBottom: '16px' }}>Drag tables to position them on the floor plan.</p>
-      <div ref={containerRef} onDrop={handleDrop} onDragOver={(e) => e.preventDefault()} className="ee-layout-canvas">
-        {tables?.map((t) => (
-          <div
-            key={t.id}
-            draggable
-            onDragStart={(e) => setDraggingId(t.id)}
-            className="ee-layout-table"
-            style={{ left: `${t.position_x ?? 10}%`, top: `${t.position_y ?? 10}%` }}
-          >
-            Table {t.number}
-            <span className="ee-layout-table-name">{t.name}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ThemeTab({ eventId, settings, toast }: { eventId: string; settings: ReturnType<typeof useGuestPageSettings>['data']; toast: ToastFn }) {
-  const upsert = useUpsertGuestPageSettings();
-
-  const [colorPrimary, setColorPrimary] = useState(settings?.color_primary || '#1A1A1A');
-  const [colorBg, setColorBg] = useState(settings?.color_background || '#F8F8F8');
-  const [colorCard, setColorCard] = useState(settings?.color_card || '#FFFFFF');
-  const [colorText, setColorText] = useState(settings?.color_text || '#1A1A1A');
-  const [colorHeader, setColorHeader] = useState(settings?.color_header || '#1A1A1A');
-  const [borderRadius, setBorderRadius] = useState(settings?.border_radius ?? 12);
-  const [welcomeMessage, setWelcomeMessage] = useState(settings?.welcome_message || '');
-  const [eventSubtitle, setEventSubtitle] = useState(settings?.event_subtitle || '');
-  const [logoSize, setLogoSize] = useState(settings?.logo_size ?? 80);
-  const [logoRounded, setLogoRounded] = useState(settings?.logo_rounded ?? false);
-
-  const [fontTitleFamily, setFontTitleFamily] = useState(settings?.font_title_family || 'Inter');
-  const [fontTitleSize, setFontTitleSize] = useState(settings?.font_title_size ?? 32);
-  const [fontTitleWeight, setFontTitleWeight] = useState(settings?.font_title_weight ?? 700);
-  const [fontSubtitleFamily, setFontSubtitleFamily] = useState(settings?.font_subtitle_family || 'Inter');
-  const [fontSubtitleSize, setFontSubtitleSize] = useState(settings?.font_subtitle_size ?? 16);
-  const [fontSubtitleWeight, setFontSubtitleWeight] = useState(settings?.font_subtitle_weight ?? 400);
-  const [fontDatetimeFamily, setFontDatetimeFamily] = useState(settings?.font_datetime_family || 'Inter');
-  const [fontDatetimeSize, setFontDatetimeSize] = useState(settings?.font_datetime_size ?? 14);
-  const [fontDatetimeWeight, setFontDatetimeWeight] = useState(settings?.font_datetime_weight ?? 400);
-  const [fontVenueFamily, setFontVenueFamily] = useState(settings?.font_venue_family || 'Inter');
-  const [fontVenueSize, setFontVenueSize] = useState(settings?.font_venue_size ?? 14);
-  const [fontVenueWeight, setFontVenueWeight] = useState(settings?.font_venue_weight ?? 400);
-
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const input: GuestPageSettingsInput = {
-        color_primary: colorPrimary,
-        color_background: colorBg,
-        color_card: colorCard,
-        color_text: colorText,
-        color_header: colorHeader,
-        border_radius: borderRadius,
-        welcome_message: welcomeMessage || undefined,
-        event_subtitle: eventSubtitle || undefined,
-        logo_size: logoSize,
-        logo_rounded: logoRounded,
-        font_title_family: fontTitleFamily,
-        font_title_size: fontTitleSize,
-        font_title_weight: fontTitleWeight,
-        font_subtitle_family: fontSubtitleFamily,
-        font_subtitle_size: fontSubtitleSize,
-        font_subtitle_weight: fontSubtitleWeight,
-        font_datetime_family: fontDatetimeFamily,
-        font_datetime_size: fontDatetimeSize,
-        font_datetime_weight: fontDatetimeWeight,
-        font_venue_family: fontVenueFamily,
-        font_venue_size: fontVenueSize,
-        font_venue_weight: fontVenueWeight,
-      };
-      await upsert.mutateAsync({ eventId, ...input });
-      toast('Theme saved');
-    } catch (err) {
-      toast(classifyError(err).message, 'error');
-    } finally {
-      setSaving(false);
+      const { message } = classifyError(err);
+      toast(message, 'error');
     }
   };
 
-  const logoSizeLabel = logoSize <= 80 ? 'Small' : logoSize <= 160 ? 'Medium' : logoSize <= 280 ? 'Large' : 'Extra Large';
+  const handleBulkAdd = async () => {
+    const ok = await confirm({
+      title: 'Add 10 tables',
+      message: 'This will create 10 new tables (Table 1 through Table 10) with 8 seats each.',
+      confirmText: 'Add',
+    });
+    if (!ok) return;
+    const tables: TableInput[] = Array.from({ length: 10 }, (_, i) => ({
+      name: `Table ${i + 1}`,
+      capacity: 8,
+      x: null,
+      y: null,
+    }));
+    try {
+      await bulkCreateTables.mutateAsync({ event_id: eventId, tables });
+      toast('10 tables added', 'success');
+    } catch (err) {
+      const { message } = classifyError(err);
+      toast(message, 'error');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    const ok = await confirm({
+      title: 'Delete table',
+      message: 'Are you sure you want to remove this table?',
+      confirmText: 'Delete',
+    });
+    if (!ok) return;
+    try {
+      await deleteTable.mutateAsync({ id, eventId });
+      toast('Table removed', 'success');
+    } catch (err) {
+      const { message } = classifyError(err);
+      toast(message, 'error');
+    }
+  };
 
   return (
     <div>
-      <style>{getDynamicFontStyles()}</style>
-      <div className="card">
-        <h2 className="ee-section-title">Theme Editor</h2>
-
-        <h3 className="ee-subsection-title">Colors</h3>
-        <div className="ee-form-grid">
-          <ColorField label="Primary" value={colorPrimary} onChange={setColorPrimary} />
-          <ColorField label="Background" value={colorBg} onChange={setColorBg} />
-          <ColorField label="Card" value={colorCard} onChange={setColorCard} />
-          <ColorField label="Text" value={colorText} onChange={setColorText} />
-          <ColorField label="Header" value={colorHeader} onChange={setColorHeader} />
-          <div className="form-group">
-            <label className="form-label">Border Radius: {borderRadius}px</label>
-            <input type="range" min="0" max="24" value={borderRadius} onChange={(e) => setBorderRadius(parseInt(e.target.value))} />
+      <div className="card" style={{ marginBottom: 16 }}>
+        <form onSubmit={handleAdd}>
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="table-name">Table Name</label>
+              <input
+                id="table-name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Table 1"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="table-capacity">Capacity</label>
+              <input
+                id="table-capacity"
+                type="number"
+                min={1}
+                value={newCapacity}
+                onChange={(e) => setNewCapacity(Number(e.target.value))}
+              />
+            </div>
           </div>
-        </div>
-
-        <h3 className="ee-subsection-title">Event Content</h3>
-        <div className="ee-form-grid">
-          <div className="form-group">
-            <label className="form-label">Event Subtitle</label>
-            <input value={eventSubtitle} onChange={(e) => setEventSubtitle(e.target.value)} placeholder="e.g. Together with their families" />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="submit" className="btn btn-primary">
+              Add Table
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={handleBulkAdd}
+              disabled={bulkCreateTables.isPending}
+            >
+              {bulkCreateTables.isPending ? 'Adding…' : 'Add 10 Tables'}
+            </button>
           </div>
-          <div className="form-group">
-            <label className="form-label">Welcome Message</label>
-            <input value={welcomeMessage} onChange={(e) => setWelcomeMessage(e.target.value)} placeholder="Welcome message for guests" />
-          </div>
-        </div>
-
-        <h3 className="ee-subsection-title">Logo Size ({logoSizeLabel} — {logoSize}px)</h3>
-        <div className="form-group">
-          <input type="range" min="40" max="500" step="10" value={logoSize} onChange={(e) => setLogoSize(parseInt(e.target.value))} />
-          <div className="ee-size-labels">
-            <span>Small</span><span>Medium</span><span>Large</span><span>Extra Large</span>
-          </div>
-        </div>
-        <div className="form-group">
-          <label className="ee-checkbox-label">
-            <input type="checkbox" checked={logoRounded} onChange={(e) => setLogoRounded(e.target.checked)} />
-            Rounded logo corners
-          </label>
-        </div>
-
-        <h3 className="ee-subsection-title">Typography</h3>
-        <p className="ee-muted" style={{ marginBottom: '16px' }}>Customise how text appears on the Guest Website. Each font is shown in its own style.</p>
-
-        <div className="ee-typography-section">
-          <h4 className="ee-typo-group-title">Event Title</h4>
-          <TypographyControls
-            family={fontTitleFamily} setFamily={setFontTitleFamily}
-            size={fontTitleSize} setSize={setFontTitleSize}
-            weight={fontTitleWeight} setWeight={setFontTitleWeight}
-          />
-          <div className="ee-typo-preview" style={{ fontFamily: fontTitleFamily, fontSize: `${fontTitleSize}px`, fontWeight: fontTitleWeight }}>
-            Your Event Title
-          </div>
-        </div>
-
-        <div className="ee-typography-section">
-          <h4 className="ee-typo-group-title">Event Subtitle</h4>
-          <TypographyControls
-            family={fontSubtitleFamily} setFamily={setFontSubtitleFamily}
-            size={fontSubtitleSize} setSize={setFontSubtitleSize}
-            weight={fontSubtitleWeight} setWeight={setFontSubtitleWeight}
-          />
-          <div className="ee-typo-preview" style={{ fontFamily: fontSubtitleFamily, fontSize: `${fontSubtitleSize}px`, fontWeight: fontSubtitleWeight }}>
-            Together with their families
-          </div>
-        </div>
-
-        <div className="ee-typography-section">
-          <h4 className="ee-typo-group-title">Date &amp; Time</h4>
-          <TypographyControls
-            family={fontDatetimeFamily} setFamily={setFontDatetimeFamily}
-            size={fontDatetimeSize} setSize={setFontDatetimeSize}
-            weight={fontDatetimeWeight} setWeight={setFontDatetimeWeight}
-          />
-          <div className="ee-typo-preview" style={{ fontFamily: fontDatetimeFamily, fontSize: `${fontDatetimeSize}px`, fontWeight: fontDatetimeWeight }}>
-            Saturday, 15 June 2024 at 6:00 PM
-          </div>
-        </div>
-
-        <div className="ee-typography-section">
-          <h4 className="ee-typo-group-title">Venue</h4>
-          <TypographyControls
-            family={fontVenueFamily} setFamily={setFontVenueFamily}
-            size={fontVenueSize} setSize={setFontVenueSize}
-            weight={fontVenueWeight} setWeight={setFontVenueWeight}
-          />
-          <div className="ee-typo-preview" style={{ fontFamily: fontVenueFamily, fontSize: `${fontVenueSize}px`, fontWeight: fontVenueWeight }}>
-            The Grand Ballroom, Hilton Hotel
-          </div>
-        </div>
-
-        <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ marginTop: '24px' }}>
-          {saving ? 'Saving...' : 'Save Theme'}
-        </button>
+        </form>
       </div>
+
+      {isLoading ? (
+        <div className="empty-state">
+          <div className="spinner" style={{ margin: '0 auto 16px' }} />
+          <p className="loading-text">Loading tables…</p>
+        </div>
+      ) : !tables || tables.length === 0 ? (
+        <div className="empty-state">
+          <p className="empty-state-title">No tables</p>
+          <p>Add tables individually or use bulk add.</p>
+        </div>
+      ) : (
+        <div>
+          {tables.map((t) => (
+            <div key={t.id} className="list-item">
+              <div>
+                <div className="list-item-name">{t.name}</div>
+                <div className="list-item-meta">Capacity: {t.capacity}</div>
+              </div>
+              <div className="list-item-actions">
+                <button
+                  className="btn btn-danger btn-sm"
+                  onClick={() => handleDelete(t.id)}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="form-group">
-      <label className="form-label">{label}</label>
-      <div className="ee-color-field">
-        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="ee-color-picker" />
-        <input value={value} onChange={(e) => onChange(e.target.value)} className="ee-color-text" />
-      </div>
-    </div>
-  );
-}
-
-function TypographyControls({ family, setFamily, size, setSize, weight, setWeight }: {
-  family: string; setFamily: (v: string) => void;
-  size: number; setSize: (v: number) => void;
-  weight: number; setWeight: (v: number) => void;
+// ── Layout Tab ──────────────────────────────────────────
+function LayoutTab({
+  eventId,
+  toast,
+}: {
+  eventId: string;
+  toast: (message: string, type?: 'success' | 'error' | 'info') => void;
 }) {
+  const { data: tables } = useTables(eventId);
+  const updateTable = useUpdateTable();
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null);
+
+  const handleMouseDown = (e: React.MouseEvent, table: any) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    draggingRef.current = {
+      id: table.id,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+    };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!draggingRef.current || !canvasRef.current) return;
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const x = e.clientX - canvasRect.left - draggingRef.current.offsetX;
+    const y = e.clientY - canvasRect.top - draggingRef.current.offsetY;
+    // Update visual position directly via DOM for smoothness
+    const el = canvasRef.current.querySelector(
+      `[data-table-id="${draggingRef.current.id}"]`
+    ) as HTMLElement;
+    if (el) {
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+    }
+  };
+
+  const handleMouseUp = async () => {
+    if (!draggingRef.current || !canvasRef.current) return;
+    const el = canvasRef.current.querySelector(
+      `[data-table-id="${draggingRef.current.id}"]`
+    ) as HTMLElement;
+    if (el) {
+      const x = parseFloat(el.style.left) || 0;
+      const y = parseFloat(el.style.top) || 0;
+      try {
+        await updateTable.mutateAsync({
+          eventId,
+          id: draggingRef.current.id,
+          name: el.querySelector('.layout-table-name')?.textContent ?? '',
+          capacity: 8,
+          x,
+          y,
+        });
+        toast('Layout saved', 'success');
+      } catch (err) {
+        const { message } = classifyError(err);
+        toast(message, 'error');
+      }
+    }
+    draggingRef.current = null;
+  };
+
   return (
-    <div className="ee-typo-controls">
-      <div className="form-group">
-        <label className="form-label">Font Family</label>
-        <select value={family} onChange={(e) => setFamily(e.target.value)} style={{ fontFamily: family }}>
-          {GOOGLE_FONTS.map((f) => (
-            <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>{f.label}</option>
-          ))}
-        </select>
+    <div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <p style={{ fontSize: 14, color: 'var(--gray-500)' }}>
+          Drag tables to position them on the floor plan. Positions are saved automatically when you drop a table.
+        </p>
       </div>
-      <div className="form-group">
-        <label className="form-label">Font Size</label>
-        <select value={size} onChange={(e) => setSize(parseInt(e.target.value))}>
-          {FONT_SIZE_OPTIONS.map((s) => (
-            <option key={s} value={s}>{s}px</option>
-          ))}
-        </select>
-      </div>
-      <div className="form-group">
-        <label className="form-label">Font Weight</label>
-        <select value={weight} onChange={(e) => setWeight(parseInt(e.target.value))}>
-          {FONT_WEIGHTS.map((w) => (
-            <option key={w.value} value={w.value}>{w.label}</option>
-          ))}
-        </select>
+      <div
+        ref={canvasRef}
+        className="layout-canvas"
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
+        {!tables || tables.length === 0 ? (
+          <div className="empty-state" style={{ padding: '60px 24px' }}>
+            <p className="empty-state-title">No tables</p>
+            <p>Add tables in the Tables tab first.</p>
+          </div>
+        ) : (
+          tables.map((t) => (
+            <div
+              key={t.id}
+              data-table-id={t.id}
+              className="layout-table"
+              style={{ left: t.x ?? 20, top: t.y ?? 20 }}
+              onMouseDown={(e) => handleMouseDown(e, t)}
+            >
+              <span className="layout-table-name">{t.name}</span>
+              <span className="layout-table-capacity">{t.capacity} seats</span>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
 }
 
-function ShareTab({ event, updateEvent, toast }: { event: EventData; updateEvent: UpdateEventMut; toast: ToastFn }) {
-  const [slug, setSlug] = useState(event.slug);
-  const [qrDataUrl, setQrDataUrl] = useState('');
-  const [qrSvg, setQrSvg] = useState('');
-  const baseUrl = typeof window !== 'undefined' ? `${window.location.origin}/find-your-seat` : '';
-  const fullUrl = `${baseUrl}/${slug}`;
-  const slugCheck = useCheckSlugAvailability(slug, event.id);
+// ── Theme Tab ───────────────────────────────────────────
+function ThemeTab({
+  eventId,
+  toast,
+}: {
+  eventId: string;
+  toast: (message: string, type?: 'success' | 'error' | 'info') => void;
+}) {
+  const { data: settings } = useGuestPageSettings(eventId);
+  const upsert = useUpsertGuestPageSettings();
+
+  const [form, setForm] = useState<GuestPageSettingsInput>({});
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (fullUrl) {
-      QRCode.toDataURL(fullUrl, { width: 300, margin: 2, color: { dark: '#1A1A1A', light: '#FFFFFF' } })
-        .then(setQrDataUrl).catch((err) => console.error('QR PNG error:', err));
-      QRCode.toString(fullUrl, { type: 'svg', margin: 2, color: { dark: '#1A1A1A', light: '#FFFFFF' } })
-        .then(setQrSvg).catch((err) => console.error('QR SVG error:', err));
+    if (settings && !loaded) {
+      setForm({
+        event_id: eventId,
+        color_primary: settings.color_primary,
+        color_background: settings.color_background,
+        color_card: settings.color_card,
+        color_text: settings.color_text,
+        color_header: settings.color_header,
+        border_radius: settings.border_radius,
+        logo_url: settings.logo_url,
+        logo_size: settings.logo_size,
+        logo_rounded: settings.logo_rounded,
+        venue_image_url: settings.venue_image_url,
+        welcome_message: settings.welcome_message,
+        event_subtitle: settings.event_subtitle,
+        font_title_family: settings.font_title_family,
+        font_title_size: settings.font_title_size,
+        font_title_weight: settings.font_title_weight,
+        font_subtitle_family: settings.font_subtitle_family,
+        font_subtitle_size: settings.font_subtitle_size,
+        font_subtitle_weight: settings.font_subtitle_weight,
+        font_datetime_family: settings.font_datetime_family,
+        font_datetime_size: settings.font_datetime_size,
+        font_datetime_weight: settings.font_datetime_weight,
+        font_venue_family: settings.font_venue_family,
+        font_venue_size: settings.font_venue_size,
+        font_venue_weight: settings.font_venue_weight,
+      });
+      setLoaded(true);
     }
-  }, [fullUrl]);
+  }, [settings, loaded, eventId]);
 
-  const sanitizeSlug = (val: string) => val.toLowerCase().trim().replace(/[^a-z0-9-\s]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  // Load Google Fonts dynamically
+  const fontFamilies = [
+    form.font_title_family,
+    form.font_subtitle_family,
+    form.font_datetime_family,
+    form.font_venue_family,
+  ].filter(Boolean) as string[];
 
-  const handleSaveSlug = async () => {
-    const clean = sanitizeSlug(slug);
-    if (!clean || clean.length < 2) { toast('Slug must be at least 2 characters', 'error'); return; }
-    if (slugCheck.data && !slugCheck.data.available) { toast('This slug is already taken', 'error'); return; }
+  useEffect(() => {
+    const href = getFontLinkTag(fontFamilies);
+    if (!href) return;
+    const existing = document.querySelector(`link[href="${href}"]`);
+    if (!existing) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = href;
+      document.head.appendChild(link);
+    }
+  }, [fontFamilies.join(',')]);
+
+  const update = (patch: Partial<GuestPageSettingsInput>) => {
+    setForm((prev) => ({ ...prev, ...patch }));
+  };
+
+  const handleSave = async () => {
     try {
-      await updateEvent.mutateAsync({ id: event.id, slug: clean });
-      setSlug(clean);
-      toast('URL updated');
+      await upsert.mutateAsync({ ...form, event_id: eventId });
+      toast('Theme saved', 'success');
     } catch (err) {
-      toast(classifyError(err).message, 'error');
+      const { message } = classifyError(err);
+      toast(message, 'error');
     }
-  };
-
-  const handleCopyLink = async () => {
-    try { await navigator.clipboard.writeText(fullUrl); toast('Link copied to clipboard'); }
-    catch { toast('Could not copy link: ' + fullUrl, 'error'); }
-  };
-
-  const handleDownloadPng = () => {
-    if (!qrDataUrl) return;
-    const a = document.createElement('a'); a.href = qrDataUrl; a.download = `${slug}-qr.png`; a.click();
-  };
-
-  const handleDownloadSvg = () => {
-    if (!qrSvg) return;
-    const blob = new Blob([qrSvg], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `${slug}-qr.svg`; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleNativeShare = async () => {
-    if (navigator.share) {
-      try { await navigator.share({ title: event.name, text: `Find your seat at ${event.name}`, url: fullUrl }); }
-      catch { /* cancelled */ }
-    } else { handleCopyLink(); }
   };
 
   return (
-    <div className="card">
-      <h2 className="ee-section-title">Share Event</h2>
-      <div className="ee-share-grid">
-        <div>
-          <label className="form-label">Guest Website URL</label>
-          <div className="ee-share-url">{fullUrl}</div>
-          <label className="form-label" style={{ marginTop: '20px' }}>Custom URL Slug</label>
-          <div className="ee-share-slug-field">
-            <span className="ee-share-slug-prefix">{baseUrl}/</span>
-            <input className="ee-share-slug-input" value={slug} onChange={(e) => setSlug(sanitizeSlug(e.target.value))} placeholder="my-event" />
-          </div>
-          {slug !== event.slug && slug.length >= 2 && (
-            slugCheck.isLoading ? <p className="ee-muted">Checking availability...</p>
-            : slugCheck.data?.available ? <p className="ee-share-valid">Slug is available</p>
-            : <p className="ee-share-error">Slug is already taken</p>
-          )}
-          <button className="btn btn-primary" onClick={handleSaveSlug} disabled={updateEvent.isPending || slug === event.slug} style={{ marginTop: '8px' }}>
-            Save URL
-          </button>
-          <div className="ee-share-actions">
-            <button className="btn btn-secondary" onClick={handleCopyLink} title="Copy link to clipboard">Copy Link</button>
-            <button className="btn btn-secondary" onClick={() => window.open(fullUrl, '_blank')} title="Open guest website">Open Website</button>
-            <button className="btn btn-secondary" onClick={handleDownloadPng} title="Download QR code as PNG">Download QR (PNG)</button>
-            <button className="btn btn-secondary" onClick={handleDownloadSvg} title="Download QR code as SVG">Download QR (SVG)</button>
-            <button className="btn btn-secondary" onClick={handleNativeShare} title="Share via your device">Share</button>
+    <div>
+      {/* Colors */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="theme-section">
+          <div className="theme-section-title">Colors</div>
+          {(
+            [
+              ['color_primary', 'Primary'],
+              ['color_background', 'Background'],
+              ['color_card', 'Card'],
+              ['color_text', 'Text'],
+              ['color_header', 'Header'],
+            ] as const
+          ).map(([key, label]) => (
+            <div key={key} className="color-row">
+              <label>{label}</label>
+              <input
+                type="color"
+                className="color-input"
+                value={(form as any)[key] ?? '#1A1A1A'}
+                onChange={(e) => update({ [key]: e.target.value } as any)}
+              />
+              <input
+                className="color-text"
+                value={(form as any)[key] ?? ''}
+                onChange={(e) => update({ [key]: e.target.value } as any)}
+                placeholder="#1A1A1A"
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="theme-section">
+          <div className="theme-section-title">Border Radius</div>
+          <div className="range-row">
+            <input
+              type="range"
+              className="range-input"
+              min={0}
+              max={24}
+              value={form.border_radius ?? 12}
+              onChange={(e) => update({ border_radius: Number(e.target.value) })}
+            />
+            <span className="range-value">{form.border_radius ?? 12}px</span>
           </div>
         </div>
-        <div className="ee-share-qr">
-          <label className="form-label" style={{ textAlign: 'center', marginBottom: '12px' }}>QR Code</label>
-          {qrDataUrl ? <img src={qrDataUrl} alt="QR code" style={{ width: '100%', maxWidth: '240px', borderRadius: '8px' }} />
-            : <p className="ee-muted">Generating QR code...</p>}
+
+        <div className="theme-section">
+          <div className="theme-section-title">Logo</div>
+          <div className="form-group">
+            <label>Logo URL</label>
+            <input
+              value={form.logo_url ?? ''}
+              onChange={(e) => update({ logo_url: e.target.value })}
+              placeholder="https://…"
+            />
+          </div>
+          <div className="range-row">
+            <label>Logo Size</label>
+            <input
+              type="range"
+              className="range-input"
+              min={40}
+              max={500}
+              value={form.logo_size ?? 120}
+              onChange={(e) => update({ logo_size: Number(e.target.value) })}
+            />
+            <span className="range-value">{form.logo_size ?? 120}px</span>
+          </div>
+          <div className="form-group" style={{ marginTop: 12 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="checkbox"
+                style={{ width: 'auto', height: 'auto' }}
+                checked={form.logo_rounded ?? false}
+                onChange={(e) => update({ logo_rounded: e.target.checked })}
+              />
+              Rounded logo
+            </label>
+          </div>
+        </div>
+
+        <div className="theme-section">
+          <div className="theme-section-title">Venue Image</div>
+          <div className="form-group">
+            <label>Venue Image URL</label>
+            <input
+              value={form.venue_image_url ?? ''}
+              onChange={(e) => update({ venue_image_url: e.target.value })}
+              placeholder="https://…"
+            />
+          </div>
+        </div>
+
+        <div className="theme-section">
+          <div className="theme-section-title">Content</div>
+          <div className="form-group">
+            <label>Event Subtitle</label>
+            <input
+              value={form.event_subtitle ?? ''}
+              onChange={(e) => update({ event_subtitle: e.target.value })}
+              placeholder="Join us for our special day"
+            />
+          </div>
+          <div className="form-group">
+            <label>Welcome Message</label>
+            <textarea
+              value={form.welcome_message ?? ''}
+              onChange={(e) => update({ welcome_message: e.target.value })}
+              placeholder="Welcome to our event! Find your seat below."
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Typography */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="theme-section-title" style={{ marginBottom: 16 }}>
+          Typography
+        </div>
+
+        {(
+          [
+            ['title', 'Title'],
+            ['subtitle', 'Subtitle'],
+            ['datetime', 'Date & Time'],
+            ['venue', 'Venue'],
+          ] as const
+        ).map(([key, label]) => (
+          <div key={key}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+              {label}
+            </div>
+            <div className="typography-row">
+              <div>
+                <label>Font Family</label>
+                <select
+                  value={(form as any)[`font_${key}_family`] ?? 'Inter'}
+                  onChange={(e) =>
+                    update({ [`font_${key}_family`]: e.target.value } as any)
+                  }
+                >
+                  {GOOGLE_FONTS.map((f) => (
+                    <option key={f.name} value={f.name}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label>Size</label>
+                <select
+                  value={(form as any)[`font_${key}_size`] ?? 16}
+                  onChange={(e) =>
+                    update({ [`font_${key}_size`]: Number(e.target.value) } as any)
+                  }
+                >
+                  {FONT_SIZE_OPTIONS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}px
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label>Weight</label>
+                <select
+                  value={(form as any)[`font_${key}_weight`] ?? 400}
+                  onChange={(e) =>
+                    update({ [`font_${key}_weight`]: Number(e.target.value) } as any)
+                  }
+                >
+                  {FONT_WEIGHTS.map((w) => (
+                    <option key={w} value={w}>
+                      {w}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="typography-preview">
+              <span
+                style={{
+                  fontFamily: getFontCss((form as any)[`font_${key}_family`]),
+                  fontSize: getFontSize((form as any)[`font_${key}_size`]),
+                  fontWeight: getFontWeight((form as any)[`font_${key}_weight`]),
+                }}
+              >
+                {label} Preview
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button
+        className="btn btn-primary"
+        onClick={handleSave}
+        disabled={upsert.isPending}
+      >
+        {upsert.isPending ? 'Saving…' : 'Save Theme'}
+      </button>
+    </div>
+  );
+}
+
+// ── Share Tab ───────────────────────────────────────────
+function ShareTab({
+  event,
+  toast,
+}: {
+  event: any;
+  toast: (message: string, type?: 'success' | 'error' | 'info') => void;
+}) {
+  const updateEvent = useUpdateEvent();
+  const checkSlug = useCheckSlugAvailability();
+  const [slug, setSlug] = useState(event.slug ?? '');
+  const [qrPng, setQrPng] = useState<string>('');
+  const [qrSvg, setQrSvg] = useState<string>('');
+
+  const baseUrl = window.location.origin;
+  const inviteUrl = `${baseUrl}/e/${slug}`;
+
+  useEffect(() => {
+    QRCode.toDataURL(inviteUrl, { width: 200, margin: 2 })
+      .then(setQrPng)
+      .catch(() => {});
+    QRCode.toString(inviteUrl, { type: 'svg', margin: 2 })
+      .then(setQrSvg)
+      .catch(() => {});
+  }, [inviteUrl]);
+
+  const handleSaveSlug = async () => {
+    if (slug === event.slug) return;
+    try {
+      const available = await checkSlug.mutateAsync(slug);
+      if (!available) {
+        toast('Slug already taken', 'error');
+        return;
+      }
+      await updateEvent.mutateAsync({ id: event.id, name: event.name, slug });
+      toast('Slug updated', 'success');
+    } catch (err) {
+      const { message } = classifyError(err);
+      toast(message, 'error');
+    }
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      toast('Link copied', 'success');
+    } catch {
+      toast('Failed to copy', 'error');
+    }
+  };
+
+  const handleOpen = () => {
+    window.open(inviteUrl, '_blank');
+  };
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: event.name,
+          url: inviteUrl,
+        });
+      } catch {
+        // user cancelled
+      }
+    } else {
+      handleCopy();
+    }
+  };
+
+  const downloadQr = (format: 'png' | 'svg') => {
+    if (format === 'png' && qrPng) {
+      const a = document.createElement('a');
+      a.href = qrPng;
+      a.download = `${slug}-qr.png`;
+      a.click();
+    } else if (format === 'svg' && qrSvg) {
+      const blob = new Blob([qrSvg], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${slug}-qr.svg`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  return (
+    <div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="theme-section-title">Invitation Link</div>
+        <div className="share-url-box">
+          <input value={inviteUrl} readOnly />
+          <button className="btn btn-secondary" onClick={handleCopy}>
+            Copy
+          </button>
+          <button className="btn btn-secondary" onClick={handleOpen}>
+            Open
+          </button>
+          <button className="btn btn-primary" onClick={handleShare}>
+            Share
+          </button>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="theme-section-title">URL Slug</div>
+        <div className="form-group">
+          <label>Slug</label>
+          <div className="share-url-box">
+            <input
+              value={slug}
+              onChange={(e) =>
+                setSlug(
+                  e.target.value
+                    .toLowerCase()
+                    .trim()
+                    .replace(/[^a-z0-9-]/g, '')
+                )
+              }
+            />
+            <button
+              className="btn btn-primary"
+              onClick={handleSaveSlug}
+              disabled={slug === event.slug || updateEvent.isPending}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="theme-section-title">QR Code</div>
+        {qrPng && (
+          <div className="qr-preview">
+            <img src={qrPng} alt="QR Code" />
+          </div>
+        )}
+        <div className="share-actions">
+          <button className="btn btn-secondary" onClick={() => downloadQr('png')}>
+            Download PNG
+          </button>
+          <button className="btn btn-secondary" onClick={() => downloadQr('svg')}>
+            Download SVG
+          </button>
         </div>
       </div>
     </div>
   );
 }
-
-function getDynamicFontStyles(): string {
-  const imports = GOOGLE_FONTS.map((f) =>
-    `@import url('https://fonts.googleapis.com/css2?family=${f.css}&display=swap');`
-  ).join('\n');
-  return imports;
-}
-
-const eeStyles = `
-.ee-container { max-width: 900px; margin: 0 auto; padding: 24px; }
-.ee-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
-.ee-title { font-size: 24px; font-weight: 700; color: #1A1A1A; letter-spacing: -0.02em; margin: 0; }
-.ee-subtitle { font-size: 14px; color: #4A4A4A; margin-top: 4px; }
-.ee-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.ee-tabs { display: flex; gap: 4px; border-bottom: 1px solid #EFEFEF; margin-bottom: 24px; overflow-x: auto; flex-wrap: wrap; }
-.ee-tab { padding: 10px 16px; border: none; background: transparent; color: #4A4A4A; font-size: 14px; font-weight: 500; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; }
-.ee-tab:hover { color: #1A1A1A; }
-.ee-tab-active { color: #1A1A1A; border-bottom-color: #1A1A1A; }
-.ee-content { animation: fadeIn 0.2s ease; }
-.ee-section-title { font-size: 18px; font-weight: 600; color: #1A1A1A; margin: 0 0 16px; }
-.ee-subsection-title { font-size: 15px; font-weight: 600; color: #1A1A1A; margin: 24px 0 12px; }
-.ee-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-.ee-row-space { display: flex; justify-content: space-between; align-items: center; }
-.ee-row-gap { display: flex; gap: 8px; }
-.ee-muted { color: #4A4A4A; font-size: 14px; }
-.ee-add-form { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
-.ee-flex-input { flex: 1; min-width: 150px; }
-.ee-search { margin-top: 16px; margin-bottom: 16px; width: 100%; }
-.ee-list { display: flex; flex-direction: column; gap: 8px; }
-.ee-list-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-radius: 8px; background: #F8F8F8; border: 1px solid #EFEFEF; }
-.ee-list-name { font-size: 14px; font-weight: 500; color: #1A1A1A; }
-.ee-list-meta { font-size: 13px; color: #4A4A4A; }
-.ee-btn-sm { padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; height: auto; }
-.ee-import-status { margin-top: 16px; padding: 16px; border-radius: 8px; background: #F8F8F8; border: 1px solid #EFEFEF; font-size: 14px; }
-.ee-import-error { background: #FEF2F2; border-color: #FECACA; color: #991B1B; }
-.ee-import-success { background: #F0FDF4; border-color: #BBF7D0; color: #166534; }
-.ee-layout-canvas { position: relative; width: 100%; height: 500px; background: #F8F8F8; border-radius: 12px; border: 2px dashed #EFEFEF; overflow: hidden; }
-.ee-layout-table { position: absolute; padding: 12px 16px; background: #FFFFFF; border: 1px solid #DADADA; border-radius: 8px; cursor: move; font-size: 13px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.08); user-select: none; }
-.ee-layout-table-name { display: block; font-size: 11px; font-weight: 400; color: #4A4A4A; }
-.ee-color-field { display: flex; gap: 8px; align-items: center; }
-.ee-color-picker { width: 44px; height: 44px; padding: 0; border: 1px solid #DADADA; border-radius: 8px; cursor: pointer; }
-.ee-color-text { flex: 1; }
-.ee-checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #4A4A4A; cursor: pointer; }
-.ee-checkbox-label input { width: auto; height: auto; }
-.ee-size-labels { display: flex; justify-content: space-between; font-size: 11px; color: #4A4A4A; margin-top: 4px; }
-.ee-typography-section { padding: 16px; border: 1px solid #EFEFEF; border-radius: 12px; margin-bottom: 16px; }
-.ee-typo-group-title { font-size: 14px; font-weight: 600; color: #1A1A1A; margin: 0 0 12px; }
-.ee-typo-controls { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-.ee-typo-preview { padding: 12px; background: #F8F8F8; border-radius: 8px; margin-top: 12px; color: #1A1A1A; }
-.ee-share-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
-.ee-share-url { padding: 12px 16px; border-radius: 12px; background: #F8F8F8; border: 1px solid #EFEFEF; font-size: 14px; color: #1A1A1A; word-break: break-all; font-family: monospace; }
-.ee-share-slug-field { display: flex; align-items: center; border: 1px solid #DADADA; border-radius: 12px; overflow: hidden; }
-.ee-share-slug-prefix { padding: 0 12px; font-size: 14px; color: #4A4A4A; white-space: nowrap; background: #F8F8F8; height: 44px; display: flex; align-items: center; }
-.ee-share-slug-input { border: none; border-radius: 0; flex: 1; }
-.ee-share-slug-input:focus { border: none; }
-.ee-share-valid { color: #166534; font-size: 13px; }
-.ee-share-error { color: #DC2626; font-size: 13px; }
-.ee-share-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
-.ee-share-qr { display: flex; flex-direction: column; align-items: center; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@media (max-width: 768px) {
-  .ee-form-grid { grid-template-columns: 1fr; }
-  .ee-typo-controls { grid-template-columns: 1fr; }
-  .ee-share-grid { grid-template-columns: 1fr; }
-}
-`;
