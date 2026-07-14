@@ -169,7 +169,7 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
   const [venue, setVenue] = useState(event.venue ?? '')
   const [detailsDirty, setDetailsDirty] = useState(false)
 
-  // FIX: logoUrl always holds either a real Supabase Storage public URL or null.
+  // logoUrl always holds either a real Supabase Storage public URL or null.
   // The logo is uploaded to storage IMMEDIATELY when the user selects a file,
   // not deferred to save time. This eliminates the state race condition where
   // a data: URL could be passed to the upsert or where the save could overwrite
@@ -246,8 +246,8 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
     )
   }, [titleFont, titleSize, titleColor, subtitleFont, subtitleSize, subtitleColor, datetimeFont, datetimeSize, datetimeColor, venueFont, venueSize, venueColor, settings])
 
-  // FIX: Upload the logo to Supabase Storage IMMEDIATELY when the user selects a file.
-  // This means logoUrl in state always holds a real public URL (or null if removed).
+  // Upload the logo to Supabase Storage IMMEDIATELY when the user selects a file.
+  // logoUrl in state always holds a real public URL (or null if removed).
   // When Save is clicked, logoUrl is already a real URL — no data: URL conversion needed,
   // no state race condition, and the save payload always contains the correct value.
   const handleLogoFile = async (file: File) => {

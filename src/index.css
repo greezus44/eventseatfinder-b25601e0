@@ -165,7 +165,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .two-col { display: grid; grid-template-columns: 1fr 380px; gap: var(--space-6); }
 @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
 
-/* CHANGE 4: Details tab sticky preview layout */
+/* Details tab sticky preview layout */
 .details-layout {
   display: grid;
   grid-template-columns: 1fr 400px;
@@ -285,7 +285,6 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 /* ===== Guest Page (invitation) ===== */
 .gp-loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
 
-/* CHANGE 1: Public site centering — all content properly centered */
 .gp-page {
   min-height: 100vh;
   display: flex;
@@ -323,8 +322,6 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .gp-search-section { width: 100%; max-width: 480px; display: flex; flex-direction: column; align-items: center; }
 .gp-autocomplete-wrapper { position: relative; width: 100%; }
 
-/* CHANGE 2: Search box text styling fix — text color inherits page text color,
-   proper vertical/horizontal alignment via padding and line-height */
 .gp-autocomplete-input {
   width: 100%;
   padding: var(--space-4) var(--space-5);
