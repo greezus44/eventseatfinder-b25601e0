@@ -91,6 +91,22 @@ body { font-family: var(--font-sans); background: var(--color-bg); color: var(--
 .color-picker-sm { width: 32px; height: 32px; padding: 0; border: 1px solid var(--color-border); border-radius: var(--radius-sm); cursor: pointer; background: none; }
 .typo-card-preview { margin-top: var(--space-3); padding: var(--space-2) var(--space-3); background: var(--color-surface); border-radius: var(--radius-sm); border: 1px solid var(--color-border); min-height: 28px; display: flex; align-items: center; overflow: hidden; }
 
+/* ===== Logo Management ===== */
+.logo-section { margin-top: var(--space-5); }
+.logo-preview-area { display: flex; align-items: center; gap: var(--space-4); }
+.logo-preview-box { display: flex; align-items: center; justify-content: center; padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg); min-width: 120px; min-height: 80px; }
+.logo-actions { display: flex; gap: var(--space-2); }
+.logo-size-controls { margin-top: var(--space-4); }
+.logo-size-presets { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); }
+
+/* ===== Live Preview ===== */
+.gp-preview-container { text-align: center; padding: var(--space-6); background: var(--color-bg); border-radius: var(--radius-md); border: 1px solid var(--color-border); }
+.gp-preview-logo-wrapper { margin-bottom: var(--space-4); display: flex; justify-content: center; }
+.gp-preview-title { font-weight: 700; line-height: 1.2; margin-bottom: var(--space-2); }
+.gp-preview-subtitle { color: var(--color-text-muted); margin-bottom: var(--space-2); }
+.gp-preview-datetime { color: var(--color-text-muted); margin-bottom: var(--space-1); }
+.gp-preview-venue { color: var(--color-text-muted); }
+
 /* ===== Guest Management ===== */
 .guest-filters { display: flex; gap: var(--space-3); margin-bottom: var(--space-4); }
 .guest-filters .input { flex: 1; }
@@ -208,8 +224,6 @@ body { font-family: var(--font-sans); background: var(--color-bg); color: var(--
 .gp-find-seat { margin-bottom: var(--space-5); }
 .gp-search-section { max-width: 460px; margin: 0 auto; }
 .gp-autocomplete-wrapper { position: relative; }
-
-/* Search input — centre-aligned placeholder and typed text */
 .gp-autocomplete-input { width: 100%; padding: var(--space-3) var(--space-4); font-size: 15px; font-family: inherit; border: 2px solid; border-radius: var(--radius-md); transition: box-shadow .15s ease; text-align: center; }
 .gp-autocomplete-input::placeholder { color: currentColor; opacity: .45; text-align: center; text-transform: uppercase; letter-spacing: .05em; }
 .gp-autocomplete-input:focus { outline: none; box-shadow: 0 0 0 3px rgba(15,118,110,.12); }
@@ -227,13 +241,9 @@ body { font-family: var(--font-sans); background: var(--color-bg); color: var(--
 /* This Is Your Table view */
 .gp-table-info { max-width: 460px; margin: 0 auto; }
 .gp-table-info-title { font-size: 24px; font-weight: 700; margin-bottom: var(--space-5); }
-
-/* Card uses page background colour, accent border — no hardcoded colours */
 .gp-table-info-card { display: flex; align-items: center; justify-content: space-between; padding: var(--space-6) var(--space-7); border: 1px solid; gap: var(--space-4); }
 .gp-table-info-left { text-align: left; }
 .gp-table-info-name { font-weight: 700; }
-
-/* Badge on the table page — same theme-aware styling, accent border + text */
 .gp-table-info-right { display: flex; align-items: center; gap: var(--space-2); }
 .gp-table-info-badge { display: inline-flex; align-items: center; padding: var(--space-2) var(--space-5); font-weight: 600; border: 1px solid; }
 .gp-back-btn { margin-top: var(--space-5); }

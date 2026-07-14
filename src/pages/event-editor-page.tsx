@@ -9,21 +9,30 @@ import { useConfirmDialog } from '@/providers/confirm-dialog'
 import { AppHeader } from '@/components/app-header'
 import { FONTS, getFontCss, loadGoogleFonts, formatTime12 } from '@/lib/fonts'
 import { parseFile, matchTableByName, classifyError, type ParsedGuest } from '@/lib/guest-import'
+import { uploadEventImage } from '@/lib/storage'
 import QRCode from 'qrcode'
 import type { GuestInput } from '@/types'
 
 type Tab = 'details' | 'guests' | 'tables' | 'layout' | 'theme' | 'share'
 
-const HOURS = [12, 1, 2,3,4,5,6,7,8,9,10,11]
-const MINUTES = ['00','05','10','15','20','25','30','35','40','45','50','55']
+const HOURS = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+const MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55']
+
+// Logo size presets — map to pixel widths
+const LOGO_SIZES = [
+  { label: 'Small', value: 80 },
+  { label: 'Medium', value: 160 },
+  { label: 'Large', value: 280 },
+  { label: 'Extra Large', value: 420 },
+]
 
 function TimeSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const time24 = value || '09:00'; const [h, m] = time24.split(':')
   let hour = parseInt(h, 10); const period = hour >= 12 ? 'PM' : 'AM'
   if (hour === 0) hour = 12; else if (hour > 12) hour -= 12
-  const handleHour = (n: number) => { let h24 = n; if (period === 'PM' && n !== 12) h24 += 12; if (period === 'AM' && n === 12) h24 = 0; onChange(`${String(h24).padStart(2,'0')}:${m}`) }
-  const handleMinute = (n: string) => { let h24 = hour; if (period === 'PM' && hour !== 12) h24 = hour + 12; if (period === 'AM' && hour === 12) h24 = 0; onChange(`${String(h24).padStart(2,'0')}:${n}`) }
-  const handlePeriod = (p: string) => { let h24 = hour; if (p === 'PM' && hour !== 12) h24 = hour + 12; if (p === 'AM' && hour === 12) h24 = 0; if (p === 'PM' && hour === 12) h24 = 12; onChange(`${String(h24).padStart(2,'0')}:${m}`) }
+  const handleHour = (n: number) => { let h24 = n; if (period === 'PM' && n !== 12) h24 += 12; if (period === 'AM' && n === 12) h24 = 0; onChange(`${String(h24).padStart(2, '0')}:${m}`) }
+  const handleMinute = (n: string) => { let h24 = hour; if (period === 'PM' && hour !== 12) h24 = hour + 12; if (period === 'AM' && hour === 12) h24 = 0; onChange(`${String(h24).padStart(2, '0')}:${n}`) }
+  const handlePeriod = (p: string) => { let h24 = hour; if (p === 'PM' && hour !== 12) h24 = hour + 12; if (p === 'AM' && hour === 12) h24 = 0; if (p === 'PM' && hour === 12) h24 = 12; onChange(`${String(h24).padStart(2, '0')}:${m}`) }
   return <div className="time-selector"><select className="select" value={hour} onChange={(e) => handleHour(Number(e.target.value))}>{HOURS.map((h) => <option key={h} value={h}>{h}</option>)}</select><select className="select" value={m} onChange={(e) => handleMinute(e.target.value)}>{MINUTES.map((mm) => <option key={mm} value={mm}>{mm}</option>)}</select><select className="select" value={period} onChange={(e) => handlePeriod(e.target.value)}><option value="AM">AM</option><option value="PM">PM</option></select></div>
 }
 
@@ -56,11 +65,22 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
   const [time, setTime] = useState(event.time ?? '09:00')
   const [venue, setVenue] = useState(event.venue ?? '')
   const [detailsDirty, setDetailsDirty] = useState(false)
+
+  // Logo state — restored logo management
+  const [logoUrl, setLogoUrl] = useState<string | null>(settings?.logo_url ?? null)
+  const [logoSize, setLogoSize] = useState<number>(settings?.logo_size ?? 80)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoDragOver, setLogoDragOver] = useState(false)
+  const logoFileRef = useRef<HTMLInputElement>(null)
+
+  // Typography state
   const [titleFont, setTitleFont] = useState('Inter'); const [titleSize, setTitleSize] = useState(32); const [titleColor, setTitleColor] = useState('#0f172a')
   const [subtitleFont, setSubtitleFont] = useState('Inter'); const [subtitleSize, setSubtitleSize] = useState(16); const [subtitleColor, setSubtitleColor] = useState('#64748b')
   const [datetimeFont, setDatetimeFont] = useState('Inter'); const [datetimeSize, setDatetimeSize] = useState(14); const [datetimeColor, setDatetimeColor] = useState('#64748b')
   const [venueFont, setVenueFont] = useState('Inter'); const [venueSize, setVenueSize] = useState(14); const [venueColor, setVenueColor] = useState('#64748b')
   const [typoDirty, setTypoDirty] = useState(false)
+
+  // Sync state when settings arrive from server
   useEffect(() => {
     if (!settings) return
     setTitleFont(settings.font_title_family ?? 'Inter'); setTitleSize(settings.font_title_size ?? 32); setTitleColor(settings.font_title_color ?? '#0f172a')
@@ -68,17 +88,207 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
     setDatetimeFont(settings.font_datetime_family ?? 'Inter'); setDatetimeSize(settings.font_datetime_size ?? 14); setDatetimeColor(settings.font_datetime_color ?? '#64748b')
     setVenueFont(settings.font_venue_family ?? 'Inter'); setVenueSize(settings.font_venue_size ?? 14); setVenueColor(settings.font_venue_color ?? '#64748b')
     setSubtitle(settings.event_subtitle ?? '')
+    setLogoUrl(settings.logo_url ?? null)
+    setLogoSize(settings.logo_size ?? 80)
   }, [settings])
-  useEffect(() => { setDetailsDirty(name !== event.name || subtitle !== (settings?.event_subtitle ?? '') || date !== (event.date ?? '') || time !== (event.time ?? '09:00') || venue !== (event.venue ?? '')) }, [name, subtitle, date, time, venue, event, settings])
+
+  useEffect(() => {
+    setDetailsDirty(
+      name !== event.name ||
+      subtitle !== (settings?.event_subtitle ?? '') ||
+      date !== (event.date ?? '') ||
+      time !== (event.time ?? '09:00') ||
+      venue !== (event.venue ?? '') ||
+      logoUrl !== (settings?.logo_url ?? null) ||
+      logoSize !== (settings?.logo_size ?? 80)
+    )
+  }, [name, subtitle, date, time, venue, logoUrl, logoSize, event, settings])
+
   const allFonts = [titleFont, subtitleFont, datetimeFont, venueFont]
   useEffect(() => { loadGoogleFonts(allFonts) }, allFonts)
+
   useEffect(() => {
     if (!settings) { setTypoDirty(false); return }
-    setTypoDirty(titleFont !== (settings.font_title_family ?? 'Inter') || titleSize !== (settings.font_title_size ?? 32) || titleColor !== (settings.font_title_color ?? '#0f172a') || subtitleFont !== (settings.font_subtitle_family ?? 'Inter') || subtitleSize !== (settings.font_subtitle_size ?? 16) || subtitleColor !== (settings.font_subtitle_color ?? '#64748b') || datetimeFont !== (settings.font_datetime_family ?? 'Inter') || datetimeSize !== (settings.font_datetime_size ?? 14) || datetimeColor !== (settings.font_datetime_color ?? '#64748b') || venueFont !== (settings.font_venue_family ?? 'Inter') || venueSize !== (settings.font_venue_size ?? 14) || venueColor !== (settings.font_venue_color ?? '#64748b'))
+    setTypoDirty(
+      titleFont !== (settings.font_title_family ?? 'Inter') || titleSize !== (settings.font_title_size ?? 32) || titleColor !== (settings.font_title_color ?? '#0f172a') ||
+      subtitleFont !== (settings.font_subtitle_family ?? 'Inter') || subtitleSize !== (settings.font_subtitle_size ?? 16) || subtitleColor !== (settings.font_subtitle_color ?? '#64748b') ||
+      datetimeFont !== (settings.font_datetime_family ?? 'Inter') || datetimeSize !== (settings.font_datetime_size ?? 14) || datetimeColor !== (settings.font_datetime_color ?? '#64748b') ||
+      venueFont !== (settings.font_venue_family ?? 'Inter') || venueSize !== (settings.font_venue_size ?? 14) || venueColor !== (settings.font_venue_color ?? '#64748b')
+    )
   }, [titleFont, titleSize, titleColor, subtitleFont, subtitleSize, subtitleColor, datetimeFont, datetimeSize, datetimeColor, venueFont, venueSize, venueColor, settings])
-  const handleSaveDetails = async () => { try { await updateEvent.mutateAsync({ id: eventId, name, slug: event.slug, date: date || null, time: time || null, venue: venue || null }); await upsertSettings.mutateAsync({ event_id: eventId, event_subtitle: subtitle || null }); toast('Event details saved'); setDetailsDirty(false) } catch (err) { toast(err instanceof Error ? err.message : 'Failed to save', 'error') } }
-  const handleSaveTypography = async () => { try { await upsertSettings.mutateAsync({ event_id: eventId, font_title_family: titleFont, font_title_size: titleSize, font_title_color: titleColor, font_subtitle_family: subtitleFont, font_subtitle_size: subtitleSize, font_subtitle_color: subtitleColor, font_datetime_family: datetimeFont, font_datetime_size: datetimeSize, font_datetime_color: datetimeColor, font_venue_family: venueFont, font_venue_size: venueSize, font_venue_color: venueColor }); toast('Typography saved'); setTypoDirty(false) } catch (err) { toast(err instanceof Error ? err.message : 'Failed to save', 'error') } }
-  return <div className="section"><div className="card section"><div className="card-header"><h3 className="card-title">Event Details</h3><p className="card-subtitle">Basic information about your event</p></div><div className="form-row"><div className="form-group"><label className="form-label">Event Name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Wedding" /></div><div className="form-group"><label className="form-label">Subtitle (optional)</label><input className="input" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="Together With Our Families" /></div></div><div className="form-row" style={{ marginTop: 'var(--space-4)' }}><div className="form-group"><label className="form-label">Venue</label><input className="input" value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="Grand Hotel" /></div></div><div className="form-row" style={{ marginTop: 'var(--space-4)' }}><div className="form-group"><label className="form-label">Date</label><input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div><div className="form-group"><label className="form-label">Time</label><TimeSelector value={time} onChange={setTime} /></div></div><div style={{ marginTop: 'var(--space-5)' }}><button className="btn btn-primary" onClick={handleSaveDetails} disabled={!detailsDirty || updateEvent.isPending || upsertSettings.isPending}>{updateEvent.isPending || upsertSettings.isPending ? 'Saving…' : 'Save Changes'}</button></div></div><div className="card section"><div className="card-header"><h3 className="card-title">Typography</h3><p className="card-subtitle">Fonts, sizes, and colours for each text element. Preview updates live.</p></div><div className="typo-cards"><TypoCard label="Event Title" font={titleFont} size={titleSize} color={titleColor} onFont={setTitleFont} onSize={setTitleSize} onColor={setTitleColor} previewText={name || 'Event Name'} previewStyle={{ fontFamily: getFontCss(titleFont), fontSize: `${titleSize}px`, color: titleColor }} /><TypoCard label="Event Subtitle" font={subtitleFont} size={subtitleSize} color={subtitleColor} onFont={setSubtitleFont} onSize={setSubtitleSize} onColor={setSubtitleColor} previewText={subtitle || 'Event Subtitle'} previewStyle={{ fontFamily: getFontCss(subtitleFont), fontSize: `${subtitleSize}px`, color: subtitleColor }} /><TypoCard label="Date & Time" font={datetimeFont} size={datetimeSize} color={datetimeColor} onFont={setDatetimeFont} onSize={setDatetimeSize} onColor={setDatetimeColor} previewText={date && time ? `${new Date(date).toLocaleDateString()} at ${formatTime12(time)}` : 'Date & Time'} previewStyle={{ fontFamily: getFontCss(datetimeFont), fontSize: `${datetimeSize}px`, color: datetimeColor }} /><TypoCard label="Venue" font={venueFont} size={venueSize} color={venueColor} onFont={setVenueFont} onSize={setVenueSize} onColor={setVenueColor} previewText={venue || 'Venue Name'} previewStyle={{ fontFamily: getFontCss(venueFont), fontSize: `${venueSize}px`, color: venueColor }} /></div><div style={{ marginTop: 'var(--space-5)' }}><button className="btn btn-primary" onClick={handleSaveTypography} disabled={!typoDirty || upsertSettings.isPending}>{upsertSettings.isPending ? 'Saving…' : 'Save Typography'}</button></div></div></div>
+
+  // Logo upload handler — supports drag & drop and browse
+  const handleLogoFile = async (file: File) => {
+    if (!file.type.match(/image\/(png|jpe?g|svg\+xml|webp)/)) {
+      toast('Please use PNG, JPG, SVG, or WebP', 'error')
+      return
+    }
+    setLogoUploading(true)
+    try {
+      // Read as data URL for immediate preview
+      const reader = new FileReader()
+      reader.onload = () => {
+        setLogoUrl(reader.result as string)
+        setLogoUploading(false)
+      }
+      reader.readAsDataURL(file)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to load image', 'error')
+      setLogoUploading(false)
+    }
+  }
+
+  const handleLogoUpload = async (): Promise<string | null> => {
+    if (!logoUrl) return null
+    // If it's a data URL, upload to storage
+    if (logoUrl.startsWith('data:')) {
+      try {
+        const response = await fetch(logoUrl)
+        const blob = await response.blob()
+        const file = new File([blob], `logo-${Date.now()}.png`, { type: blob.type || 'image/png' })
+        const publicUrl = await uploadEventImage(eventId, file, 'logo')
+        setLogoUrl(publicUrl)
+        return publicUrl
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'Failed to upload logo', 'error')
+        throw err
+      }
+    }
+    return logoUrl
+  }
+
+  const handleRemoveLogo = () => {
+    setLogoUrl(null)
+  }
+
+  const handleSaveDetails = async () => {
+    try {
+      // Upload logo to storage if it's a data URL
+      let finalLogoUrl: string | null = logoUrl
+      if (logoUrl && logoUrl.startsWith('data:')) {
+        finalLogoUrl = await handleLogoUpload()
+      }
+
+      await updateEvent.mutateAsync({ id: eventId, name, slug: event.slug, date: date || null, time: time || null, venue: venue || null })
+      await upsertSettings.mutateAsync({
+        event_id: eventId,
+        event_subtitle: subtitle || null,
+        logo_url: finalLogoUrl,
+        logo_size: logoSize,
+      })
+      toast('Event details saved'); setDetailsDirty(false)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to save', 'error')
+    }
+  }
+
+  const handleSaveTypography = async () => {
+    try {
+      await upsertSettings.mutateAsync({
+        event_id: eventId,
+        font_title_family: titleFont, font_title_size: titleSize, font_title_color: titleColor,
+        font_subtitle_family: subtitleFont, font_subtitle_size: subtitleSize, font_subtitle_color: subtitleColor,
+        font_datetime_family: datetimeFont, font_datetime_size: datetimeSize, font_datetime_color: datetimeColor,
+        font_venue_family: venueFont, font_venue_size: venueSize, font_venue_color: venueColor,
+      })
+      toast('Typography saved'); setTypoDirty(false)
+    } catch (err) { toast(err instanceof Error ? err.message : 'Failed to save', 'error') }
+  }
+
+  const logoSizeLabel = LOGO_SIZES.find((s) => s.value === logoSize)?.label ?? 'Custom'
+
+  return (
+    <div className="section">
+      <div className="card section">
+        <div className="card-header"><h3 className="card-title">Event Details</h3><p className="card-subtitle">Basic information about your event</p></div>
+        <div className="form-row">
+          <div className="form-group"><label className="form-label">Event Name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Wedding" /></div>
+          <div className="form-group"><label className="form-label">Subtitle (optional)</label><input className="input" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="Together With Our Families" /></div>
+        </div>
+        <div className="form-row" style={{ marginTop: 'var(--space-4)' }}>
+          <div className="form-group"><label className="form-label">Venue</label><input className="input" value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="Grand Hotel" /></div>
+        </div>
+        <div className="form-row" style={{ marginTop: 'var(--space-4)' }}>
+          <div className="form-group"><label className="form-label">Date</label><input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Time</label><TimeSelector value={time} onChange={setTime} /></div>
+        </div>
+
+        {/* Logo Management Section — restored */}
+        <div className="logo-section" style={{ marginTop: 'var(--space-5)' }}>
+          <label className="form-label">Logo</label>
+          {logoUrl ? (
+            <div className="logo-preview-area">
+              <div className="logo-preview-box">
+                <img src={logoUrl} alt="Event logo preview" style={{ maxWidth: '100%', maxHeight: '120px', objectFit: 'contain' }} />
+              </div>
+              <div className="logo-actions">
+                <button className="btn btn-ghost btn-sm" onClick={() => logoFileRef.current?.click()} disabled={logoUploading}>Replace</button>
+                <button className="btn btn-ghost btn-sm" onClick={handleRemoveLogo} disabled={logoUploading}>Remove</button>
+              </div>
+            </div>
+          ) : (
+            <div
+              className={`dropzone ${logoDragOver ? 'dropzone-active' : ''}`}
+              onDragOver={(e) => { e.preventDefault(); setLogoDragOver(true) }}
+              onDragLeave={() => setLogoDragOver(false)}
+              onDrop={(e) => { e.preventDefault(); setLogoDragOver(false); if (e.dataTransfer.files[0]) handleLogoFile(e.dataTransfer.files[0]) }}
+              onClick={() => logoFileRef.current?.click()}
+            >
+              <p className="dropzone-text">{logoUploading ? 'Uploading…' : 'Drop logo here or click to browse'}</p>
+              <p className="dropzone-hint">PNG, JPG, SVG, or WebP</p>
+            </div>
+          )}
+          <input ref={logoFileRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && handleLogoFile(e.target.files[0])} />
+
+          {/* Logo Size Controls — preset buttons */}
+          <div className="logo-size-controls" style={{ marginTop: 'var(--space-4)' }}>
+            <label className="form-label">Logo Size</label>
+            <div className="logo-size-presets">
+              {LOGO_SIZES.map((s) => (
+                <button
+                  key={s.value}
+                  className={`btn btn-sm ${logoSize === s.value ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setLogoSize(s.value)}
+                >{s.label}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 'var(--space-5)' }}><button className="btn btn-primary" onClick={handleSaveDetails} disabled={!detailsDirty || updateEvent.isPending || upsertSettings.isPending || logoUploading}>{updateEvent.isPending || upsertSettings.isPending ? 'Saving…' : 'Save Changes'}</button></div>
+      </div>
+
+      {/* Live Preview — shows logo, title, subtitle, date, venue */}
+      <div className="card section">
+        <div className="card-header"><h3 className="card-title">Live Preview</h3><p className="card-subtitle">See how your guest page will look</p></div>
+        <div className="gp-preview-container">
+          {logoUrl && (
+            <div className="gp-preview-logo-wrapper">
+              <img src={logoUrl} alt="Logo preview" style={{ width: `${Math.min(logoSize, 500)}px`, maxWidth: '100%', height: 'auto', objectFit: 'contain' }} />
+            </div>
+          )}
+          <h3 className="gp-preview-title" style={{ fontFamily: getFontCss(titleFont), fontSize: `${titleSize}px`, color: titleColor }}>{name || 'Event Name'}</h3>
+          {subtitle && subtitle.trim() && (
+            <p className="gp-preview-subtitle" style={{ fontFamily: getFontCss(subtitleFont), fontSize: `${subtitleSize}px`, color: subtitleColor }}>{subtitle}</p>
+          )}
+          {date && <p className="gp-preview-datetime" style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${datetimeSize}px`, color: datetimeColor }}>{new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>}
+          {time && <p className="gp-preview-datetime" style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${datetimeSize}px`, color: datetimeColor }}>{formatTime12(time)}</p>}
+          {venue && <p className="gp-preview-venue" style={{ fontFamily: getFontCss(venueFont), fontSize: `${venueSize}px`, color: venueColor }}>{venue}</p>}
+        </div>
+      </div>
+
+      <div className="card section">
+        <div className="card-header"><h3 className="card-title">Typography</h3><p className="card-subtitle">Fonts, sizes, and colours for each text element. Preview updates live.</p></div>
+        <div className="typo-cards">
+          <TypoCard label="Event Title" font={titleFont} size={titleSize} color={titleColor} onFont={setTitleFont} onSize={setTitleSize} onColor={setTitleColor} previewText={name || 'Event Name'} previewStyle={{ fontFamily: getFontCss(titleFont), fontSize: `${titleSize}px`, color: titleColor }} />
+          <TypoCard label="Event Subtitle" font={subtitleFont} size={subtitleSize} color={subtitleColor} onFont={setSubtitleFont} onSize={setSubtitleSize} onColor={setSubtitleColor} previewText={subtitle || 'Event Subtitle'} previewStyle={{ fontFamily: getFontCss(subtitleFont), fontSize: `${subtitleSize}px`, color: subtitleColor }} />
+          <TypoCard label="Date & Time" font={datetimeFont} size={datetimeSize} color={datetimeColor} onFont={setDatetimeFont} onSize={setDatetimeSize} onColor={setDatetimeColor} previewText={date && time ? `${new Date(date).toLocaleDateString()} at ${formatTime12(time)}` : 'Date & Time'} previewStyle={{ fontFamily: getFontCss(datetimeFont), fontSize: `${datetimeSize}px`, color: datetimeColor }} />
+          <TypoCard label="Venue" font={venueFont} size={venueSize} color={venueColor} onFont={setVenueFont} onSize={setVenueSize} onColor={setVenueColor} previewText={venue || 'Venue Name'} previewStyle={{ fontFamily: getFontCss(venueFont), fontSize: `${venueSize}px`, color: venueColor }} />
+        </div>
+        <div style={{ marginTop: 'var(--space-5)' }}><button className="btn btn-primary" onClick={handleSaveTypography} disabled={!typoDirty || upsertSettings.isPending}>{upsertSettings.isPending ? 'Saving…' : 'Save Typography'}</button></div>
+      </div>
+    </div>
+  )
 }
 
 function GuestsTab({ eventId, guests, tables, toast, confirm }: any) {

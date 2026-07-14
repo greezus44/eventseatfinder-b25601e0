@@ -148,15 +148,18 @@ export function InvitationPage() {
   const logoSize = settings.logo_size ?? 80
   const logoRounded = settings.logo_rounded ?? false
   const subtitle = settings.event_subtitle
+  // Logo URL — from guest_page_settings.logo_url (set by host in Event Details)
+  const logoUrl = settings.logo_url
 
   const formatDate = () => { if (!event.date) return ''; return new Date(event.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }
 
   return (
     <div className="gp-page" style={{ background: bg, color: text }}>
       <div className="gp-container">
-        {settings.logo_url && (
+        {/* Logo — only rendered when logo_url exists, no empty space when absent */}
+        {logoUrl && (
           <div className="gp-logo-wrapper">
-            <img src={settings.logo_url} alt="Event logo" className="gp-logo" style={{ width: `${Math.min(logoSize, 500)}px`, height: 'auto', borderRadius: logoRounded ? '50%' : '0' }} />
+            <img src={logoUrl} alt="Event logo" className="gp-logo" style={{ width: `${Math.min(logoSize, 500)}px`, maxWidth: '100%', height: 'auto', borderRadius: logoRounded ? '50%' : '0' }} />
           </div>
         )}
         <h1 className="gp-title" style={{ fontFamily: getFontCss(titleFont), fontSize: `${settings.font_title_size ?? 32}px`, color: settings.font_title_color ?? text }}>{event.name}</h1>
@@ -190,7 +193,6 @@ export function InvitationPage() {
                     autoComplete="off"
                     style={{ background: bg, borderColor: primary, color: text, borderRadius: radius }}
                   />
-                  {/* Live dropdown */}
                   {showDropdown && searchText.trim() && (
                     <div className="gp-autocomplete-dropdown" style={{ background: bg, borderColor: primary, borderRadius: radius }}>
                       {loadingGuests ? (
@@ -206,7 +208,6 @@ export function InvitationPage() {
                             style={{ background: i === highlightIndex ? `${primary}15` : 'transparent' }}
                           >
                             <span className="gp-autocomplete-name" style={{ color: text }}>{g.name}</span>
-                            {/* Wider rectangular badge with generous horizontal padding */}
                             <span className="gp-table-badge" style={{
                               background: bg,
                               borderColor: primary,
@@ -229,11 +230,9 @@ export function InvitationPage() {
                 <h2 className="gp-table-info-title" style={{ color: text }}>This Is Your Table</h2>
                 <div className="gp-table-info-card" style={{ background: bg, borderColor: primary, borderRadius: radius }}>
                   <div className="gp-table-info-left">
-                    {/* Slightly larger text (~12.5% increase from 20px to 22.5px) */}
                     <p className="gp-table-info-name" style={{ color: text, fontSize: '22.5px' }}>{selectedGuest.name}</p>
                   </div>
                   <div className="gp-table-info-right">
-                    {/* Same theme-aware styling, slightly larger text (~12.5% increase from 16px to 18px) */}
                     <span className="gp-table-info-badge" style={{ background: bg, borderColor: primary, color: primary, borderRadius: radius, fontSize: '18px' }}>
                       {selectedGuest.table_name}
                     </span>
