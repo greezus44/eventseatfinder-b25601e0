@@ -6,6 +6,8 @@ import { EventSettingsPage } from '@/pages/event-settings-page';
 import { GuestManagementPage } from '@/pages/guest-management-page';
 import { SeatingArrangementPage } from '@/pages/seating-arrangement-page';
 import { EventOverviewPage } from '@/pages/event-overview-page';
+import { PrintSeatingChartPage } from '@/pages/print-seating-chart-page';
+import { PrintGuestListPage } from '@/pages/print-guest-list-page';
 import { LoginPage } from '@/pages/login-page';
 import { FindYourSeatPage } from '@/pages/find-your-seat-page';
 import { InvitationPage } from '@/pages/invitation-page';
@@ -49,6 +51,14 @@ export const routes: RouteObject[] = [
           {
             path: '/events/:eventId/overview',
             element: <EventOverviewPage />,
+          },
+          {
+            path: '/events/:eventId/print',
+            element: <PrintSeatingChartPage />,
+          },
+          {
+            path: '/events/:eventId/print/guest-list',
+            element: <PrintGuestListPage />,
           },
         ],
       },
