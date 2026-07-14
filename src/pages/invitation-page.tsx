@@ -32,7 +32,6 @@ export function InvitationPage() {
   const [loadingGuests, setLoadingGuests] = useState(false)
   const [guestsData, setGuestsData] = useState<GuestWithTable[]>([])
 
-  // Lightbox state for venue layout viewing
   const [lightboxOpen, setLightboxOpen] = useState(false)
 
   const settings = data
@@ -249,14 +248,12 @@ function VenueLightbox({ src, onClose }: { src: string; onClose: () => void }) {
     setTimeout(onClose, 200)
   }, [onClose])
 
-  // Esc to close
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose() }
     document.addEventListener('keydown', handleEsc)
     return () => document.removeEventListener('keydown', handleEsc)
   }, [handleClose])
 
-  // Lock body scroll
   useEffect(() => {
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = '' }
@@ -293,7 +290,6 @@ function VenueLightbox({ src, onClose }: { src: string; onClose: () => void }) {
     if (e.target === e.currentTarget) handleClose()
   }
 
-  // Touch / pinch handlers
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
       const dx = e.touches[0].clientX - e.touches[1].clientX

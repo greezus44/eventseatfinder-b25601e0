@@ -111,29 +111,47 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
       reader.readAsDataURL(file)
     } catch (err) { toast(err instanceof Error ? err.message : 'Failed to load image', 'error'); setLogoUploading(false) }
   }
-  const handleLogoUpload = async (): Promise<string | null> => {
-    if (!logoUrl) return null
-    if (logoUrl.startsWith('data:')) {
-      try {
-        const response = await fetch(logoUrl)
-        const blob = await response.blob()
-        const file = new File([blob], `logo-${Date.now()}.png`, { type: blob.type || 'image/png' })
-        const publicUrl = await uploadEventImage(eventId, file, 'logo')
-        setLogoUrl(publicUrl)
-        return publicUrl
-      } catch (err) { toast(err instanceof Error ? err.message : 'Failed to upload logo', 'error'); throw err }
-    }
-    return logoUrl
-  }
   const handleRemoveLogo = () => { setLogoUrl(null) }
-  const handleSaveDetails = async () => {
+
+  // FIX: Upload logo to Supabase Storage and return the public URL.
+  // Does NOT update React state mid-save (previous bug caused state race conditions).
+  // Does NOT re-throw errors (previous bug aborted the entire save when logo upload failed).
+  const uploadLogo = async (dataUrl: string): Promise<string | null> => {
     try {
-      let finalLogoUrl: string | null = logoUrl
-      if (logoUrl && logoUrl.startsWith('data:')) { finalLogoUrl = await handleLogoUpload() }
+      const response = await fetch(dataUrl)
+      const blob = await response.blob()
+      const file = new File([blob], `logo-${Date.now()}.png`, { type: blob.type || 'image/png' })
+      const publicUrl = await uploadEventImage(eventId, file, 'logo')
+      return publicUrl
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to upload logo', 'error')
+      return null
+    }
+  }
+
+  // FIX: Save flow now correctly handles logo upload + persistence.
+  // 1. Upload logo first (if it's a data URL) — failure doesn't abort other saves.
+  // 2. Save event details.
+  // 3. Upsert settings with the uploaded logo URL.
+  // 4. Update local state to the persisted URL so it survives refresh.
+  const handleSaveDetails = async () => {
+    let finalLogoUrl: string | null = logoUrl
+
+    // Upload logo if it's still a data URL (not yet persisted to storage)
+    if (logoUrl && logoUrl.startsWith('data:')) {
+      finalLogoUrl = await uploadLogo(logoUrl)
+    }
+
+    try {
       await updateEvent.mutateAsync({ id: eventId, name, slug: event.slug, date: date || null, time: time || null, venue: venue || null })
       await upsertSettings.mutateAsync({ event_id: eventId, event_subtitle: subtitle || null, logo_url: finalLogoUrl, logo_size: logoSize })
-      toast('Event details saved'); setDetailsDirty(false)
-    } catch (err) { toast(err instanceof Error ? err.message : 'Failed to save', 'error') }
+      // Update local state to the persisted URL so it matches what's in the database
+      setLogoUrl(finalLogoUrl)
+      toast('Event details saved')
+      setDetailsDirty(false)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to save', 'error')
+    }
   }
   const handleSaveTypography = async () => {
     try {
