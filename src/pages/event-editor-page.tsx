@@ -1,7 +1,6 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import QRCode from 'qrcode';
-import { useEvent, useUpdateEvent, useDeleteEvent, useCheckSlugAvailability } from '@/hooks/use-events';
+import { useEvent, useUpdateEvent, useDeleteEvent } from '@/hooks/use-events';
 import { useGuests, useCreateGuest, useBulkCreateGuests, useDeleteGuest } from '@/hooks/use-guests';
 import { useTables, useCreateTable, useDeleteTable, useBulkCreateTables } from '@/hooks/use-tables';
 import { useGuestPageSettings, useUpsertGuestPageSettings } from '@/hooks/use-guest-page-settings';
@@ -12,7 +11,7 @@ import type { GuestPageSettingsInput, ScheduleItem } from '@/types/guest-page-se
 import type { GuestPageSettings } from '@/types/guest-page-settings';
 import type { TableInput } from '@/types/table';
 
-type Tab = 'details' | 'guests' | 'tables' | 'venue' | 'schedule' | 'settings' | 'share';
+type Tab = 'details' | 'guests' | 'tables' | 'venue' | 'schedule' | 'settings';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'details', label: 'Event Details' },
@@ -21,10 +20,14 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'venue', label: 'Venue Layout' },
   { id: 'schedule', label: 'Schedule' },
   { id: 'settings', label: 'Settings' },
-  { id: 'share', label: 'Share' },
 ];
 
-const LOGO_SIZE_PRESETS = [{ label: 'Small', value: 48 }, { label: 'Medium', value: 64 }, { label: 'Large', value: 96 }];
+const LOGO_SIZE_PRESETS = [
+  { label: 'Small', value: 48 },
+  { label: 'Medium', value: 64 },
+  { label: 'Large', value: 96 },
+];
+
 const ACCEPTED_FORMATS = '.png,.jpg,.jpeg,.svg,.webp';
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
@@ -52,7 +55,6 @@ const EE_CSS = `
 .ee-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 20px; height: 44px; border-radius: 12px; font-size: 14px; font-weight: 500; transition: all 200ms ease; white-space: nowrap; }
 .ee-btn-primary { background: #1A1A1A; color: #FFFFFF; }
 .ee-btn-primary:hover { background: #333333; }
-.ee-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 .ee-btn-secondary { background: #FFFFFF; color: #1A1A1A; border: 1px solid #DADADA; }
 .ee-btn-secondary:hover { background: #EFEFEF; }
 .ee-btn-danger { background: #FFFFFF; color: #C0392B; border: 1px solid #E5A29B; }
@@ -67,6 +69,7 @@ const EE_CSS = `
 .ee-dropzone-text { font-size: 14px; font-weight: 500; color: #4A4A4A; }
 .ee-dropzone-hint { font-size: 12px; color: #B0B0B0; }
 .ee-logo-preview { display: flex; align-items: center; gap: 16px; padding: 16px; border: 1px solid #EFEFEF; border-radius: 12px; background: #FAFAFA; }
+.ee-logo-preview-img { object-fit: contain; border-radius: 8px; background: #FFFFFF; border: 1px solid #EFEFEF; }
 .ee-logo-size-controls { display: flex; flex-direction: column; gap: 12px; }
 .ee-logo-size-presets { display: flex; gap: 8px; }
 .ee-logo-size-preset { padding: 8px 16px; border: 1px solid #DADADA; border-radius: 12px; font-size: 14px; font-weight: 500; color: #4A4A4A; transition: all 200ms ease; }
@@ -125,36 +128,16 @@ const EE_CSS = `
 .ee-bulk-result--warning { background: #FFF7ED; color: #9A3412; border: 1px solid #FED7AA; }
 .ee-bulk-table-form { display: flex; gap: 16px; flex-wrap: wrap; }
 .ee-bulk-table-form > .ee-field { flex: 1; min-width: 120px; margin-bottom: 0; }
-/* Share tab styles */
-.ee-share-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.ee-share-url-row { display: flex; gap: 12px; align-items: center; }
-.ee-share-url-display { flex: 1; height: 44px; padding: 10px 14px; border: 1px solid #DADADA; border-radius: 12px; background: #F8F8F8; font-size: 14px; color: #1A1A1A; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.ee-share-qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.ee-share-qr-canvas { border: 1px solid #EFEFEF; border-radius: 12px; padding: 16px; background: #FFFFFF; }
-.ee-share-qr-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-.ee-share-slug-input { display: flex; align-items: center; gap: 0; }
-.ee-share-slug-prefix { height: 44px; padding: 10px 14px; border: 1px solid #DADADA; border-right: none; border-radius: 12px 0 0 12px; background: #F8F8F8; font-size: 14px; color: #B0B0B0; display: flex; align-items: center; white-space: nowrap; }
-.ee-share-slug-field { flex: 1; height: 44px; padding: 10px 14px; border: 1px solid #DADADA; border-radius: 0 12px 12px 0; background: #FFFFFF; font-size: 14px; color: #1A1A1A; outline: none; transition: border-color 200ms ease, box-shadow 200ms ease; }
-.ee-share-slug-field:focus { border-color: #1A1A1A; box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
-.ee-share-slug-field--error { border-color: #C0392B; }
-.ee-share-slug-field--error:focus { border-color: #C0392B; box-shadow: 0 0 0 3px rgba(192,57,43,0.08); }
-.ee-share-slug-field--valid { border-color: #059669; }
-.ee-share-preview { padding: 12px 16px; border: 1px solid #EFEFEF; border-radius: 12px; background: #F8F8F8; font-size: 14px; color: #1A1A1A; word-break: break-all; }
-.ee-share-error { font-size: 13px; color: #C0392B; margin-top: 6px; font-weight: 500; }
-.ee-share-valid { font-size: 13px; color: #059669; margin-top: 6px; font-weight: 500; }
-.ee-share-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.ee-share-tooltip { position: relative; }
-.ee-share-tooltip::after { content: attr(data-tooltip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #1A1A1A; color: #fff; font-size: 12px; padding: 4px 10px; border-radius: 6px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 200ms ease; z-index: 10; }
-.ee-share-tooltip:hover::after { opacity: 1; }
-@media (max-width: 768px) { .ee-body { padding: 16px; } .ee-row { flex-direction: column; } .ee-preset-grid { grid-template-columns: repeat(2, 1fr); } .ee-bulk-table-form { flex-direction: column; } .ee-share-grid { grid-template-columns: 1fr; } .ee-share-url-row { flex-direction: column; } }
+@media (max-width: 768px) { .ee-body { padding: 16px; } .ee-row { flex-direction: column; } .ee-preset-grid { grid-template-columns: repeat(2, 1fr); } .ee-bulk-table-form { flex-direction: column; } }
 `;
 
 function readFileAsDataURL(file: File): Promise<string> {
-  return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result as string); reader.onerror = reject; reader.readAsDataURL(file); });
-}
-
-function sanitizeSlug(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 export function EventEditorPage() {
@@ -201,7 +184,7 @@ export function EventEditorPage() {
   const [newGuestName, setNewGuestName] = useState('');
   const [newGuestTable, setNewGuestTable] = useState('');
 
-  // Bulk import
+  // Bulk import — permanent
   const [bulkDragOver, setBulkDragOver] = useState(false);
   const [bulkText, setBulkText] = useState('');
   const bulkFileRef = useRef<HTMLInputElement>(null);
@@ -224,27 +207,10 @@ export function EventEditorPage() {
   // Delete confirm
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-  // Share tab state
-  const [slugInput, setSlugInput] = useState('');
-  const [slugSaved, setSlugSaved] = useState('');
-  const [slugSaving, setSlugSaving] = useState(false);
-  const [qrDataUrl, setQrDataUrl] = useState<string>('');
-  const [qrSvg, setQrSvg] = useState<string>('');
-  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
-
-  const baseUrl = typeof window !== 'undefined' ? `${window.location.origin}/e/` : 'https://seatly.app/e/';
-  const currentSlug = slugSaved || event?.slug || '';
-  const fullUrl = `${baseUrl}${currentSlug}`;
-
-  // Slug availability check
-  const { data: slugCheck } = useCheckSlugAvailability(slugInput, eventId);
-
   // Sync state when data loads
   useEffect(() => {
     if (event) {
       setEventForm({ name: event.name, slug: event.slug, date: event.date ?? '', time: event.time ?? '', venue: event.venue ?? '', accent_color: event.accent_color ?? '#1A1A1A' });
-      setSlugInput(event.slug);
-      setSlugSaved(event.slug);
     }
   }, [event]);
 
@@ -258,17 +224,6 @@ export function EventEditorPage() {
     const items = effectiveSettings.schedule_items;
     setScheduleItems(Array.isArray(items) ? items : []);
   }, [settings, eventId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // QR code generation — updates automatically when URL changes
-  useEffect(() => {
-    if (!fullUrl) return;
-    QRCode.toDataURL(fullUrl, { width: 320, margin: 2, color: { dark: '#1A1A1A', light: '#FFFFFF' }, errorCorrectionLevel: 'H' })
-      .then((url) => setQrDataUrl(url))
-      .catch(() => {});
-    QRCode.toString(fullUrl, { type: 'svg', margin: 2, color: { dark: '#1A1A1A', light: '#FFFFFF' }, errorCorrectionLevel: 'H' })
-      .then((svg) => setQrSvg(svg))
-      .catch(() => {});
-  }, [fullUrl]);
 
   // Logo upload handlers
   const handleLogoFile = useCallback(async (file: File) => {
@@ -359,120 +314,85 @@ export function EventEditorPage() {
     const count = parseInt(bulkCount) || 0;
     const capacity = parseInt(bulkCapacity) || 8;
     const prefix = bulkPrefix.trim() || 'Table';
+
     if (count <= 0) { toast('Number of tables must be at least 1', 'error'); return; }
     if (count > 500) { toast('Maximum 500 tables at once', 'error'); return; }
+
+    // Generate table names and numbers
     const newTables: TableInput[] = [];
     const duplicates: string[] = [];
     const existingNames = new Set((tables ?? []).map(t => `${t.number}`));
     const existingDisplayNames = new Set((tables ?? []).map(t => t.name));
+
     for (let i = 0; i < count; i++) {
       const num = String(start + i);
       const displayName = `${prefix} ${num}`;
-      if (existingNames.has(num) || existingDisplayNames.has(displayName)) { duplicates.push(displayName); }
-      else { newTables.push({ event_id: eventId, number: num, name: displayName, capacity }); }
+      if (existingNames.has(num) || existingDisplayNames.has(displayName)) {
+        duplicates.push(displayName);
+      } else {
+        newTables.push({ event_id: eventId, number: num, name: displayName, capacity });
+      }
     }
-    if (newTables.length === 0) { setBulkTableResult({ created: 0, skipped: duplicates.length, total: tables?.length ?? 0, duplicates }); toast(`All ${duplicates.length} tables already exist — none created`, 'error'); return; }
+
+    if (newTables.length === 0) {
+      setBulkTableResult({ created: 0, skipped: duplicates.length, total: tables?.length ?? 0, duplicates });
+      toast(`All ${duplicates.length} tables already exist — none created`, 'error');
+      return;
+    }
+
     try {
       await bulkCreateTables.mutateAsync({ event_id: eventId, tables: newTables });
       const totalAfter = (tables?.length ?? 0) + newTables.length;
       setBulkTableResult({ created: newTables.length, skipped: duplicates.length, total: totalAfter, duplicates });
-      toast(duplicates.length > 0 ? `${newTables.length} tables created, ${duplicates.length} duplicates skipped` : `${newTables.length} tables created`, 'success');
-    } catch (err) { toast('Failed to create tables: ' + (err instanceof Error ? err.message : 'Unknown error'), 'error'); }
+      if (duplicates.length > 0) {
+        toast(`${newTables.length} tables created, ${duplicates.length} duplicates skipped`, 'success');
+      } else {
+        toast(`${newTables.length} tables created`, 'success');
+      }
+    } catch (err) {
+      toast('Failed to create tables: ' + (err instanceof Error ? err.message : 'Unknown error'), 'error');
+    }
   }, [eventId, bulkStart, bulkCount, bulkCapacity, bulkPrefix, tables, bulkCreateTables, toast]);
 
-  // Settings save
+  // Settings save — FIX: save all theme fields and invalidate guest page queries
   const handleSaveSettings = useCallback(async () => {
-    try { await upsertSettings.mutateAsync(settingsForm); toast('Settings saved — guest page updated', 'success'); }
-    catch (err) { toast('Failed to save settings: ' + (err instanceof Error ? err.message : 'Unknown error'), 'error'); }
+    try {
+      await upsertSettings.mutateAsync(settingsForm);
+      toast('Settings saved — guest page updated', 'success');
+    } catch (err) {
+      toast('Failed to save settings: ' + (err instanceof Error ? err.message : 'Unknown error'), 'error');
+    }
   }, [settingsForm, upsertSettings, toast]);
 
   // Schedule save
-  const handleSaveSchedule = useCallback(async () => { await upsertSettings.mutateAsync({ event_id: eventId ?? '', schedule_items: scheduleItems }); toast('Schedule saved', 'success'); }, [eventId, scheduleItems, upsertSettings, toast]);
+  const handleSaveSchedule = useCallback(async () => {
+    await upsertSettings.mutateAsync({ event_id: eventId ?? '', schedule_items: scheduleItems });
+    toast('Schedule saved', 'success');
+  }, [eventId, scheduleItems, upsertSettings, toast]);
 
   // Delete event
   const handleDeleteEvent = useCallback(async () => { await deleteEvent.mutateAsync(eventId ?? ''); navigate('/'); }, [eventId, deleteEvent, navigate]);
 
-  // ── Share tab handlers ──
-  const handleSlugInput = useCallback((value: string) => {
-    const sanitized = sanitizeSlug(value);
-    setSlugInput(sanitized);
-  }, []);
-
-  const handleSaveSlug = useCallback(async () => {
-    if (!eventId) return;
-    const sanitized = sanitizeSlug(slugInput);
-    if (!sanitized || sanitized.length < 2) { toast('Slug must be at least 2 characters', 'error'); return; }
-    if (slugCheck && !slugCheck.available) { toast('This URL is already taken. Try another.', 'error'); return; }
-    setSlugSaving(true);
-    try {
-      await updateEvent.mutateAsync({ id: eventId, name: eventForm.name, slug: sanitized, date: eventForm.date || null, time: eventForm.time || null, venue: eventForm.venue || null, accent_color: eventForm.accent_color || null });
-      setSlugSaved(sanitized);
-      setEventForm(f => ({ ...f, slug: sanitized }));
-      toast('URL updated successfully', 'success');
-    } catch (err) { toast('Failed to update URL: ' + (err instanceof Error ? err.message : 'Unknown error'), 'error'); }
-    setSlugSaving(false);
-  }, [eventId, slugInput, slugCheck, updateEvent, eventForm, toast]);
-
-  const handleCopyLink = useCallback(async () => {
-    try { await navigator.clipboard.writeText(fullUrl); toast('Link copied to clipboard', 'success'); }
-    catch { toast('Failed to copy link', 'error'); }
-  }, [fullUrl, toast]);
-
-  const handleOpenWebsite = useCallback(() => {
-    window.open(fullUrl, '_blank', 'noopener,noreferrer');
-  }, [fullUrl]);
-
-  const handleDownloadPng = useCallback(() => {
-    if (!qrDataUrl) return;
-    const a = document.createElement('a');
-    a.href = qrDataUrl;
-    a.download = `qr-${currentSlug || 'event'}.png`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    toast('QR code downloaded as PNG', 'success');
-  }, [qrDataUrl, currentSlug, toast]);
-
-  const handleDownloadSvg = useCallback(() => {
-    if (!qrSvg) return;
-    const blob = new Blob([qrSvg], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `qr-${currentSlug || 'event'}.svg`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast('QR code downloaded as SVG', 'success');
-  }, [qrSvg, currentSlug, toast]);
-
-  const handleNativeShare = useCallback(async () => {
-    if (navigator.share) {
-      try { await navigator.share({ title: event?.name || 'My Event', text: 'Find your seat at our event!', url: fullUrl }); }
-      catch { /* user cancelled */ }
-    } else { handleCopyLink(); }
-  }, [event, fullUrl, handleCopyLink]);
-
-  // Slug validation state
-  const slugError = useMemo(() => {
-    if (!slugInput) return null;
-    if (slugInput.length < 2) return 'Slug must be at least 2 characters';
-    if (slugInput !== slugSaved && slugCheck && !slugCheck.available) return 'This URL is already taken';
-    return null;
-  }, [slugInput, slugSaved, slugCheck]);
-
-  const slugValid = slugInput && slugInput.length >= 2 && (!slugCheck || slugCheck.available) && slugInput !== slugSaved;
-  const slugUnchanged = slugInput === slugSaved;
-
-  if (eventLoading) return <div className="ee-root"><style>{EE_CSS}</style><div className="ee-loading"><div className="ee-spinner" /></div></div>;
-  if (!event) return <div className="ee-root"><style>{EE_CSS}</style><div className="ee-empty">Event not found. <Link to="/">Back to dashboard</Link></div></div>;
+  if (eventLoading) {
+    return <div className="ee-root"><style>{EE_CSS}</style><div className="ee-loading"><div className="ee-spinner" /></div></div>;
+  }
+  if (!event) {
+    return <div className="ee-root"><style>{EE_CSS}</style><div className="ee-empty">Event not found. <Link to="/">Back to dashboard</Link></div></div>;
+  }
 
   return (
     <div className="ee-root">
       <style>{EE_CSS}</style>
+
       <div className="ee-header">
         <Link to="/"><button className="ee-back-btn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M10 4L6 8l4 4" strokeLinecap="round" strokeLinejoin="round" /></svg>Back</button></Link>
         <span className="ee-title">{event.name}</span>
       </div>
+
       <div className="ee-tabs">
         {TABS.map(tab => <button key={tab.id} className={`ee-tab${activeTab === tab.id ? ' ee-tab--active' : ''}`} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}
       </div>
+
       <div className="ee-body">
 
         {/* EVENT DETAILS */}
@@ -489,14 +409,15 @@ export function EventEditorPage() {
             <div className="ee-field"><label className="ee-label">Accent Color</label><div className="ee-color-row"><input className="ee-color-input" type="color" value={eventForm.accent_color} onChange={e => setEventForm(f => ({ ...f, accent_color: e.target.value }))} /><span className="ee-color-label">{eventForm.accent_color}</span></div></div>
             <button className="ee-btn ee-btn-primary" onClick={handleSaveDetails}>Save Changes</button>
           </div>
+
           <div className="ee-card">
             <div className="ee-card-title">Event Logo</div>
             <div className="ee-logo-upload">
               <input ref={logoFileRef} type="file" accept={ACCEPTED_FORMATS} hidden onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoFile(f); e.target.value = ''; }} />
               {logoUrl ? (
                 <div className="ee-logo-preview">
-                  <img src={logoUrl} alt="Logo" style={{ width: `${logoSize}px`, height: `${logoSize}px`, objectFit: 'contain', borderRadius: '8px', background: '#FFFFFF', border: '1px solid #EFEFEF' }} />
-                  <div style={{ flex: 1 }}>
+                  <img className="ee-logo-preview-img" src={logoUrl} alt="Logo" style={{ width: `${logoSize}px`, height: `${logoSize}px` }} />
+                  <div className="ee-logo-preview-info" style={{ flex: 1 }}>
                     <div style={{ fontSize: '13px', fontWeight: 500, color: '#1A1A1A' }}>Logo uploaded</div>
                     <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                       <button className="ee-btn ee-btn-secondary ee-btn-sm" onClick={() => logoFileRef.current?.click()}>Replace</button>
@@ -542,6 +463,7 @@ export function EventEditorPage() {
               <button className="ee-btn ee-btn-primary ee-btn-sm" style={{ marginTop: '8px' }} onClick={handleBulkImport}>Import Guests</button>
             </div>
           </div>
+
           <div className="ee-card">
             <div className="ee-card-title">Add Guest</div>
             <div className="ee-row">
@@ -550,6 +472,7 @@ export function EventEditorPage() {
             </div>
             <button className="ee-btn ee-btn-primary" onClick={handleAddGuest}>Add Guest</button>
           </div>
+
           <div className="ee-card">
             <div className="ee-card-title">Guest List ({guests?.length ?? 0})</div>
             {guests && guests.length > 0 ? (
@@ -562,22 +485,48 @@ export function EventEditorPage() {
 
         {/* TABLES */}
         <section className="ee-panel" style={{ display: activeTab === 'tables' ? 'block' : 'none' }}>
+
+          {/* Bulk Create Tables — at top */}
           <div className="ee-card">
             <div className="ee-card-title">Bulk Create Tables</div>
             <div className="ee-bulk-table-form">
-              <div className="ee-field"><label className="ee-label">Table Prefix</label><input className="ee-input" placeholder="Table" value={bulkPrefix} onChange={e => setBulkPrefix(e.target.value)} /></div>
-              <div className="ee-field"><label className="ee-label">Starting Number</label><input className="ee-input" type="number" min="1" value={bulkStart} onChange={e => setBulkStart(e.target.value)} /></div>
-              <div className="ee-field"><label className="ee-label">Number of Tables</label><input className="ee-input" type="number" min="1" max="500" value={bulkCount} onChange={e => setBulkCount(e.target.value)} /></div>
-              <div className="ee-field"><label className="ee-label">Seats Per Table</label><input className="ee-input" type="number" min="1" value={bulkCapacity} onChange={e => setBulkCapacity(e.target.value)} /></div>
+              <div className="ee-field">
+                <label className="ee-label">Table Prefix</label>
+                <input className="ee-input" placeholder="Table" value={bulkPrefix} onChange={e => setBulkPrefix(e.target.value)} />
+              </div>
+              <div className="ee-field">
+                <label className="ee-label">Starting Number</label>
+                <input className="ee-input" type="number" min="1" value={bulkStart} onChange={e => setBulkStart(e.target.value)} />
+              </div>
+              <div className="ee-field">
+                <label className="ee-label">Number of Tables</label>
+                <input className="ee-input" type="number" min="1" max="500" value={bulkCount} onChange={e => setBulkCount(e.target.value)} />
+              </div>
+              <div className="ee-field">
+                <label className="ee-label">Seats Per Table</label>
+                <input className="ee-input" type="number" min="1" value={bulkCapacity} onChange={e => setBulkCapacity(e.target.value)} />
+              </div>
             </div>
-            <div style={{ marginTop: '16px' }}><button className="ee-btn ee-btn-primary" onClick={handleBulkCreateTables} disabled={bulkCreateTables.isPending}>{bulkCreateTables.isPending ? 'Creating...' : 'Create Tables'}</button></div>
+            <div style={{ marginTop: '16px' }}>
+              <button className="ee-btn ee-btn-primary" onClick={handleBulkCreateTables} disabled={bulkCreateTables.isPending}>
+                {bulkCreateTables.isPending ? 'Creating...' : 'Create Tables'}
+              </button>
+            </div>
             {bulkTableResult && (
               <div className={`ee-bulk-result${bulkTableResult.skipped > 0 ? ' ee-bulk-result--warning' : ' ee-bulk-result--success'}`}>
-                {bulkTableResult.created} table{bulkTableResult.created !== 1 ? 's' : ''} created{bulkTableResult.skipped > 0 && `, ${bulkTableResult.skipped} duplicate${bulkTableResult.skipped !== 1 ? 's' : ''} skipped`}{' — '}{bulkTableResult.total} total tables in event
-                {bulkTableResult.duplicates.length > 0 && <div style={{ fontSize: '12px', marginTop: '4px', opacity: 0.8 }}>Skipped: {bulkTableResult.duplicates.slice(0, 10).join(', ')}{bulkTableResult.duplicates.length > 10 ? ` ... and ${bulkTableResult.duplicates.length - 10} more` : ''}</div>}
+                {bulkTableResult.created} table{bulkTableResult.created !== 1 ? 's' : ''} created
+                {bulkTableResult.skipped > 0 && `, ${bulkTableResult.skipped} duplicate${bulkTableResult.skipped !== 1 ? 's' : ''} skipped`}
+                {' — '}{bulkTableResult.total} total tables in event
+                {bulkTableResult.duplicates.length > 0 && (
+                  <div style={{ fontSize: '12px', marginTop: '4px', opacity: 0.8 }}>
+                    Skipped: {bulkTableResult.duplicates.slice(0, 10).join(', ')}{bulkTableResult.duplicates.length > 10 ? ` ... and ${bulkTableResult.duplicates.length - 10} more` : ''}
+                  </div>
+                )}
               </div>
             )}
           </div>
+
+          {/* Single table add */}
           <div className="ee-card">
             <div className="ee-card-title">Add Single Table</div>
             <div className="ee-row">
@@ -587,6 +536,8 @@ export function EventEditorPage() {
             </div>
             <button className="ee-btn ee-btn-primary" onClick={handleAddTable}>Add Table</button>
           </div>
+
+          {/* Table list */}
           <div className="ee-card">
             <div className="ee-card-title">Tables ({tables?.length ?? 0})</div>
             {tables && tables.length > 0 ? (
@@ -664,6 +615,7 @@ export function EventEditorPage() {
                   })}
                 </div>
               </div>
+
               <div className="ee-card">
                 <div className="ee-card-title">Colors</div>
                 <div className="ee-color-row"><input className="ee-color-input" type="color" value={settingsForm.color_primary ?? '#1A1A1A'} onChange={e => setSettingsForm(f => ({ ...f, color_primary: e.target.value }))} /><span className="ee-color-label">Primary / Accent</span></div>
@@ -671,18 +623,23 @@ export function EventEditorPage() {
                 <div className="ee-color-row"><input className="ee-color-input" type="color" value={settingsForm.color_button ?? '#1A1A1A'} onChange={e => setSettingsForm(f => ({ ...f, color_button: e.target.value }))} /><span className="ee-color-label">Button</span></div>
                 <div className="ee-color-row"><input className="ee-color-input" type="color" value={settingsForm.color_button_text ?? '#FFFFFF'} onChange={e => setSettingsForm(f => ({ ...f, color_button_text: e.target.value }))} /><span className="ee-color-label">Button Text</span></div>
               </div>
+
               <div className="ee-card">
                 <div className="ee-card-title">Fonts</div>
                 <div className="ee-field"><label className="ee-label">Heading Font</label><select className="ee-select" value={settingsForm.font_heading ?? 'Inter'} onChange={e => setSettingsForm(f => ({ ...f, font_heading: e.target.value }))}>{FONT_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select></div>
                 <div className="ee-field"><label className="ee-label">Body Font</label><select className="ee-select" value={settingsForm.font_body ?? 'Inter'} onChange={e => setSettingsForm(f => ({ ...f, font_body: e.target.value }))}>{FONT_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select></div>
               </div>
+
               <button className="ee-btn ee-btn-primary" onClick={handleSaveSettings}>Save Settings</button>
+
               <div className="ee-danger-zone" style={{ marginTop: '24px' }}>
                 <div className="ee-danger-zone-title">Danger Zone</div>
                 <div className="ee-danger-zone-desc">Permanently delete this event and all associated data.</div>
                 <button className="ee-btn ee-btn-danger" onClick={() => setDeleteConfirmOpen(true)}>Delete Event</button>
               </div>
             </div>
+
+            {/* Live Preview */}
             <div style={{ width: '340px', flexShrink: 0 }}>
               <div className="ee-preview-wrap">
                 <div className="ee-preview-device-toggle">
@@ -694,103 +651,14 @@ export function EventEditorPage() {
                     {logoUrl && <img src={logoUrl} alt="Logo" style={{ width: `${logoSize}px`, height: `${logoSize}px`, margin: '0 auto 12px', borderRadius: '50%', objectFit: 'contain' }} />}
                     <div style={{ fontFamily: settingsForm.font_heading ?? 'Inter', fontSize: '20px', fontWeight: 600, letterSpacing: '0.1em', marginBottom: '8px' }}>{eventForm.name.toUpperCase() || 'EVENT NAME'}</div>
                     <div style={{ fontSize: '11px', letterSpacing: '0.15em', opacity: 0.8 }}>{eventForm.date || 'DATE'} · {eventForm.venue?.toUpperCase() || 'VENUE'}</div>
-                    <div style={{ marginTop: '16px', padding: '0 16px' }}><div style={{ border: `1.5px solid ${settingsForm.color_primary ?? '#1A1A1A'}`, borderRadius: '12px', padding: '12px 16px', fontSize: '14px', background: settingsForm.color_background ?? 'transparent', color: settingsForm.color_primary ?? '#1A1A1A' }}>SEARCH YOUR NAME</div></div>
-                    <div style={{ marginTop: '12px' }}><div style={{ display: 'inline-block', padding: '8px 20px', borderRadius: '12px', background: settingsForm.color_button ?? '#1A1A1A', color: settingsForm.color_button_text ?? '#FFFFFF', fontSize: '14px', fontWeight: 500 }}>FIND SEAT</div></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* SHARE */}
-        <section className="ee-panel" style={{ display: activeTab === 'share' ? 'block' : 'none' }}>
-          <div className="ee-card">
-            <div className="ee-card-title">Share Your Event</div>
-            <p style={{ fontSize: '14px', color: '#4A4A4A', marginBottom: '20px' }}>Share your guest website with attendees. They can search for their seat and view the venue layout.</p>
-
-            {/* Guest Website URL */}
-            <div style={{ marginBottom: '24px' }}>
-              <label className="ee-label">Guest Website URL</label>
-              <div className="ee-share-url-row">
-                <div className="ee-share-url-display">{fullUrl}</div>
-              </div>
-              <div className="ee-share-actions" style={{ marginTop: '12px' }}>
-                <button className="ee-btn ee-btn-primary ee-btn-sm ee-share-tooltip" data-tooltip="Copy link to clipboard" onClick={handleCopyLink}>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="5" y="5" width="8" height="8" rx="2" /><path d="M11 5V3a2 2 0 00-2-2H3a2 2 0 00-2 2v6a2 2 0 002 2h2" /></svg>
-                  Copy Link
-                </button>
-                <button className="ee-btn ee-btn-secondary ee-btn-sm ee-share-tooltip" data-tooltip="Open guest website in new tab" onClick={handleOpenWebsite}>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M10 3h3v3M13 3L7 9M12 9v3a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2h3" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  Open Guest Website
-                </button>
-                <button className="ee-btn ee-btn-secondary ee-btn-sm ee-share-tooltip" data-tooltip="Share via browser" onClick={handleNativeShare}>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="4" cy="8" r="2" /><circle cx="12" cy="4" r="2" /><circle cx="12" cy="12" r="2" /><path d="M6 7l4-2M6 9l4 2" /></svg>
-                  Share
-                </button>
-              </div>
-            </div>
-
-            {/* QR Code */}
-            <div style={{ marginBottom: '24px' }}>
-              <label className="ee-label">QR Code</label>
-              <div className="ee-share-grid">
-                <div className="ee-share-qr-wrap">
-                  {qrDataUrl ? (
-                    <div className="ee-share-qr-canvas">
-                      <img src={qrDataUrl} alt="QR Code" style={{ width: '240px', height: '240px' }} />
+                    <div style={{ marginTop: '16px', padding: '0 16px' }}>
+                      <div style={{ border: `1.5px solid ${settingsForm.color_primary ?? '#1A1A1A'}`, borderRadius: '12px', padding: '12px 16px', fontSize: '14px', background: settingsForm.color_background ?? 'transparent', color: settingsForm.color_primary ?? '#1A1A1A' }}>SEARCH YOUR NAME</div>
                     </div>
-                  ) : (
-                    <div className="ee-share-qr-canvas" style={{ width: '272px', height: '272px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <div className="ee-spinner" />
+                    <div style={{ marginTop: '12px' }}>
+                      <div style={{ display: 'inline-block', padding: '8px 20px', borderRadius: '12px', background: settingsForm.color_button ?? '#1A1A1A', color: settingsForm.color_button_text ?? '#FFFFFF', fontSize: '14px', fontWeight: 500 }}>FIND SEAT</div>
                     </div>
-                  )}
-                  <div className="ee-share-qr-actions">
-                    <button className="ee-btn ee-btn-secondary ee-btn-sm ee-share-tooltip" data-tooltip="Download as PNG image" onClick={handleDownloadPng} disabled={!qrDataUrl}>
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M8 2v8m0 0l-3-3m3 3l3-3M2 12v1a2 2 0 002 2h8a2 2 0 002-2v-1" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      Download PNG
-                    </button>
-                    <button className="ee-btn ee-btn-secondary ee-btn-sm ee-share-tooltip" data-tooltip="Download as SVG vector" onClick={handleDownloadSvg} disabled={!qrSvg}>
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M8 2v8m0 0l-3-3m3 3l3-3M2 12v1a2 2 0 002 2h8a2 2 0 002-2v-1" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      Download SVG
-                    </button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div>
-                    <p style={{ fontSize: '13px', color: '#4A4A4A', lineHeight: 1.6 }}>The QR code automatically updates when you change the URL slug. Guests can scan this code with their phone to open the guest page directly.</p>
-                    <p style={{ fontSize: '13px', color: '#4A4A4A', lineHeight: 1.6, marginTop: '8px' }}>Download the PNG for print materials or the SVG for digital use.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Custom URL */}
-            <div>
-              <label className="ee-label">Custom URL</label>
-              <div className="ee-share-slug-input">
-                <span className="ee-share-slug-prefix">{baseUrl}</span>
-                <input
-                  className={`ee-share-slug-field${slugError ? ' ee-share-slug-field--error' : slugValid ? ' ee-share-slug-field--valid' : ''}`}
-                  placeholder="your-event-slug"
-                  value={slugInput}
-                  onChange={e => handleSlugInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && slugValid) handleSaveSlug(); }}
-                />
-              </div>
-              {slugError && <div className="ee-share-error">{slugError}</div>}
-              {slugValid && <div className="ee-share-valid">URL is available</div>}
-              <div style={{ marginTop: '12px' }}>
-                <label className="ee-label">Live Preview</label>
-                <div className="ee-share-preview">{baseUrl}{slugInput || currentSlug || 'your-event-slug'}</div>
-              </div>
-              <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
-                <button className="ee-btn ee-btn-primary ee-btn-sm" onClick={handleSaveSlug} disabled={!slugValid || slugSaving || slugUnchanged}>
-                  {slugSaving ? 'Saving...' : 'Save URL'}
-                </button>
-                <button className="ee-btn ee-btn-secondary ee-btn-sm ee-share-tooltip" data-tooltip="Open preview in new tab" onClick={handleOpenWebsite}>
-                  Open Guest Website
-                </button>
               </div>
             </div>
           </div>

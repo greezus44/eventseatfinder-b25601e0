@@ -1,5 +1,5 @@
-import { Navigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/providers/auth-provider';
 
 export function ProtectedLayout({ children }: { children: ReactNode }) {
@@ -10,13 +10,13 @@ export function ProtectedLayout({ children }: { children: ReactNode }) {
       <div
         style={{
           minHeight: '100vh',
-          background: '#F8F8F8',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          background: '#F8F8F8',
         }}
       >
-        <span style={{ color: '#4A4A4A', fontSize: '14px' }}>Loading…</span>
+        <span style={{ fontSize: 14, color: '#4A4A4A', fontFamily: 'Inter, sans-serif' }}>Loading…</span>
       </div>
     );
   }

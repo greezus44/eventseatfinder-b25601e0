@@ -1,8 +1,4 @@
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import type { Event, EventInput } from '@/types/event';
 
@@ -10,10 +6,7 @@ export function useEvents() {
   return useQuery({
     queryKey: ['events'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('events').select('*').order('created_at', { ascending: false });
       if (error) throw error;
       return data as Event[];
     },
@@ -22,13 +15,9 @@ export function useEvents() {
 
 export function useEvent(eventId: string) {
   return useQuery({
-    queryKey: ['event', eventId],
+    queryKey: ['events', eventId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .eq('id', eventId)
-        .single();
+      const { data, error } = await supabase.from('events').select('*').eq('id', eventId).single();
       if (error) throw error;
       return data as Event;
     },
@@ -38,13 +27,9 @@ export function useEvent(eventId: string) {
 
 export function useEventBySlug(slug: string) {
   return useQuery({
-    queryKey: ['event-by-slug', slug],
+    queryKey: ['events', 'slug', slug],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .eq('slug', slug)
-        .single();
+      const { data, error } = await supabase.from('events').select('*').eq('slug', slug).single();
       if (error) throw error;
       return data as Event;
     },
@@ -56,11 +41,7 @@ export function useCreateEvent() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: EventInput) => {
-      const { data, error } = await supabase
-        .from('events')
-        .insert(input)
-        .select()
-        .single();
+      const { data, error } = await supabase.from('events').insert(input).select().single();
       if (error) throw error;
       return data as Event;
     },
@@ -73,20 +54,14 @@ export function useCreateEvent() {
 export function useUpdateEvent() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...fields }: { id: string } & EventInput) => {
-      const { data, error } = await supabase
-        .from('events')
-        .update(fields)
-        .eq('id', id)
-        .select()
-        .single();
+    mutationFn: async ({ id, ...input }: EventInput & { id: string }) => {
+      const { data, error } = await supabase.from('events').update(input).eq('id', id).select().single();
       if (error) throw error;
       return data as Event;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
-      queryClient.invalidateQueries({ queryKey: ['event', data.id] });
-      queryClient.invalidateQueries({ queryKey: ['event-by-slug', data.slug] });
+      queryClient.invalidateQueries({ queryKey: ['events', data.id] });
     },
   });
 }
@@ -101,23 +76,5 @@ export function useDeleteEvent() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
     },
-  });
-}
-
-export function useCheckSlugAvailability(slug: string, currentEventId?: string) {
-  return useQuery({
-    queryKey: ['slug-check', slug],
-    queryFn: async () => {
-      if (!slug || slug.length < 2) return { available: false, reason: 'too_short' };
-      let query = supabase.from('events').select('id, slug').eq('slug', slug);
-      if (currentEventId) {
-        query = query.neq('id', currentEventId);
-      }
-      const { data, error } = await query;
-      if (error) throw error;
-      return { available: !data || data.length === 0, reason: data && data.length > 0 ? 'taken' : 'ok' };
-    },
-    enabled: !!slug && slug.length >= 2,
-    staleTime: 0,
   });
 }
