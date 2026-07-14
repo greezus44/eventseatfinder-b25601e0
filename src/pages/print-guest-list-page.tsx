@@ -1,294 +1,248 @@
 import { useParams, Link } from 'react-router-dom';
 import { useEvent } from '@/hooks/use-events';
 import { useGuests } from '@/hooks/use-guests';
-import type { GuestWithTable } from '@/types/guest';
 
 const PGL_CSS = `
-.pgl-root {
-  min-height: 100vh; background: #F8F8F8; font-family: 'Inter', sans-serif;
-  color: #1A1A1A; padding: 32px 24px 64px; box-sizing: border-box;
-}
-.pgl-container { max-width: 900px; margin: 0 auto; }
+.pgl-root { min-height: 100vh; background: #F8F8F8; font-family: 'Inter', system-ui, sans-serif; color: #1A1A1A; }
 
-/* ---- Toolbar (hidden in print) ---- */
+/* Toolbar — hidden on print */
 .pgl-toolbar {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  margin-bottom: 28px; flex-wrap: wrap;
+  background: #FFFFFF; border-bottom: 1px solid #EFEFEF; padding: 16px 32px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  position: sticky; top: 0; z-index: 100;
 }
 .pgl-toolbar-left { display: flex; align-items: center; gap: 12px; }
 .pgl-back-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 40px; padding: 0 14px;
-  border: 1px solid #DADADA; border-radius: 10px;
-  background: #FFFFFF; color: #4A4A4A; font-size: 13px; font-weight: 500;
-  font-family: inherit; text-decoration: none; cursor: pointer;
-  transition: all 200ms ease;
+  display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px;
+  border: 1px solid #DADADA; border-radius: 12px; background: #FFFFFF; color: #4A4A4A;
+  font-size: 14px; font-weight: 500; cursor: pointer; text-decoration: none;
+  transition: all 200ms ease; font-family: inherit;
 }
 .pgl-back-btn:hover { background: #EFEFEF; color: #1A1A1A; }
 .pgl-print-btn {
-  display: inline-flex; align-items: center; gap: 8px;
-  height: 44px; padding: 0 20px;
-  border: none; border-radius: 12px;
-  background: #1A1A1A; color: #FFFFFF;
-  font-size: 14px; font-weight: 600; font-family: inherit;
-  cursor: pointer; transition: background 200ms ease;
+  display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 20px;
+  border: 1px solid #1A1A1A; border-radius: 12px; background: #1A1A1A; color: #FFFFFF;
+  font-size: 14px; font-weight: 500; cursor: pointer; transition: background 200ms ease; font-family: inherit;
 }
 .pgl-print-btn:hover { background: #333333; }
 
-/* ---- Header ---- */
-.pgl-header { margin-bottom: 32px; }
-.pgl-header h1 {
-  margin: 0 0 6px; font-size: 28px; font-weight: 700; color: #1A1A1A;
-  letter-spacing: -0.5px;
+/* Document */
+.pgl-doc { max-width: 800px; margin: 0 auto; padding: 48px 32px; }
+.pgl-header { text-align: center; margin-bottom: 40px; padding-bottom: 24px; border-bottom: 2px solid #1A1A1A; }
+.pgl-eyebrow {
+  font-size: 12px; font-weight: 600; color: #B0B0B0; text-transform: uppercase;
+  letter-spacing: 0.15em; margin: 0 0 8px;
 }
-.pgl-header-meta { font-size: 14px; color: #4A4A4A; margin: 0; }
-.pgl-header-meta span { margin-right: 16px; }
-.pgl-header-meta span:last-child { margin-right: 0; }
+.pgl-title { font-size: 32px; font-weight: 700; color: #1A1A1A; margin: 0 0 8px; letter-spacing: -0.02em; }
+.pgl-meta { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+.pgl-meta-item { font-size: 13px; color: #4A4A4A; display: flex; align-items: center; gap: 4px; }
+.pgl-meta-item svg { color: #B0B0B0; }
 
-/* ---- Stats ---- */
-.pgl-stats {
-  display: flex; gap: 16px; margin-bottom: 28px; flex-wrap: wrap;
-}
-.pgl-stat {
-  background: #FFFFFF; border: 1px solid #EFEFEF; border-radius: 12px;
-  padding: 16px 20px; flex: 1; min-width: 140px;
-}
-.pgl-stat-label {
-  font-size: 12px; font-weight: 600; color: #4A4A4A;
-  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
-}
-.pgl-stat-value { font-size: 24px; font-weight: 700; color: #1A1A1A; }
-
-/* ---- Guest table ---- */
-.pgl-table-wrap {
-  background: #FFFFFF; border: 1px solid #EFEFEF; border-radius: 14px;
-  overflow: hidden;
-}
-.pgl-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.pgl-table thead { background: #F8F8F8; }
+/* Guest table */
+.pgl-table-wrap { background: #FFFFFF; border: 1px solid #EFEFEF; border-radius: 12px; overflow: hidden; }
+.pgl-table { width: 100%; border-collapse: collapse; }
 .pgl-table th {
   text-align: left; padding: 12px 16px; font-size: 12px; font-weight: 600;
-  color: #4A4A4A; text-transform: uppercase; letter-spacing: 0.5px;
-  border-bottom: 1px solid #EFEFEF;
+  color: #B0B0B0; text-transform: uppercase; letter-spacing: 0.05em;
+  background: #F8F8F8; border-bottom: 1px solid #EFEFEF;
 }
 .pgl-table td {
-  padding: 12px 16px; border-bottom: 1px solid #EFEFEF; color: #1A1A1A;
+  padding: 12px 16px; font-size: 14px; color: #1A1A1A; border-bottom: 1px solid #F8F8F8;
 }
-.pgl-table tbody tr:last-child td { border-bottom: none; }
-.pgl-table tbody tr:hover { background: #F8F8F8; }
-
+.pgl-table tr:last-child td { border-bottom: none; }
+.pgl-table tr:nth-child(even) { background: #FAFAFA; }
 .pgl-guest-name { font-weight: 600; }
 .pgl-table-badge {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 28px; height: 26px; padding: 0 8px; border-radius: 8px;
-  background: #1A1A1A; color: #FFFFFF; font-size: 12px; font-weight: 700;
+  display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 8px;
+  font-size: 12px; font-weight: 500;
 }
-.pgl-table-badge--none {
-  background: #EFEFEF; color: #4A4A4A; font-weight: 500; min-width: auto;
-  padding: 0 10px;
-}
-.pgl-contact { font-size: 13px; color: #4A4A4A; }
-.pgl-contact--none { color: #B0B0B0; font-style: italic; }
-.pgl-dietary {
-  font-size: 13px; color: #4A4A4A; max-width: 200px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.pgl-dietary--none { color: #B0B0B0; font-style: italic; }
-.pgl-empty-row { text-align: center; padding: 40px 16px; color: #B0B0B0; font-size: 14px; }
+.pgl-table-badge--assigned { background: #1A1A1A; color: #FFFFFF; }
+.pgl-table-badge--unassigned { background: #EFEFEF; color: #4A4A4A; }
+.pgl-empty { padding: 48px; text-align: center; font-size: 14px; color: #B0B0B0; }
 
-/* ---- Loading / Error ---- */
-.pgl-loading, .pgl-error { text-align: center; padding: 80px 20px; }
-.pgl-loading-dot {
-  width: 32px; height: 32px; border-radius: 50%;
-  border: 3px solid #EFEFEF; border-top-color: #1A1A1A;
-  animation: pgl-spin 0.7s linear infinite; margin: 0 auto 16px;
+/* Summary */
+.pgl-summary {
+  margin-top: 24px; padding: 20px; background: #FFFFFF; border: 1px solid #EFEFEF; border-radius: 12px;
+  display: flex; gap: 32px; justify-content: center; flex-wrap: wrap;
 }
+.pgl-summary-item { text-align: center; }
+.pgl-summary-label { font-size: 12px; font-weight: 600; color: #B0B0B0; text-transform: uppercase; letter-spacing: 0.05em; }
+.pgl-summary-value { font-size: 24px; font-weight: 700; color: #1A1A1A; margin-top: 2px; }
+
+/* Loading / error */
+.pgl-loading { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #F8F8F8; }
+.pgl-spinner { width: 32px; height: 32px; border: 3px solid #EFEFEF; border-top-color: #1A1A1A; border-radius: 50%; animation: pgl-spin 0.8s linear infinite; }
 @keyframes pgl-spin { to { transform: rotate(360deg); } }
-.pgl-loading-text { font-size: 14px; color: #4A4A4A; }
-.pgl-error-icon {
-  width: 56px; height: 56px; margin: 0 auto 16px; border-radius: 14px;
-  background: #EFEFEF; display: flex; align-items: center; justify-content: center;
-  color: #4A4A4A;
+.pgl-error { text-align: center; padding: 64px 32px; }
+.pgl-error-title { font-size: 18px; font-weight: 600; color: #1A1A1A; margin: 0 0 8px; }
+.pgl-error-text { font-size: 14px; color: #B0B0B0; margin: 0 0 24px; }
+.pgl-error-link {
+  display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 20px;
+  border-radius: 12px; background: #1A1A1A; color: #FFFFFF; font-size: 14px; font-weight: 500;
+  text-decoration: none; transition: background 200ms ease;
 }
-.pgl-error h2 { margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #1A1A1A; }
-.pgl-error p { margin: 0; font-size: 14px; color: #4A4A4A; }
+.pgl-error-link:hover { background: #333333; }
 
-/* ---- Print styles ---- */
+/* Print */
 @media print {
-  .pgl-root { background: #FFFFFF; padding: 0; }
   .pgl-toolbar { display: none !important; }
-  .pgl-table-wrap { border: 1px solid #DADADA; }
-  .pgl-table th { background: #F8F8F8; }
-  .pgl-table tbody tr:hover { background: transparent; }
-  .pgl-container { max-width: 100%; }
-  @page { margin: 1.5cm; }
+  .pgl-root { background: #FFFFFF; }
+  .pgl-doc { padding: 0; max-width: 100%; }
+  .pgl-table-wrap { box-shadow: none; }
+  .pgl-summary { box-shadow: none; }
+  .pgl-table tr { page-break-inside: avoid; }
 }
 `;
 
-function formatPglDate(dateStr: string | null): string {
+function formatDate(dateStr: string | null): string {
   if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  try {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
 }
 
 export function PrintGuestListPage() {
   const { eventId } = useParams<{ eventId: string }>();
-  const eid = eventId ?? '';
+  const { data: event, isLoading } = useEvent(eventId ?? '');
+  const { data: guests } = useGuests(eventId ?? '');
 
-  const { data: event, isLoading: eventLoading } = useEvent(eid || undefined);
-  const { data: guests = [], isLoading: guestsLoading } = useGuests(eid || undefined);
+  if (isLoading) {
+    return (
+      <div className="pgl-loading">
+        <style>{PGL_CSS}</style>
+        <div className="pgl-spinner" />
+      </div>
+    );
+  }
 
-  const isLoading = eventLoading || guestsLoading;
+  if (!event) {
+    return (
+      <div className="pgl-root">
+        <style>{PGL_CSS}</style>
+        <div className="pgl-error">
+          <h2 className="pgl-error-title">Event not found</h2>
+          <p className="pgl-error-text">The event you're looking for doesn't exist.</p>
+          <Link to="/" className="pgl-error-link">Back to Dashboard</Link>
+        </div>
+      </div>
+    );
+  }
 
-  const assignedCount = guests.filter((g) => g.table_id !== null).length;
-  const unassignedCount = guests.length - assignedCount;
-  const totalParty = guests.reduce((sum, g) => sum + (g.party_size || 1), 0);
+  const totalGuests = guests?.length ?? 0;
+  const assignedGuests = guests?.filter((g) => g.table_id).length ?? 0;
+  const unassignedGuests = totalGuests - assignedGuests;
 
   // Sort guests alphabetically by name
-  const sortedGuests = [...guests].sort((a, b) =>
-    a.name.localeCompare(b.name),
-  );
+  const sortedGuests = [...(guests ?? [])].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="pgl-root">
       <style>{PGL_CSS}</style>
-      <div className="pgl-container">
-        {/* Toolbar */}
-        <div className="pgl-toolbar">
-          <div className="pgl-toolbar-left">
-            <Link to={`/e/${eid}`} className="pgl-back-btn">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M9 3L4 7l5 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Back to Event
-            </Link>
-          </div>
-          <button className="pgl-print-btn" onClick={() => window.print()}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M4 6V2h8v4M4 11H2V7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v4h-2M4 9h8v5H4z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+
+      {/* Toolbar */}
+      <div className="pgl-toolbar">
+        <div className="pgl-toolbar-left">
+          <Link to={`/event/${event.id}`} className="pgl-back-btn">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M10 4L6 8l4 4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Print Guest List
-          </button>
+            Back to Event
+          </Link>
+        </div>
+        <button className="pgl-print-btn" onClick={() => window.print()}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M4 5V2h8v3M4 11H2.5V7a1 1 0 011-1h9a1 1 0 011 1v4H12M4 9h8v5H4z" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Print Guest List
+        </button>
+      </div>
+
+      {/* Document */}
+      <div className="pgl-doc">
+        <div className="pgl-header">
+          <p className="pgl-eyebrow">Guest List</p>
+          <h1 className="pgl-title">{event.name}</h1>
+          <div className="pgl-meta">
+            {event.date && (
+              <span className="pgl-meta-item">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="3" y="4" width="10" height="10" rx="1.5" />
+                  <path d="M3 7h10M6 2v4M10 2v4" strokeLinecap="round" />
+                </svg>
+                {formatDate(event.date)}
+                {event.time ? ` · ${event.time}` : ''}
+              </span>
+            )}
+            {event.venue && (
+              <span className="pgl-meta-item">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M8 14s5-4.5 5-8a5 5 0 10-10 0c0 3.5 5 8 5 8z" />
+                  <circle cx="8" cy="6" r="2" />
+                </svg>
+                {event.venue}
+              </span>
+            )}
+          </div>
         </div>
 
-        {isLoading ? (
-          <div className="pgl-loading">
-            <div className="pgl-loading-dot" />
-            <p className="pgl-loading-text">Loading guest list...</p>
-          </div>
-        ) : !event ? (
-          <div className="pgl-error">
-            <div className="pgl-error-icon">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" />
-                <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </div>
-            <h2>Event Not Found</h2>
-            <p>This event may have been removed.</p>
-          </div>
-        ) : (
-          <>
-            {/* Header */}
-            <div className="pgl-header">
-              <h1>Guest List — {event.name}</h1>
-              <p className="pgl-header-meta">
-                {event.date && <span>{formatPglDate(event.date)}</span>}
-                {event.venue && <span>{event.venue}</span>}
-              </p>
-            </div>
-
-            {/* Stats */}
-            <div className="pgl-stats">
-              <div className="pgl-stat">
-                <div className="pgl-stat-label">Total Guests</div>
-                <div className="pgl-stat-value">{guests.length}</div>
-              </div>
-              <div className="pgl-stat">
-                <div className="pgl-stat-label">Total Party Size</div>
-                <div className="pgl-stat-value">{totalParty}</div>
-              </div>
-              <div className="pgl-stat">
-                <div className="pgl-stat-label">Assigned</div>
-                <div className="pgl-stat-value">{assignedCount}</div>
-              </div>
-              <div className="pgl-stat">
-                <div className="pgl-stat-label">Unassigned</div>
-                <div className="pgl-stat-value">{unassignedCount}</div>
-              </div>
-            </div>
-
-            {/* Guest table */}
-            <div className="pgl-table-wrap">
-              <table className="pgl-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '28%' }}>Name</th>
-                    <th style={{ width: '15%' }}>Party Size</th>
-                    <th style={{ width: '15%' }}>Table</th>
-                    <th style={{ width: '22%' }}>Contact</th>
-                    <th style={{ width: '20%' }}>Dietary Notes</th>
+        {/* Guest table */}
+        <div className="pgl-table-wrap">
+          {sortedGuests.length > 0 ? (
+            <table className="pgl-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '40px' }}>#</th>
+                  <th>Guest Name</th>
+                  <th>Table</th>
+                  <th>Party Size</th>
+                  <th>Dietary Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedGuests.map((g, i) => (
+                  <tr key={g.id}>
+                    <td>{i + 1}</td>
+                    <td className="pgl-guest-name">{g.name}</td>
+                    <td>
+                      {g.table ? (
+                        <span className="pgl-table-badge pgl-table-badge--assigned">
+                          Table {g.table.number}
+                        </span>
+                      ) : (
+                        <span className="pgl-table-badge pgl-table-badge--unassigned">
+                          Unassigned
+                        </span>
+                      )}
+                    </td>
+                    <td>{g.party_size}</td>
+                    <td>{g.dietary_notes || '—'}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {sortedGuests.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="pgl-empty-row">
-                        No guests have been added yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    sortedGuests.map((g: GuestWithTable) => (
-                      <tr key={g.id}>
-                        <td className="pgl-guest-name">{g.name}</td>
-                        <td>{g.party_size}</td>
-                        <td>
-                          {g.table ? (
-                            <span className="pgl-table-badge">
-                              {g.table.number}
-                            </span>
-                          ) : (
-                            <span className="pgl-table-badge pgl-table-badge--none">
-                              Unassigned
-                            </span>
-                          )}
-                        </td>
-                        <td>
-                          {g.email || g.phone ? (
-                            <span className="pgl-contact">
-                              {g.email || g.phone}
-                            </span>
-                          ) : (
-                            <span className="pgl-contact pgl-contact--none">
-                              —
-                            </span>
-                          )}
-                        </td>
-                        <td>
-                          {g.dietary_notes ? (
-                            <span className="pgl-dietary" title={g.dietary_notes}>
-                              {g.dietary_notes}
-                            </span>
-                          ) : (
-                            <span className="pgl-dietary pgl-dietary--none">
-                              —
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="pgl-empty">No guests have been added to this event.</div>
+          )}
+        </div>
+
+        {/* Summary */}
+        <div className="pgl-summary">
+          <div className="pgl-summary-item">
+            <div className="pgl-summary-label">Total Guests</div>
+            <div className="pgl-summary-value">{totalGuests}</div>
+          </div>
+          <div className="pgl-summary-item">
+            <div className="pgl-summary-label">Assigned</div>
+            <div className="pgl-summary-value">{assignedGuests}</div>
+          </div>
+          <div className="pgl-summary-item">
+            <div className="pgl-summary-label">Unassigned</div>
+            <div className="pgl-summary-value">{unassignedGuests}</div>
+          </div>
+        </div>
       </div>
     </div>
   );

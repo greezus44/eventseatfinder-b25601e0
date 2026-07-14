@@ -1,10 +1,6 @@
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { Event, EventInput } from '@/types/event';
+import { Event, EventInput } from '@/types/event';
 
 export function useEvents() {
   return useQuery({
@@ -20,35 +16,35 @@ export function useEvents() {
   });
 }
 
-export function useEvent(eventId: string | undefined) {
+export function useEvent(eventId: string) {
   return useQuery({
     queryKey: ['event', eventId],
-    enabled: !!eventId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('events')
         .select('*')
-        .eq('id', eventId!)
+        .eq('id', eventId)
         .single();
       if (error) throw error;
       return data as Event;
     },
+    enabled: !!eventId,
   });
 }
 
-export function useEventBySlug(slug: string | undefined) {
+export function useEventBySlug(slug: string) {
   return useQuery({
-    queryKey: ['event', 'slug', slug],
-    enabled: !!slug,
+    queryKey: ['event-by-slug', slug],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('events')
         .select('*')
-        .eq('slug', slug!)
+        .eq('slug', slug)
         .single();
       if (error) throw error;
       return data as Event;
     },
+    enabled: !!slug,
   });
 }
 
@@ -86,6 +82,7 @@ export function useUpdateEvent() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
       queryClient.invalidateQueries({ queryKey: ['event', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['event-by-slug'] });
     },
   });
 }

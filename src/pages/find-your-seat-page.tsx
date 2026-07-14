@@ -161,6 +161,7 @@ export function FindYourSeatPage() {
   return (
     <div className="gp-root" style={{ '--accent': accent, '--bg': bg } as React.CSSProperties}>
 
+      {/* Language switcher — rectangular, matches search box */}
       <div className="gp-lang-switcher">
         <button
           className={`gp-lang-btn${lang === 'en' ? ' gp-lang-btn--active' : ''}`}
@@ -176,6 +177,7 @@ export function FindYourSeatPage() {
         </button>
       </div>
 
+      {/* Hero */}
       <div className="gp-hero">
         {effectiveSettings.logo_url ? (
           <img
@@ -203,6 +205,7 @@ export function FindYourSeatPage() {
         )}
       </div>
 
+      {/* Segmented tabs — rectangular, matches search box */}
       <div className="gp-tabs-wrap">
         <div className="gp-tabs" style={{ borderColor: accent }}>
           <button
@@ -223,12 +226,12 @@ export function FindYourSeatPage() {
         </div>
       </div>
 
+      {/* Content */}
       <div className="gp-content">
 
         {/* FIND SEAT TAB */}
         <div className={`gp-tab-panel${activeTab === 'find' ? ' gp-tab-panel--active' : ''}`}>
           <div className="gp-search-wrap">
-            {/* Search box: matches page background, accent border, rectangular with 12px radius */}
             <div className="gp-search-box" style={{ borderColor: accent, background: bg }}>
               <svg className="gp-search-icon" style={{ color: accent }} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <circle cx="8.5" cy="8.5" r="5.5" />
@@ -261,7 +264,7 @@ export function FindYourSeatPage() {
           )}
         </div>
 
-        {/* VENUE LAYOUT TAB — larger preview */}
+        {/* VENUE LAYOUT TAB */}
         <div className={`gp-tab-panel${activeTab === 'venue' ? ' gp-tab-panel--active' : ''}`}>
           {venueImageUrl ? (
             <div className="gp-venue-wrap">

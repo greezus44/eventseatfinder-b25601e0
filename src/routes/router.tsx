@@ -2,10 +2,10 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/app-layout';
 import { ProtectedLayout } from '@/components/layout/protected-layout';
 import { LoginPage } from '@/pages/login-page';
-import { DashboardPage } from '@/pages/dashboard-page';
-import { EventEditorPage } from '@/pages/event-editor-page';
 import { FindYourSeatPage } from '@/pages/find-your-seat-page';
 import { InvitationPage } from '@/pages/invitation-page';
+import { DashboardPage } from '@/pages/dashboard-page';
+import { EventEditorPage } from '@/pages/event-editor-page';
 import { PrintSeatingChartPage } from '@/pages/print-seating-chart-page';
 import { PrintGuestListPage } from '@/pages/print-guest-list-page';
 

@@ -7,9 +7,8 @@ import { useGuestPageSettings, useUpsertGuestPageSettings } from '@/hooks/use-gu
 import { useToast } from '@/providers/toast-provider';
 import { ConfirmDialog, Modal } from '@/components/ui/confirm-dialog';
 import { DEFAULT_SETTINGS, FONT_OPTIONS, THEME_PRESETS } from '@/types/guest-page-settings';
-import type { GuestPageSettingsInput } from '@/types/guest-page-settings';
+import type { GuestPageSettingsInput, ScheduleItem } from '@/types/guest-page-settings';
 import type { GuestPageSettings } from '@/types/guest-page-settings';
-import type { GuestWithTable } from '@/types/guest';
 
 type Tab = 'details' | 'guests' | 'tables' | 'venue' | 'schedule' | 'settings';
 
@@ -28,7 +27,7 @@ const LOGO_SIZE_PRESETS = [
   { label: 'Large', value: 96 },
 ];
 
-const ACCEPTED_FORMATS = '.png,.jpg,.jpeg,.svg,.webP';
+const ACCEPTED_FORMATS = '.png,.jpg,.jpeg,.svg,.webp';
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 const EE_CSS = `
@@ -39,7 +38,7 @@ const EE_CSS = `
 }
 .ee-back-btn {
   display: flex; align-items: center; gap: 6px; padding: 8px 14px;
-  border: 1px solid #DADADA; border-radius: 10px; font-size: 13px; font-weight: 500;
+  border: 1px solid #DADADA; border-radius: 12px; font-size: 14px; font-weight: 500;
   color: #4A4A4A; transition: all 200ms ease;
 }
 .ee-back-btn:hover { background: #EFEFEF; color: #1A1A1A; }
@@ -49,7 +48,7 @@ const EE_CSS = `
   padding: 0 32px; overflow-x: auto;
 }
 .ee-tab {
-  padding: 12px 20px; font-size: 13px; font-weight: 500; color: #B0B0B0;
+  padding: 12px 20px; font-size: 14px; font-weight: 500; color: #B0B0B0;
   border-bottom: 2px solid transparent; transition: all 200ms ease; white-space: nowrap;
 }
 .ee-tab:hover { color: #4A4A4A; }
@@ -59,7 +58,7 @@ const EE_CSS = `
 @keyframes ee-fade { from { opacity: 0; } to { opacity: 1; } }
 
 /* Form elements — consistent rectangular with 12px radius */
-.ee-field { margin-bottom: 20px; }
+.ee-field { margin-bottom: 16px; }
 .ee-label { display: block; font-size: 13px; font-weight: 600; color: #4A4A4A; margin-bottom: 6px; }
 .ee-input, .ee-select, .ee-textarea {
   width: 100%; height: 44px; padding: 10px 14px;
@@ -82,7 +81,7 @@ const EE_CSS = `
 .ee-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   padding: 10px 20px; height: 44px; border-radius: 12px;
-  font-size: 14px; font-weight: 600; transition: all 200ms ease; white-space: nowrap;
+  font-size: 14px; font-weight: 500; transition: all 200ms ease; white-space: nowrap;
 }
 .ee-btn-primary { background: #1A1A1A; color: #FFFFFF; }
 .ee-btn-primary:hover { background: #333333; }
@@ -94,7 +93,7 @@ const EE_CSS = `
 
 /* Cards */
 .ee-card {
-  background: #FFFFFF; border: 1px solid #EFEFEF; border-radius: 16px;
+  background: #FFFFFF; border: 1px solid #EFEFEF; border-radius: 12px;
   padding: 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .ee-card-title { font-size: 15px; font-weight: 600; color: #1A1A1A; margin-bottom: 16px; }
@@ -115,10 +114,7 @@ const EE_CSS = `
   display: flex; align-items: center; gap: 16px; padding: 16px;
   border: 1px solid #EFEFEF; border-radius: 12px; background: #FAFAFA;
 }
-.ee-logo-preview-img {
-  object-fit: contain; border-radius: 8px; background: #FFFFFF;
-  border: 1px solid #EFEFEF;
-}
+.ee-logo-preview-img { object-fit: contain; border-radius: 8px; background: #FFFFFF; border: 1px solid #EFEFEF; }
 .ee-logo-preview-info { flex: 1; }
 .ee-logo-preview-name { font-size: 13px; font-weight: 500; color: #1A1A1A; }
 .ee-logo-preview-actions { display: flex; gap: 8px; }
@@ -127,8 +123,8 @@ const EE_CSS = `
 .ee-logo-size-controls { display: flex; flex-direction: column; gap: 12px; }
 .ee-logo-size-presets { display: flex; gap: 8px; }
 .ee-logo-size-preset {
-  padding: 8px 16px; border: 1px solid #DADADA; border-radius: 10px;
-  font-size: 13px; font-weight: 500; color: #4A4A4A; transition: all 200ms ease;
+  padding: 8px 16px; border: 1px solid #DADADA; border-radius: 12px;
+  font-size: 14px; font-weight: 500; color: #4A4A4A; transition: all 200ms ease;
 }
 .ee-logo-size-preset--active { background: #1A1A1A; color: #FFFFFF; border-color: #1A1A1A; }
 .ee-logo-size-slider-row { display: flex; align-items: center; gap: 12px; }
@@ -144,7 +140,7 @@ const EE_CSS = `
   width: 20px; height: 20px; border: none; border-radius: 50%;
   background: #1A1A1A; cursor: pointer;
 }
-.ee-logo-size-value { font-size: 13px; font-weight: 600; color: #1A1A1A; min-width: 48px; text-align: right; }
+.ee-logo-size-value { font-size: 14px; font-weight: 600; color: #1A1A1A; min-width: 48px; text-align: right; }
 .ee-logo-live-preview {
   display: flex; align-items: center; justify-content: center;
   padding: 24px; border: 1px solid #EFEFEF; border-radius: 12px; background: #FAFAFA;
@@ -153,17 +149,34 @@ const EE_CSS = `
 
 /* Venue layout upload */
 .ee-venue-dropzone {
-  border: 2px dashed #DADADA; border-radius: 16px;
+  border: 2px dashed #DADADA; border-radius: 12px;
   padding: 48px; text-align: center; cursor: pointer; transition: all 200ms ease;
   display: flex; flex-direction: column; align-items: center; gap: 12px;
 }
 .ee-venue-dropzone:hover { border-color: #1A1A1A; background: #FAFAFA; }
 .ee-venue-dropzone--drag { border-color: #1A1A1A; background: #F8F8F8; }
-.ee-venue-preview {
-  border: 1px solid #EFEFEF; border-radius: 16px; overflow: hidden; background: #FAFAFA;
-}
+.ee-venue-preview { border: 1px solid #EFEFEF; border-radius: 12px; overflow: hidden; background: #FAFAFA; }
 .ee-venue-preview-img { width: 100%; height: auto; display: block; }
 .ee-venue-preview-actions { display: flex; gap: 8px; padding: 16px; border-top: 1px solid #EFEFEF; }
+
+/* Bulk import — permanent section */
+.ee-bulk-zone {
+  border: 2px dashed #DADADA; border-radius: 12px;
+  padding: 24px; text-align: center; cursor: pointer; transition: all 200ms ease;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.ee-bulk-zone:hover { border-color: #1A1A1A; background: #FAFAFA; }
+.ee-bulk-zone--drag { border-color: #1A1A1A; background: #F8F8F8; }
+.ee-bulk-zone-text { font-size: 14px; font-weight: 500; color: #4A4A4A; }
+.ee-bulk-zone-hint { font-size: 12px; color: #B0B0B0; }
+.ee-bulk-textarea {
+  width: 100%; min-height: 80px; padding: 10px 14px;
+  border: 1px solid #DADADA; border-radius: 12px;
+  background: #FFFFFF; font-size: 14px; color: #1A1A1A;
+  outline: none; resize: vertical; line-height: 1.5;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+.ee-bulk-textarea:focus { border-color: #1A1A1A; box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
 
 /* Guest table */
 .ee-guest-table { width: 100%; border-collapse: collapse; }
@@ -201,24 +214,21 @@ const EE_CSS = `
 
 /* Color picker */
 .ee-color-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-.ee-color-input { width: 44px; height: 44px; border: 1px solid #DADADA; border-radius: 10px; cursor: pointer; padding: 4px; background: #FFFFFF; }
-.ee-color-label { font-size: 13px; font-weight: 500; color: #4A4A4A; }
+.ee-color-input { width: 44px; height: 44px; border: 1px solid #DADADA; border-radius: 12px; cursor: pointer; padding: 4px; background: #FFFFFF; }
+.ee-color-label { font-size: 14px; font-weight: 500; color: #4A4A4A; }
 
 /* Live preview */
 .ee-preview-wrap {
   position: sticky; top: 80px; background: #FFFFFF; border: 1px solid #EFEFEF;
-  border-radius: 16px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  border-radius: 12px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.06);
 }
 .ee-preview-device-toggle { display: flex; gap: 4px; margin-bottom: 16px; }
 .ee-preview-device-btn {
   padding: 6px 12px; font-size: 12px; font-weight: 500; border: 1px solid #DADADA;
-  border-radius: 8px; color: #4A4A4A; transition: all 200ms ease;
+  border-radius: 12px; color: #4A4A4A; transition: all 200ms ease;
 }
 .ee-preview-device-btn--active { background: #1A1A1A; color: #FFFFFF; border-color: #1A1A1A; }
-.ee-preview-frame {
-  border: 1px solid #EFEFEF; border-radius: 12px; overflow: hidden; margin: 0 auto;
-  transition: max-width 200ms ease;
-}
+.ee-preview-frame { border: 1px solid #EFEFEF; border-radius: 12px; overflow: hidden; margin: 0 auto; transition: max-width 200ms ease; }
 .ee-preview-content { padding: 24px; text-align: center; }
 
 /* Schedule */
@@ -227,10 +237,7 @@ const EE_CSS = `
 /* Misc */
 .ee-empty { text-align: center; padding: 48px; color: #B0B0B0; font-size: 14px; }
 .ee-loading { display: flex; align-items: center; justify-content: center; min-height: 400px; }
-.ee-spinner {
-  width: 32px; height: 32px; border: 3px solid #EFEFEF;
-  border-top-color: #1A1A1A; border-radius: 50%; animation: spin 0.8s linear infinite;
-}
+.ee-spinner { width: 32px; height: 32px; border: 3px solid #EFEFEF; border-top-color: #1A1A1A; border-radius: 50%; animation: spin 0.8s linear infinite; }
 .ee-danger-zone { border: 1px solid #E5A29B; border-radius: 12px; padding: 20px; background: #FDF2F1; }
 .ee-danger-zone-title { font-size: 14px; font-weight: 600; color: #C0392B; margin-bottom: 8px; }
 .ee-danger-zone-desc { font-size: 13px; color: #7A4A45; margin-bottom: 16px; }
@@ -295,8 +302,11 @@ export function EventEditorPage() {
   // Guest form
   const [newGuestName, setNewGuestName] = useState('');
   const [newGuestTable, setNewGuestTable] = useState('');
-  const [bulkOpen, setBulkOpen] = useState(false);
+
+  // Bulk import — permanent, always visible
+  const [bulkDragOver, setBulkDragOver] = useState(false);
   const [bulkText, setBulkText] = useState('');
+  const bulkFileRef = useRef<HTMLInputElement>(null);
 
   // Table form
   const [newTableNumber, setNewTableNumber] = useState('');
@@ -304,7 +314,7 @@ export function EventEditorPage() {
   const [newTableCapacity, setNewTableCapacity] = useState('8');
 
   // Schedule
-  const [scheduleItems, setScheduleItems] = useState<{ time: string; title: string }[]>([]);
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
 
   // Delete confirm
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -330,7 +340,7 @@ export function EventEditorPage() {
     setLogoSize(effectiveSettings.logo_size ?? 64);
     setVenueUrl(effectiveSettings.venue_image_url ?? null);
     setSettingsForm({ ...DEFAULT_SETTINGS, event_id: eventId ?? '', ...settings });
-    const items = effectiveSettings.schedule_items as { time: string; title: string }[] | null;
+    const items = effectiveSettings.schedule_items;
     setScheduleItems(Array.isArray(items) ? items : []);
   }, [settings, eventId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -341,8 +351,7 @@ export function EventEditorPage() {
     if (!validTypes.includes(file.type)) { toast('Unsupported format. Use PNG, JPG, SVG, or WebP.', 'error'); return; }
     const dataUrl = await readFileAsDataURL(file);
     setLogoUrl(dataUrl);
-    const input: GuestPageSettingsInput = { event_id: eventId ?? '', logo_url: dataUrl, logo_size: logoSize };
-    await upsertSettings.mutateAsync(input);
+    await upsertSettings.mutateAsync({ event_id: eventId ?? '', logo_url: dataUrl, logo_size: logoSize });
     toast('Logo uploaded', 'success');
   }, [eventId, logoSize, upsertSettings, toast]);
 
@@ -354,15 +363,13 @@ export function EventEditorPage() {
 
   const handleLogoRemove = useCallback(async () => {
     setLogoUrl(null);
-    const input: GuestPageSettingsInput = { event_id: eventId ?? '', logo_url: null };
-    await upsertSettings.mutateAsync(input);
+    await upsertSettings.mutateAsync({ event_id: eventId ?? '', logo_url: null });
     toast('Logo removed', 'success');
   }, [eventId, upsertSettings, toast]);
 
   const handleLogoSizeChange = useCallback(async (size: number) => {
     setLogoSize(size);
-    const input: GuestPageSettingsInput = { event_id: eventId ?? '', logo_size: size };
-    await upsertSettings.mutateAsync(input);
+    await upsertSettings.mutateAsync({ event_id: eventId ?? '', logo_size: size });
   }, [eventId, upsertSettings]);
 
   // Venue upload handlers
@@ -371,8 +378,7 @@ export function EventEditorPage() {
     if (!file.type.startsWith('image/')) { toast('Please upload an image file', 'error'); return; }
     const dataUrl = await readFileAsDataURL(file);
     setVenueUrl(dataUrl);
-    const input: GuestPageSettingsInput = { event_id: eventId ?? '', venue_image_url: dataUrl };
-    await upsertSettings.mutateAsync(input);
+    await upsertSettings.mutateAsync({ event_id: eventId ?? '', venue_image_url: dataUrl });
     toast('Venue layout uploaded', 'success');
   }, [eventId, upsertSettings, toast]);
 
@@ -384,8 +390,7 @@ export function EventEditorPage() {
 
   const handleVenueRemove = useCallback(async () => {
     setVenueUrl(null);
-    const input: GuestPageSettingsInput = { event_id: eventId ?? '', venue_image_url: null };
-    await upsertSettings.mutateAsync(input);
+    await upsertSettings.mutateAsync({ event_id: eventId ?? '', venue_image_url: null });
     toast('Venue layout removed', 'success');
   }, [eventId, upsertSettings, toast]);
 
@@ -401,37 +406,80 @@ export function EventEditorPage() {
     toast('Event details saved', 'success');
   }, [eventId, eventForm, updateEvent, toast]);
 
-  // Guest handlers
+  // Guest handlers — FIX: ensure proper GuestInput shape
   const handleAddGuest = useCallback(async () => {
-    if (!newGuestName.trim()) return;
-    await createGuest.mutateAsync({
-      event_id: eventId ?? '', name: newGuestName,
-      table_id: newGuestTable || null, party_size: 1,
-    });
-    setNewGuestName(''); setNewGuestTable('');
-    toast('Guest added', 'success');
+    if (!newGuestName.trim()) { toast('Guest name is required', 'error'); return; }
+    if (!eventId) { toast('Event not loaded', 'error'); return; }
+    try {
+      await createGuest.mutateAsync({
+        event_id: eventId,
+        name: newGuestName.trim(),
+        table_id: newGuestTable || null,
+        party_size: 1,
+      });
+      setNewGuestName('');
+      setNewGuestTable('');
+      toast('Guest added', 'success');
+    } catch (err) {
+      toast('Failed to add guest: ' + (err instanceof Error ? err.message : 'Unknown error'), 'error');
+    }
   }, [eventId, newGuestName, newGuestTable, createGuest, toast]);
 
-  const handleBulkAdd = useCallback(async () => {
+  // Bulk import — parse text or file
+  const handleBulkImport = useCallback(async () => {
     const names = bulkText.split('\n').map(n => n.trim()).filter(Boolean);
-    if (names.length === 0) return;
-    await bulkCreateGuests.mutateAsync(names.map(name => ({
-      event_id: eventId ?? '', name, party_size: 1,
-    })));
-    setBulkText(''); setBulkOpen(false);
-    toast(`${names.length} guests added`, 'success');
+    if (names.length === 0) { toast('Enter at least one guest name', 'error'); return; }
+    if (!eventId) { toast('Event not loaded', 'error'); return; }
+    try {
+      await bulkCreateGuests.mutateAsync(
+        names.map(name => ({ event_id: eventId, name, party_size: 1 }))
+      );
+      setBulkText('');
+      toast(`${names.length} guests imported`, 'success');
+    } catch (err) {
+      toast('Failed to import guests: ' + (err instanceof Error ? err.message : 'Unknown error'), 'error');
+    }
   }, [eventId, bulkText, bulkCreateGuests, toast]);
+
+  const handleBulkFile = useCallback(async (file: File) => {
+    if (!eventId) return;
+    try {
+      const text = await file.text();
+      const names = text.split(/\r?\n/).map((n: string) => n.trim()).filter(Boolean);
+      // Also handle CSV: extract first column
+      const csvNames = names.map((n: string) => n.split(',')[0]?.trim() ?? '').filter(Boolean);
+      if (csvNames.length === 0) { toast('No names found in file', 'error'); return; }
+      await bulkCreateGuests.mutateAsync(
+        csvNames.map((name: string) => ({ event_id: eventId, name, party_size: 1 }))
+      );
+      toast(`${csvNames.length} guests imported`, 'success');
+    } catch (err) {
+      toast('Failed to import file: ' + (err instanceof Error ? err.message : 'Unknown error'), 'error');
+    }
+  }, [eventId, bulkCreateGuests, toast]);
+
+  const handleBulkDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); setBulkDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleBulkFile(file);
+  }, [handleBulkFile]);
 
   // Table handlers
   const handleAddTable = useCallback(async () => {
-    if (!newTableNumber.trim()) return;
-    await createTable.mutateAsync({
-      event_id: eventId ?? '', number: newTableNumber,
-      name: newTableName || newTableNumber,
-      capacity: parseInt(newTableCapacity) || 8,
-    });
-    setNewTableNumber(''); setNewTableName(''); setNewTableCapacity('8');
-    toast('Table added', 'success');
+    if (!newTableNumber.trim()) { toast('Table number is required', 'error'); return; }
+    if (!eventId) { toast('Event not loaded', 'error'); return; }
+    try {
+      await createTable.mutateAsync({
+        event_id: eventId,
+        number: newTableNumber.trim(),
+        name: newTableName.trim() || newTableNumber.trim(),
+        capacity: parseInt(newTableCapacity) || 8,
+      });
+      setNewTableNumber(''); setNewTableName(''); setNewTableCapacity('8');
+      toast('Table added', 'success');
+    } catch (err) {
+      toast('Failed to add table: ' + (err instanceof Error ? err.message : 'Unknown error'), 'error');
+    }
   }, [eventId, newTableNumber, newTableName, newTableCapacity, createTable, toast]);
 
   // Settings save
@@ -442,8 +490,7 @@ export function EventEditorPage() {
 
   // Schedule save
   const handleSaveSchedule = useCallback(async () => {
-    const input: GuestPageSettingsInput = { event_id: eventId ?? '', schedule_items: scheduleItems };
-    await upsertSettings.mutateAsync(input);
+    await upsertSettings.mutateAsync({ event_id: eventId ?? '', schedule_items: scheduleItems });
     toast('Schedule saved', 'success');
   }, [eventId, scheduleItems, upsertSettings, toast]);
 
@@ -475,7 +522,6 @@ export function EventEditorPage() {
     <div className="ee-root">
       <style>{EE_CSS}</style>
 
-      {/* Header */}
       <div className="ee-header">
         <Link to="/">
           <button className="ee-back-btn">
@@ -488,7 +534,6 @@ export function EventEditorPage() {
         <span className="ee-title">{event.name}</span>
       </div>
 
-      {/* Tabs */}
       <div className="ee-tabs">
         {TABS.map(tab => (
           <button
@@ -501,7 +546,6 @@ export function EventEditorPage() {
         ))}
       </div>
 
-      {/* Body */}
       <div className="ee-body">
 
         {/* ── EVENT DETAILS ── */}
@@ -554,21 +598,19 @@ export function EventEditorPage() {
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoFile(f); e.target.value = ''; }} />
 
               {logoUrl ? (
-                <>
-                  <div className="ee-logo-preview">
-                    <img className="ee-logo-preview-img" src={logoUrl} alt="Logo"
-                      style={{ width: `${logoSize}px`, height: `${logoSize}px` }} />
-                    <div className="ee-logo-preview-info">
-                      <div className="ee-logo-preview-name">Logo uploaded</div>
-                      <div className="ee-logo-preview-actions" style={{ marginTop: '8px' }}>
-                        <button className="ee-btn ee-btn-secondary ee-btn-sm"
-                          onClick={() => logoFileRef.current?.click()}>Replace</button>
-                        <button className="ee-btn ee-btn-danger ee-btn-sm"
-                          onClick={handleLogoRemove}>Remove</button>
-                      </div>
+                <div className="ee-logo-preview">
+                  <img className="ee-logo-preview-img" src={logoUrl} alt="Logo"
+                    style={{ width: `${logoSize}px`, height: `${logoSize}px` }} />
+                  <div className="ee-logo-preview-info">
+                    <div className="ee-logo-preview-name">Logo uploaded</div>
+                    <div className="ee-logo-preview-actions" style={{ marginTop: '8px' }}>
+                      <button className="ee-btn ee-btn-secondary ee-btn-sm"
+                        onClick={() => logoFileRef.current?.click()}>Replace</button>
+                      <button className="ee-btn ee-btn-danger ee-btn-sm"
+                        onClick={handleLogoRemove}>Remove</button>
                     </div>
                   </div>
-                </>
+                </div>
               ) : (
                 <div
                   className={`ee-logo-dropzone${logoDragOver ? ' ee-logo-dropzone--drag' : ''}`}
@@ -586,13 +628,11 @@ export function EventEditorPage() {
                 </div>
               )}
 
-              {/* Logo Size Controls */}
               <div className="ee-logo-size-controls">
                 <label className="ee-label">Logo Size</label>
                 <div className="ee-logo-size-presets">
                   {LOGO_SIZE_PRESETS.map(preset => (
-                    <button
-                      key={preset.value}
+                    <button key={preset.value}
                       className={`ee-logo-size-preset${logoSize === preset.value ? ' ee-logo-size-preset--active' : ''}`}
                       onClick={() => handleLogoSizeChange(preset.value)}
                     >
@@ -601,15 +641,11 @@ export function EventEditorPage() {
                   ))}
                 </div>
                 <div className="ee-logo-size-slider-row">
-                  <input
-                    className="ee-logo-size-slider"
-                    type="range" min="32" max="128" step="4"
+                  <input className="ee-logo-size-slider" type="range" min="32" max="128" step="4"
                     value={logoSize}
-                    onChange={e => handleLogoSizeChange(parseInt(e.target.value))}
-                  />
+                    onChange={e => handleLogoSizeChange(parseInt(e.target.value))} />
                   <span className="ee-logo-size-value">{logoSize}px</span>
                 </div>
-                {/* Live preview */}
                 {logoUrl && (
                   <div className="ee-logo-live-preview">
                     <img className="ee-logo-live-preview-img" src={logoUrl} alt="Logo preview"
@@ -623,6 +659,36 @@ export function EventEditorPage() {
 
         {/* ── GUESTS ── */}
         <section className="ee-panel" style={{ display: activeTab === 'guests' ? 'block' : 'none' }}>
+
+          {/* Bulk Import — permanently visible at top */}
+          <div className="ee-card">
+            <div className="ee-card-title">Bulk Import</div>
+            <input ref={bulkFileRef} type="file" accept=".csv,.txt,.xlsx,.xls,.pdf" hidden
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleBulkFile(f); e.target.value = ''; }} />
+            <div
+              className={`ee-bulk-zone${bulkDragOver ? ' ee-bulk-zone--drag' : ''}`}
+              onClick={() => bulkFileRef.current?.click()}
+              onDragOver={e => { e.preventDefault(); setBulkDragOver(true); }}
+              onDragLeave={() => setBulkDragOver(false)}
+              onDrop={handleBulkDrop}
+            >
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#B0B0B0" strokeWidth="1.5">
+                <path d="M12 16V4M8 8l4-4 4 4" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="ee-bulk-zone-text">Drag & Drop CSV / Excel / PDF Here</span>
+              <span className="ee-bulk-zone-hint">or click to browse files</span>
+            </div>
+            <div style={{ marginTop: '12px' }}>
+              <label className="ee-label">Or paste names (one per line)</label>
+              <textarea className="ee-bulk-textarea" placeholder={'John Smith\nJane Doe\n...'}
+                value={bulkText} onChange={e => setBulkText(e.target.value)} />
+              <button className="ee-btn ee-btn-primary ee-btn-sm" style={{ marginTop: '8px' }}
+                onClick={handleBulkImport}>Import Guests</button>
+            </div>
+          </div>
+
+          {/* Manual Add Guest */}
           <div className="ee-card">
             <div className="ee-card-title">Add Guest</div>
             <div className="ee-row">
@@ -639,12 +705,10 @@ export function EventEditorPage() {
                 </select>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button className="ee-btn ee-btn-primary" onClick={handleAddGuest}>Add Guest</button>
-              <button className="ee-btn ee-btn-secondary" onClick={() => setBulkOpen(true)}>Bulk Add</button>
-            </div>
+            <button className="ee-btn ee-btn-primary" onClick={handleAddGuest}>Add Guest</button>
           </div>
 
+          {/* Guest List */}
           <div className="ee-card">
             <div className="ee-card-title">Guest List ({guests?.length ?? 0})</div>
             {guests && guests.length > 0 ? (
@@ -657,7 +721,14 @@ export function EventEditorPage() {
                       <td>{g.table ? `Table ${g.table.number}` : '—'}</td>
                       <td>
                         <button className="ee-btn ee-btn-danger ee-btn-sm"
-                          onClick={async () => { await deleteGuest.mutateAsync({ id: g.id, eventId: eventId ?? '' }); toast('Guest removed', 'success'); }}>
+                          onClick={async () => {
+                            try {
+                              await deleteGuest.mutateAsync({ id: g.id, eventId: eventId ?? '' });
+                              toast('Guest removed', 'success');
+                            } catch (err) {
+                              toast('Failed to remove guest', 'error');
+                            }
+                          }}>
                           Delete
                         </button>
                       </td>
@@ -702,7 +773,14 @@ export function EventEditorPage() {
                       <div className="ee-table-card-name">{t.name}</div>
                       <div className="ee-table-card-meta">{count} / {t.capacity} guests</div>
                       <button className="ee-btn ee-btn-danger ee-btn-sm" style={{ marginTop: '8px', width: '100%' }}
-                        onClick={async () => { await deleteTable.mutateAsync({ id: t.id, eventId: eventId ?? '' }); toast('Table removed', 'success'); }}>
+                        onClick={async () => {
+                          try {
+                            await deleteTable.mutateAsync({ id: t.id, eventId: eventId ?? '' });
+                            toast('Table removed', 'success');
+                          } catch (err) {
+                            toast('Failed to remove table', 'error');
+                          }
+                        }}>
                         Delete
                       </button>
                     </div>
@@ -720,17 +798,15 @@ export function EventEditorPage() {
             <input ref={venueFileRef} type="file" accept="image/*" hidden
               onChange={e => { const f = e.target.files?.[0]; if (f) handleVenueFile(f); e.target.value = ''; }} />
             {venueUrl ? (
-              <>
-                <div className="ee-venue-preview">
-                  <img className="ee-venue-preview-img" src={venueUrl} alt="Venue layout" />
-                  <div className="ee-venue-preview-actions">
-                    <button className="ee-btn ee-btn-secondary ee-btn-sm"
-                      onClick={() => venueFileRef.current?.click()}>Replace</button>
-                    <button className="ee-btn ee-btn-danger ee-btn-sm"
-                      onClick={handleVenueRemove}>Remove</button>
-                  </div>
+              <div className="ee-venue-preview">
+                <img className="ee-venue-preview-img" src={venueUrl} alt="Venue layout" />
+                <div className="ee-venue-preview-actions">
+                  <button className="ee-btn ee-btn-secondary ee-btn-sm"
+                    onClick={() => venueFileRef.current?.click()}>Replace</button>
+                  <button className="ee-btn ee-btn-danger ee-btn-sm"
+                    onClick={handleVenueRemove}>Remove</button>
                 </div>
-              </>
+              </div>
             ) : (
               <div
                 className={`ee-venue-dropzone${venueDragOver ? ' ee-venue-dropzone--drag' : ''}`}
@@ -758,14 +834,14 @@ export function EventEditorPage() {
               <div key={i} className="ee-schedule-item">
                 <input className="ee-input" type="time" style={{ width: '120px' }}
                   value={item.time} onChange={e => setScheduleItems(s => s.map((x, j) => j === i ? { ...x, time: e.target.value } : x))} />
-                <input className="ee-input" placeholder="Title / description"
-                  value={item.title} onChange={e => setScheduleItems(s => s.map((x, j) => j === i ? { ...x, title: e.target.value } : x))} />
+                <input className="ee-input" placeholder="Label / description"
+                  value={item.label} onChange={e => setScheduleItems(s => s.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} />
                 <button className="ee-btn ee-btn-danger ee-btn-sm"
                   onClick={() => setScheduleItems(s => s.filter((_, j) => j !== i))}>Remove</button>
               </div>
             ))}
             <button className="ee-btn ee-btn-secondary" style={{ marginBottom: '16px' }}
-              onClick={() => setScheduleItems(s => [...s, { time: '', title: '' }])}>+ Add Schedule Item</button>
+              onClick={() => setScheduleItems(s => [...s, { time: '', label: '' }])}>+ Add Schedule Item</button>
             <div>
               <button className="ee-btn ee-btn-primary" onClick={handleSaveSchedule}>Save Schedule</button>
             </div>
@@ -880,7 +956,7 @@ export function EventEditorPage() {
                     <div style={{ marginTop: '16px', padding: '0 16px' }}>
                       <div style={{
                         border: `1.5px solid ${settingsForm.color_primary ?? '#1A1A1A'}`,
-                        borderRadius: '12px', padding: '12px 16px', fontSize: '12px',
+                        borderRadius: '12px', padding: '12px 16px', fontSize: '14px',
                         background: settingsForm.color_background ?? 'transparent',
                         color: settingsForm.color_primary ?? '#1A1A1A',
                       }}>
@@ -895,23 +971,6 @@ export function EventEditorPage() {
         </section>
 
       </div>
-
-      {/* Bulk Add Modal */}
-      {bulkOpen && (
-        <Modal open={bulkOpen} onClose={() => setBulkOpen(false)}>
-          <div style={{ padding: '24px' }}>
-            <div className="ee-card-title">Bulk Add Guests</div>
-            <p style={{ fontSize: '13px', color: '#B0B0B0', marginBottom: '12px' }}>One name per line</p>
-            <textarea className="ee-textarea" rows={8} value={bulkText}
-              onChange={e => setBulkText(e.target.value)}
-              placeholder={'John Smith\nJane Doe\n...'} />
-            <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-              <button className="ee-btn ee-btn-primary" onClick={handleBulkAdd}>Add All</button>
-              <button className="ee-btn ee-btn-secondary" onClick={() => setBulkOpen(false)}>Cancel</button>
-            </div>
-          </div>
-        </Modal>
-      )}
 
       {/* Delete Confirm */}
       {deleteConfirmOpen && (

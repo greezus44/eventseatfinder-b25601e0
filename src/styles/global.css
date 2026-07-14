@@ -32,17 +32,6 @@
   --radius-xl: 20px;
   --radius-full: 9999px;
 
-  /* Input styling — consistent rectangular with rounded corners */
-  --input-radius: 12px;
-  --input-height: 44px;
-  --input-padding-x: 14px;
-  --input-padding-y: 10px;
-  --input-border: 1px solid var(--mid-grey);
-  --input-border-focus: 1px solid var(--near-black);
-  --input-bg: var(--white);
-  --input-font-size: 14px;
-  --input-gap: 16px;
-
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
@@ -87,15 +76,15 @@ img { display: block; max-width: 100%; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ============================================================
-   GLOBAL INPUT STYLING — Rectangular with rounded corners
-   Applied consistently across all pages via scoped CSS
-   ============================================================ */
-
-/* Base input style mixin — pages should apply these via their scoped classes */
-
-/* ============================================================
    GUEST PAGE STYLES — Premium reference design
    Prefix: gp-
+
+   DESIGN SYSTEM: All interactive controls (search box, tabs,
+   language switcher) share the same rectangular style:
+   - 1.5px border
+   - 12px border radius
+   - Same font size/weight/letter-spacing
+   - Same padding proportions
    ============================================================ */
 
 .gp-root {
@@ -128,24 +117,25 @@ img { display: block; max-width: 100%; }
   font-weight: 500;
 }
 
-/* ── Language switcher (top right) ── */
+/* ── Language switcher — matches search box style ──
+   Rectangular with 12px radius, 1.5px border, same font metrics */
 .gp-lang-switcher {
   position: absolute;
   top: 24px;
   right: 24px;
   display: flex;
   align-items: stretch;
-  border: 1px solid var(--accent);
-  border-radius: 999px;
+  border: 1.5px solid var(--accent);
+  border-radius: 12px;
   overflow: hidden;
   z-index: 10;
 }
 
 .gp-lang-btn {
   padding: 8px 16px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
   color: var(--accent);
   background: transparent;
   transition: all 200ms ease;
@@ -208,7 +198,8 @@ img { display: block; max-width: 100%; }
   line-height: 1.8;
 }
 
-/* ── Segmented tabs ── */
+/* ── Segmented tabs — matches search box style ──
+   Rectangular with 12px radius, 1.5px border, same font metrics */
 .gp-tabs-wrap {
   display: flex;
   justify-content: center;
@@ -218,18 +209,18 @@ img { display: block; max-width: 100%; }
 
 .gp-tabs {
   display: flex;
-  border: 1px solid var(--accent);
-  border-radius: 999px;
+  border: 1.5px solid var(--accent);
+  border-radius: 12px;
   overflow: hidden;
 }
 
 .gp-tab {
   flex: 1;
   padding: 12px 32px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  border: 1.5px solid transparent;
   background: transparent;
   transition: all 200ms ease;
   white-space: nowrap;
@@ -245,8 +236,9 @@ img { display: block; max-width: 100%; }
 }
 
 .gp-tab-divider {
-  width: 1px;
+  width: 1.5px;
   align-self: stretch;
+  background: var(--accent);
   opacity: 0.5;
 }
 
@@ -271,7 +263,8 @@ img { display: block; max-width: 100%; }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Search box — matches page background, accent border ── */
+/* ── Search box — the reference style all controls match ──
+   Rectangular, 1.5px border, 12px radius, matches page bg */
 .gp-search-wrap {
   margin-bottom: 24px;
 }
@@ -318,7 +311,7 @@ img { display: block; max-width: 100%; }
 }
 
 .gp-results-list {
-  border: 1px solid var(--accent);
+  border: 1.5px solid var(--accent);
   border-radius: 12px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.5);
@@ -359,11 +352,11 @@ img { display: block; max-width: 100%; }
   display: inline-flex;
   align-items: center;
   padding: 6px 14px;
-  border: 1px solid var(--accent);
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  border: 1.5px solid var(--accent);
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
   white-space: nowrap;
 }
 
@@ -383,8 +376,8 @@ img { display: block; max-width: 100%; }
 .gp-venue-viewport {
   width: 100%;
   aspect-ratio: 16 / 10;
-  border: 1px solid var(--accent);
-  border-radius: 16px;
+  border: 1.5px solid var(--accent);
+  border-radius: 12px;
   overflow: hidden;
   cursor: grab;
   background: rgba(255,255,255,0.5);
@@ -424,10 +417,10 @@ img { display: block; max-width: 100%; }
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--accent);
-  border-radius: 999px;
+  border: 1.5px solid var(--accent);
+  border-radius: 12px;
   font-size: 18px;
-  font-weight: 600;
+  font-weight: 500;
   background: rgba(255,255,255,0.7);
   transition: all 200ms ease;
 }
@@ -440,13 +433,14 @@ img { display: block; max-width: 100%; }
 .gp-venue-ctrl-btn--reset {
   width: auto;
   padding: 0 16px;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 500;
   letter-spacing: 0.05em;
 }
 
 .gp-venue-zoom-pct {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   letter-spacing: 0.05em;
   margin-left: 8px;
 }
@@ -467,8 +461,8 @@ img { display: block; max-width: 100%; }
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid;
-  border-radius: 16px;
+  border: 1.5px solid;
+  border-radius: 12px;
   opacity: 0.6;
 }
 
@@ -495,15 +489,14 @@ img { display: block; max-width: 100%; }
   }
   .gp-lang-btn {
     padding: 6px 10px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .gp-tab {
     padding: 10px 20px;
-    font-size: 11px;
+    font-size: 12px;
   }
   .gp-search-box {
     height: 52px;
-    border-radius: 12px;
   }
   .gp-content {
     padding: 0 16px 60px;
@@ -516,6 +509,6 @@ img { display: block; max-width: 100%; }
   }
   .gp-badge {
     padding: 5px 10px;
-    font-size: 10px;
+    font-size: 12px;
   }
 }

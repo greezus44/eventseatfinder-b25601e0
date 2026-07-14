@@ -1,24 +1,20 @@
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { CheckIn, CheckInInput } from '@/types/check-in';
+import { CheckIn, CheckInInput } from '@/types/check-in';
 
-export function useCheckIns(eventId: string | undefined) {
+export function useCheckIns(eventId: string) {
   return useQuery({
     queryKey: ['check-ins', eventId],
-    enabled: !!eventId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('check_ins')
-        .select('*')
-        .eq('event_id', eventId!)
+        .select('*, guest:guests(id, name)')
+        .eq('event_id', eventId)
         .order('checked_in_at', { ascending: false });
       if (error) throw error;
-      return data as CheckIn[];
+      return data as (CheckIn & { guest: { id: string; name: string } })[];
     },
+    enabled: !!eventId,
   });
 }
 

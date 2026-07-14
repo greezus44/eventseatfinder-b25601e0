@@ -1,24 +1,20 @@
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { Table, TableInput } from '@/types/table';
+import { Table, TableInput } from '@/types/table';
 
-export function useTables(eventId: string | undefined) {
+export function useTables(eventId: string) {
   return useQuery({
     queryKey: ['tables', eventId],
-    enabled: !!eventId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tables')
         .select('*')
-        .eq('event_id', eventId!)
+        .eq('event_id', eventId)
         .order('number', { ascending: true });
       if (error) throw error;
       return data as Table[];
     },
+    enabled: !!eventId,
   });
 }
 
@@ -28,7 +24,12 @@ export function useCreateTable() {
     mutationFn: async (input: TableInput) => {
       const { data, error } = await supabase
         .from('tables')
-        .insert(input)
+        .insert({
+          event_id: input.event_id,
+          number: input.number,
+          name: input.name ?? '',
+          capacity: input.capacity ?? 8,
+        })
         .select()
         .single();
       if (error) throw error;
@@ -49,6 +50,7 @@ export function useDeleteTable() {
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['tables', variables.eventId] });
+      queryClient.invalidateQueries({ queryKey: ['guests', variables.eventId] });
     },
   });
 }

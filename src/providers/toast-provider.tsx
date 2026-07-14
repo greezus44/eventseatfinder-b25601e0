@@ -1,68 +1,65 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useState,
-  type ReactNode,
-} from 'react';
+import { createContext, useCallback, useContext, useState, ReactNode, CSSProperties } from 'react';
 
 type ToastType = 'success' | 'error' | 'info';
 
-interface Toast {
+interface ToastItem {
   id: number;
   message: string;
   type: ToastType;
 }
 
 interface ToastContextValue {
-  toasts: Toast[];
   toast: (message: string, type?: ToastType) => void;
-  dismiss: (id: number) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
 
-  const dismiss = useCallback((id: number) => {
+  const toast = useCallback((message: string, type: ToastType = 'info') => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3000);
+  }, []);
+
+  const remove = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const toast = useCallback(
-    (message: string, type: ToastType = 'info') => {
-      const id = Date.now() + Math.random();
-      setToasts((prev) => [...prev, { id, message, type }]);
-      setTimeout(() => dismiss(id), 3000);
-    },
-    [dismiss]
-  );
+  const containerStyle: CSSProperties = {
+    position: 'fixed',
+    top: 20,
+    right: 20,
+    zIndex: 9999,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  };
+
+  const toastStyle = (type: ToastType): CSSProperties => ({
+    padding: '12px 20px',
+    borderRadius: 8,
+    fontSize: 14,
+    fontWeight: 500,
+    color: '#FFFFFF',
+    background: type === 'success' ? '#1A1A1A' : type === 'error' ? '#4A4A4A' : '#1A1A1A',
+    border: '1px solid #1A1A1A',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    minWidth: 200,
+    maxWidth: 360,
+    cursor: 'pointer',
+    fontFamily: 'Inter, system-ui, sans-serif',
+  });
 
   return (
-    <ToastContext.Provider value={{ toasts, toast, dismiss }}>
+    <ToastContext.Provider value={{ toast }}>
       {children}
-      <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={containerStyle}>
         {toasts.map((t) => (
-          <div
-            key={t.id}
-            style={{
-              padding: '12px 20px',
-              borderRadius: 8,
-              fontSize: 14,
-              fontFamily: 'Inter, sans-serif',
-              color: '#FFFFFF',
-              background:
-                t.type === 'success'
-                  ? '#1A1A1A'
-                  : t.type === 'error'
-                    ? '#4A4A4A'
-                    : '#4A4A4A',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              cursor: 'pointer',
-              maxWidth: 360,
-            }}
-            onClick={() => dismiss(t.id)}
-          >
+          <div key={t.id} style={toastStyle(t.type)} onClick={() => remove(t.id)}>
             {t.message}
           </div>
         ))}
@@ -74,5 +71,5 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 export function useToast() {
   const ctx = useContext(ToastContext);
   if (!ctx) throw new Error('useToast must be used within ToastProvider');
-  return { toast: ctx.toast };
+  return ctx;
 }
