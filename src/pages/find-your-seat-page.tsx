@@ -1,76 +1,54 @@
-import {
-  useState,
-  useRef,
-  useEffect,
-  useMemo,
-  type KeyboardEvent,
-} from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useEventBySlug } from '@/hooks/use-events';
 import { useGuestSearch, useGuestById } from '@/hooks/use-guests';
-import { LoadingScreen, ErrorScreen, Spinner } from '@/components/ui/feedback';
+import { Spinner, LoadingScreen, ErrorScreen } from '@/components/ui/feedback';
 import type { GuestWithTable } from '@/types/guest';
 
 export function FindYourSeatPage() {
   const { eventSlug } = useParams<{ eventSlug: string }>();
   const { data: event, isLoading, error } = useEventBySlug(eventSlug ?? '');
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
-  const [highlightIndex, setHighlightIndex] = useState(0);
+  const [query, setQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
 
-  const searchResults = useGuestSearch(event?.id ?? '', searchQuery);
-  const { data: selectedGuest, isLoading: guestLoading } = useGuestById(
+  const { data: searchResults, isLoading: searching } = useGuestSearch(
+    event?.id ?? '',
+    query,
+  );
+  const { data: selectedGuest } = useGuestById(
     event?.id ?? '',
     selectedGuestId,
   );
 
-  const suggestions = useMemo<GuestWithTable[]>(() => {
-    if (!searchQuery.trim()) return [];
-    return searchResults.data ?? [];
-  }, [searchResults.data, searchQuery]);
+  const suggestions = searchResults ?? [];
+  const inputRef = useRef<HTMLInputElement>(null);
+  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setHighlightIndex(0);
-  }, [searchQuery]);
+  }, [query]);
 
   useEffect(() => {
-    const handler = (e: globalThis.MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
-        setShowSuggestions(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    inputRef.current?.focus();
   }, []);
 
-  if (isLoading) return <LoadingScreen message="Loading event..." />;
-  if (error) return <ErrorScreen message={error.message} />;
-  if (!event) return <ErrorScreen message="Event not found" />;
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!showSuggestions || suggestions.length === 0) return;
-
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setHighlightIndex((prev) =>
-        prev < suggestions.length - 1 ? prev + 1 : 0,
-      );
+      setHighlightIndex((i) => (i + 1) % suggestions.length);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setHighlightIndex((prev) =>
-        prev > 0 ? prev - 1 : suggestions.length - 1,
+      setHighlightIndex(
+        (i) => (i - 1 + suggestions.length) % suggestions.length,
       );
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const guest = suggestions[highlightIndex];
-      if (guest) {
-        selectGuest(guest);
+      if (suggestions[highlightIndex]) {
+        selectGuest(suggestions[highlightIndex]);
       }
     } else if (e.key === 'Escape') {
       setShowSuggestions(false);
@@ -79,182 +57,235 @@ export function FindYourSeatPage() {
 
   const selectGuest = (guest: GuestWithTable) => {
     setSelectedGuestId(guest.id);
-    setSearchQuery('');
+    setQuery(guest.name);
     setShowSuggestions(false);
   };
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '';
-    try {
-      return new Date(dateStr).toLocaleDateString('en-US', {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch {
-      return dateStr;
+  const handleFocus = () => {
+    setShowSuggestions(true);
+    if (blurTimer.current) {
+      clearTimeout(blurTimer.current);
+      blurTimer.current = null;
     }
   };
+
+  const handleBlur = () => {
+    blurTimer.current = setTimeout(() => setShowSuggestions(false), 150);
+  };
+
+  const resetSearch = () => {
+    setQuery('');
+    setSelectedGuestId(null);
+    setShowSuggestions(false);
+    inputRef.current?.focus();
+  };
+
+  if (isLoading) return <LoadingScreen message="Loading event..." />;
+  if (error) return <ErrorScreen message="Failed to load event." />;
+  if (!event) return <ErrorScreen message="Event not found." />;
 
   return (
     <div className="fys-container">
       <div className="fys-card">
         <div className="fys-header">
-          {event.venue && <p className="fys-venue">{event.venue}</p>}
           <h1 className="fys-title">{event.name}</h1>
+          {event.venue && <p className="fys-venue">{event.venue}</p>}
           {event.date && (
-            <p className="text-secondary">
-              {formatDate(event.date)}
+            <p className="text-muted" style={{ fontSize: '0.875rem' }}>
+              {new Date(event.date + 'T00:00:00').toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+              })}
               {event.time ? ` at ${event.time}` : ''}
             </p>
           )}
         </div>
 
-        <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
-          <input
-            className="input fys-search w-full"
-            type="text"
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setShowSuggestions(true);
-            }}
-            onFocus={() => setShowSuggestions(true)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type your name to find your seat..."
-            autoComplete="off"
-          />
-
-          {showSuggestions && searchQuery.trim() && (
-            <div className="fys-suggestions">
-              {searchResults.isLoading && (
+        {!selectedGuest ? (
+          <div style={{ position: 'relative' }}>
+            <label
+              className="text-secondary"
+              style={{
+                display: 'block',
+                marginBottom: 'var(--space-2)',
+                fontWeight: 500,
+              }}
+            >
+              Find your seat
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                ref={inputRef}
+                type="text"
+                className="fys-search input w-full"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setShowSuggestions(true);
+                  setSelectedGuestId(null);
+                }}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+                onKeyDown={handleKeyDown}
+                placeholder="Type your name..."
+                autoComplete="off"
+              />
+              {searching && (
                 <div
-                  className="fys-suggestion"
-                  style={{ justifyContent: 'center' }}
-                >
-                  <Spinner size={20} />
-                </div>
-              )}
-              {!searchResults.isLoading && suggestions.length === 0 && (
-                <div className="fys-suggestion text-muted">No guests found</div>
-              )}
-              {suggestions.map((guest, index) => (
-                <button
-                  key={guest.id}
-                  type="button"
-                  className={`fys-suggestion ${index === highlightIndex ? 'fys-suggestion--active' : ''}`}
-                  onClick={() => selectGuest(guest)}
-                  onMouseEnter={() => setHighlightIndex(index)}
-                >
-                  <span>{guest.name}</span>
-                  {guest.table ? (
-                    <span className="badge badge--info">
-                      Table {guest.table.number}
-                    </span>
-                  ) : (
-                    <span className="text-muted">Not yet seated</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {selectedGuestId && (
-          <div className="fys-result">
-            {guestLoading ? (
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  padding: 'var(--space-6)',
-                }}
-              >
-                <Spinner size={28} />
-              </div>
-            ) : selectedGuest ? (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 'var(--space-4)',
-                }}
-              >
-                <p
-                  className="text-secondary"
                   style={{
-                    fontSize: '0.875rem',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
+                    position: 'absolute',
+                    right: 12,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
                   }}
                 >
-                  {selectedGuest.name}
-                </p>
-                {selectedGuest.table ? (
-                  <div className="fys-table-card">
-                    <span
-                      className="text-secondary"
-                      style={{ fontSize: '0.875rem' }}
-                    >
-                      Your Table
-                    </span>
-                    <span
-                      style={{
-                        fontSize: '4rem',
-                        fontWeight: 700,
-                        lineHeight: 1,
-                      }}
-                    >
-                      {selectedGuest.table.number}
-                    </span>
-                    {selectedGuest.table.name && (
-                      <span className="text-muted">
-                        {selectedGuest.table.name}
+                  <Spinner size={18} />
+                </div>
+              )}
+            </div>
+
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="fys-suggestions">
+                {suggestions.map((guest, i) => (
+                  <div
+                    key={guest.id}
+                    className={`fys-suggestion ${i === highlightIndex ? 'fys-suggestion--active' : ''}`}
+                    onMouseDown={() => selectGuest(guest)}
+                    onMouseEnter={() => setHighlightIndex(i)}
+                    style={
+                      i === highlightIndex
+                        ? { background: 'var(--hover-bg, rgba(0,0,0,0.05))' }
+                        : undefined
+                    }
+                  >
+                    <span>{guest.name}</span>
+                    {guest.table ? (
+                      <span
+                        className="text-muted"
+                        style={{ fontSize: '0.875rem' }}
+                      >
+                        Table {guest.table.number}
+                      </span>
+                    ) : (
+                      <span
+                        className="text-muted"
+                        style={{ fontSize: '0.875rem' }}
+                      >
+                        Not yet assigned
                       </span>
                     )}
                   </div>
-                ) : (
-                  <div
-                    className="card"
-                    style={{
-                      padding: 'var(--space-6)',
-                      textAlign: 'center',
-                      width: '100%',
-                    }}
-                  >
-                    <p
-                      className="text-secondary"
-                      style={{ marginBottom: 'var(--space-1)' }}
-                    >
-                      You haven't been assigned a seat yet.
-                    </p>
-                    <p className="text-muted">
-                      Please check with the host upon arrival.
-                    </p>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--sm"
-                  onClick={() => setSelectedGuestId(null)}
-                >
-                  Search again
-                </button>
+                ))}
               </div>
-            ) : (
-              <p className="text-muted">Guest not found.</p>
             )}
+
+            {showSuggestions &&
+              query.trim() &&
+              !searching &&
+              suggestions.length === 0 && (
+                <div className="fys-suggestions">
+                  <div
+                    className="fys-suggestion text-muted"
+                    style={{ justifyContent: 'center' }}
+                  >
+                    No guests found
+                  </div>
+                </div>
+              )}
           </div>
+        ) : (
+          <SeatDisplay guest={selectedGuest} onReset={resetSearch} />
         )}
 
         {event.invitation_enabled && (
-          <div style={{ textAlign: 'center', marginTop: 'var(--space-5)' }}>
-            <Link to={`/invite/${event.slug}`} className="btn btn--secondary">
-              RSVP / Send Invitation →
+          <div style={{ marginTop: 'var(--space-5)', textAlign: 'center' }}>
+            <Link
+              to={`/invite/${event.slug}`}
+              className="btn btn--ghost btn--sm"
+            >
+              RSVP →
             </Link>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function SeatDisplay({
+  guest,
+  onReset,
+}: {
+  guest: GuestWithTable;
+  onReset: () => void;
+}) {
+  return (
+    <div className="fys-result">
+      <p
+        className="text-secondary"
+        style={{ textAlign: 'center', marginBottom: 'var(--space-3)' }}
+      >
+        Welcome, {guest.name}!
+      </p>
+      {guest.table ? (
+        <div className="fys-table-card">
+          <div
+            className="text-muted"
+            style={{
+              fontSize: '0.75rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Your Table
+          </div>
+          <div style={{ fontSize: '4rem', fontWeight: 800, lineHeight: 1 }}>
+            {guest.table.number}
+          </div>
+          {guest.table.name && (
+            <div
+              className="text-secondary"
+              style={{ marginTop: 'var(--space-1)' }}
+            >
+              {guest.table.name}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="fys-table-card">
+          <div
+            className="text-muted"
+            style={{
+              fontSize: '0.75rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Your Table
+          </div>
+          <div
+            style={{
+              fontSize: '1.5rem',
+              fontWeight: 600,
+              marginTop: 'var(--space-2)',
+            }}
+          >
+            Not yet assigned
+          </div>
+          <p
+            className="text-muted"
+            style={{ marginTop: 'var(--space-1)', fontSize: '0.875rem' }}
+          >
+            Please check with the host upon arrival.
+          </p>
+        </div>
+      )}
+      <div style={{ textAlign: 'center', marginTop: 'var(--space-4)' }}>
+        <button className="btn btn--secondary btn--sm" onClick={onReset}>
+          Search again
+        </button>
       </div>
     </div>
   );

@@ -2,11 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import type { RSVP, RSVPStatus, RSVPWithGuest } from '@/types/rsvp';
 
-const QUERY_KEY = 'rsvps';
+const QK = 'rsvps';
 
 export function useRSVPs(eventId: string) {
   return useQuery({
-    queryKey: [QUERY_KEY, eventId],
+    queryKey: [QK, eventId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rsvps')
@@ -24,7 +24,7 @@ export function useRSVPs(eventId: string) {
 
 export function useRSVPByGuest(eventId: string, guestId: string | null) {
   return useQuery({
-    queryKey: [QUERY_KEY, 'guest', eventId, guestId],
+    queryKey: [QK, 'guest', eventId, guestId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rsvps')
@@ -71,8 +71,6 @@ export function useUpsertRSVP(eventId: string) {
       if (error) throw error;
       return data as RSVP;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [QUERY_KEY, eventId] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK, eventId] }),
   });
 }

@@ -14,11 +14,3 @@ export interface RSVP {
 export interface RSVPWithGuest extends RSVP {
   guest: { id: string; name: string };
 }
-
-export interface RSVPInput {
-  event_id: string;
-  guest_id: string;
-  status: RSVPStatus;
-  plus_ones?: number;
-  message?: string | null;
-}

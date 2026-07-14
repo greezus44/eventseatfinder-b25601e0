@@ -8,35 +8,293 @@ import { LoadingScreen, ErrorScreen } from '@/components/ui/feedback';
 import type { Table } from '@/types/table';
 import type { GuestWithTable } from '@/types/guest';
 
-function StatCard({
-  label,
-  value,
-  variant,
-}: {
-  label: string;
-  value: number | string;
-  variant?: 'primary' | 'success' | 'warning' | 'error';
-}) {
-  const variantClass = variant ? `overview__stat--${variant}` : '';
+export function EventOverviewPage() {
+  const { eventId } = useParams<{ eventId: string }>();
+  const eid = eventId ?? '';
+
+  const { data: event, isLoading, error } = useEvent(eid);
+  const { data: guests } = useGuests(eid);
+  const { data: tables } = useTables(eid);
+  const { data: rsvps } = useRSVPs(eid);
+
+  const stats = useMemo(() => {
+    const totalGuests = guests?.length ?? 0;
+    const totalTables = tables?.length ?? 0;
+    const attending =
+      rsvps?.filter((r) => r.status === 'attending').length ?? 0;
+    const declined =
+      rsvps?.filter((r) => r.status === 'not_attending').length ?? 0;
+    const pending = totalGuests - attending - declined;
+    const unassigned = guests?.filter((g) => !g.table_id).length ?? 0;
+    return {
+      totalGuests,
+      totalTables,
+      attending,
+      declined,
+      pending,
+      unassigned,
+    };
+  }, [guests, tables, rsvps]);
+
+  const seatingPct =
+    stats.totalGuests > 0
+      ? Math.round(
+          ((stats.totalGuests - stats.unassigned) / stats.totalGuests) * 100,
+        )
+      : 0;
+
+  const rsvpResponsePct =
+    stats.totalGuests > 0
+      ? Math.round(
+          ((stats.attending + stats.declined) / stats.totalGuests) * 100,
+        )
+      : 0;
+
+  const totalCapacity = tables?.reduce((sum, t) => sum + t.capacity, 0) ?? 0;
+  const capacityPct =
+    totalCapacity > 0 ? Math.round((stats.attending / totalCapacity) * 100) : 0;
+
+  if (isLoading) return <LoadingScreen message="Loading overview..." />;
+  if (error) return <ErrorScreen message="Failed to load overview." />;
+  if (!event) return <ErrorScreen message="Event not found." />;
+
+  const barColor = (pct: number) => {
+    if (pct >= 90) return 'var(--error, #dc2626)';
+    if (pct >= 75) return 'var(--warning, #f59e0b)';
+    return 'var(--success, #16a34a)';
+  };
+
   return (
-    <div className={`overview__stat ${variantClass}`}>
-      <span className="overview__stat-value">{value}</span>
-      <span className="overview__stat-label">{label}</span>
+    <div className="page">
+      <div className="page__header">
+        <Link
+          to={`/events/${eid}`}
+          className="text-secondary"
+          style={{
+            fontSize: '0.875rem',
+            marginBottom: 'var(--space-2)',
+            display: 'inline-block',
+          }}
+        >
+          ← Back to Event Settings
+        </Link>
+        <h1>Overview · {event.name}</h1>
+      </div>
+      <div className="page__body">
+        <div className="overview__layout">
+          <div className="overview__stats-grid">
+            <div
+              className="overview__stat card"
+              style={{ padding: 'var(--space-4)' }}
+            >
+              <div
+                className="text-muted"
+                style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}
+              >
+                Total Guests
+              </div>
+              <div style={{ fontSize: '2rem', fontWeight: 700 }}>
+                {stats.totalGuests}
+              </div>
+            </div>
+            <div
+              className="overview__stat card"
+              style={{ padding: 'var(--space-4)' }}
+            >
+              <div
+                className="text-muted"
+                style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}
+              >
+                Tables
+              </div>
+              <div style={{ fontSize: '2rem', fontWeight: 700 }}>
+                {stats.totalTables}
+              </div>
+            </div>
+            <div
+              className="overview__stat card"
+              style={{ padding: 'var(--space-4)' }}
+            >
+              <div
+                className="text-muted"
+                style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}
+              >
+                Attending
+              </div>
+              <div
+                style={{
+                  fontSize: '2rem',
+                  fontWeight: 700,
+                  color: 'var(--success, #16a34a)',
+                }}
+              >
+                {stats.attending}
+              </div>
+            </div>
+            <div
+              className="overview__stat card"
+              style={{ padding: 'var(--space-4)' }}
+            >
+              <div
+                className="text-muted"
+                style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}
+              >
+                Declined
+              </div>
+              <div
+                style={{
+                  fontSize: '2rem',
+                  fontWeight: 700,
+                  color: 'var(--error, #dc2626)',
+                }}
+              >
+                {stats.declined}
+              </div>
+            </div>
+            <div
+              className="overview__stat card"
+              style={{ padding: 'var(--space-4)' }}
+            >
+              <div
+                className="text-muted"
+                style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}
+              >
+                Pending RSVP
+              </div>
+              <div style={{ fontSize: '2rem', fontWeight: 700 }}>
+                {stats.pending}
+              </div>
+            </div>
+            <div
+              className="overview__stat card"
+              style={{ padding: 'var(--space-4)' }}
+            >
+              <div
+                className="text-muted"
+                style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}
+              >
+                Unassigned
+              </div>
+              <div
+                style={{
+                  fontSize: '2rem',
+                  fontWeight: 700,
+                  color: 'var(--warning, #f59e0b)',
+                }}
+              >
+                {stats.unassigned}
+              </div>
+            </div>
+          </div>
+
+          <div
+            className="overview__progress-card card"
+            style={{ padding: 'var(--space-5)' }}
+          >
+            <h3 style={{ marginBottom: 'var(--space-4)' }}>Progress</h3>
+            <ProgressBar
+              label="Seating"
+              pct={seatingPct}
+              color="var(--primary)"
+            />
+            <ProgressBar
+              label="RSVP Response"
+              pct={rsvpResponsePct}
+              color="var(--primary)"
+            />
+            <ProgressBar
+              label="Capacity Utilization"
+              pct={capacityPct}
+              color={barColor(capacityPct)}
+            />
+          </div>
+
+          <div
+            className="overview__tables-card card"
+            style={{ padding: 'var(--space-5)' }}
+          >
+            <h3 style={{ marginBottom: 'var(--space-4)' }}>Table Occupancy</h3>
+            {tables && tables.length === 0 ? (
+              <p className="text-muted">No tables yet.</p>
+            ) : (
+              <div className="overview__tables-grid">
+                {tables?.map((table) => (
+                  <TableOccupancyItem
+                    key={table.id}
+                    table={table}
+                    guests={guests ?? []}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div
+            className="overview__actions-card card"
+            style={{ padding: 'var(--space-5)' }}
+          >
+            <h3 style={{ marginBottom: 'var(--space-4)' }}>Quick Actions</h3>
+            <div className="overview__actions-grid">
+              <Link
+                to={`/events/${eid}/guests`}
+                className="overview__action btn btn--secondary"
+              >
+                Manage Guests
+              </Link>
+              <Link
+                to={`/events/${eid}/seating`}
+                className="overview__action btn btn--secondary"
+              >
+                Seating
+              </Link>
+              <Link
+                to={`/events/${eid}`}
+                className="overview__action btn btn--secondary"
+              >
+                Settings
+              </Link>
+              <Link
+                to={`/e/${event.slug}`}
+                className="overview__action btn btn--secondary"
+              >
+                Find Seat
+              </Link>
+              {event.invitation_enabled && (
+                <Link
+                  to={`/invite/${event.slug}`}
+                  className="overview__action btn btn--secondary"
+                >
+                  Invitation
+                </Link>
+              )}
+              <Link
+                to={`/events/${eid}/check-in`}
+                className="overview__action btn btn--secondary"
+              >
+                Check-in
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
 function ProgressBar({
   label,
-  percent,
+  pct,
   color,
 }: {
   label: string;
-  percent: number;
+  pct: number;
   color: string;
 }) {
   return (
-    <div className="overview__progress">
+    <div
+      className="overview__progress"
+      style={{ marginBottom: 'var(--space-3)' }}
+    >
       <div
         className="flex"
         style={{
@@ -48,23 +306,23 @@ function ProgressBar({
           {label}
         </span>
         <span className="text-muted" style={{ fontSize: '0.875rem' }}>
-          {Math.round(percent)}%
+          {pct}%
         </span>
       </div>
       <div
         style={{
-          height: '8px',
-          background: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-full)',
+          height: 8,
+          background: 'var(--border)',
+          borderRadius: 4,
           overflow: 'hidden',
         }}
       >
         <div
           style={{
-            width: `${Math.min(100, percent)}%`,
+            width: `${pct}%`,
             height: '100%',
             background: color,
-            borderRadius: 'var(--radius-full)',
+            borderRadius: 4,
             transition: 'width 0.3s ease',
           }}
         />
@@ -73,306 +331,78 @@ function ProgressBar({
   );
 }
 
-function getCapacityColor(used: number, capacity: number): string {
-  if (capacity === 0) return 'var(--muted)';
-  const ratio = used / capacity;
-  if (ratio > 1) return 'var(--error)';
-  if (ratio >= 0.9) return 'var(--warning)';
-  return 'var(--success)';
-}
-
-function TableOccupancyGrid({
-  tables,
-  guestsByTable,
+function TableOccupancyItem({
+  table,
+  guests,
 }: {
-  tables: Table[];
-  guestsByTable: Map<string, GuestWithTable[]>;
+  table: Table;
+  guests: GuestWithTable[];
 }) {
-  if (tables.length === 0) {
-    return <p className="text-muted">No tables created yet.</p>;
-  }
+  const count = guests.filter((g) => g.table_id === table.id).length;
+  const pct =
+    table.capacity > 0 ? Math.round((count / table.capacity) * 100) : 0;
+  const overCapacity = count > table.capacity;
 
   return (
-    <div className="overview__tables-grid">
-      {tables.map((table) => {
-        const tableGuests = guestsByTable.get(table.id) ?? [];
-        const occupancy =
-          table.capacity > 0 ? (tableGuests.length / table.capacity) * 100 : 0;
-        const isOverCapacity = tableGuests.length > table.capacity;
-        const color = getCapacityColor(tableGuests.length, table.capacity);
-
-        return (
-          <div key={table.id} className="overview__table-item">
-            <div
-              className="flex"
-              style={{
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: 'var(--space-2)',
-              }}
-            >
-              <div>
-                <span style={{ fontWeight: 600 }}>Table {table.number}</span>
-                {table.name && (
-                  <span
-                    className="text-muted"
-                    style={{
-                      marginLeft: 'var(--space-1)',
-                      fontSize: '0.8125rem',
-                    }}
-                  >
-                    {table.name}
-                  </span>
-                )}
-              </div>
-              <span
-                className={
-                  isOverCapacity ? 'badge badge--error' : 'badge badge--info'
-                }
-              >
-                {tableGuests.length}/{table.capacity}
-              </span>
-            </div>
-            <div
-              style={{
-                height: '6px',
-                background: 'var(--bg-secondary)',
-                borderRadius: 'var(--radius-full)',
-                overflow: 'hidden',
-              }}
-            >
-              <div
-                style={{
-                  width: `${Math.min(100, occupancy)}%`,
-                  height: '100%',
-                  background: color,
-                  borderRadius: 'var(--radius-full)',
-                }}
-              />
-            </div>
-            {isOverCapacity && (
-              <p
-                style={{
-                  color: 'var(--error)',
-                  fontSize: '0.75rem',
-                  marginTop: 'var(--space-1)',
-                }}
-              >
-                ⚠ Over capacity by {tableGuests.length - table.capacity}
-              </p>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-export function EventOverviewPage() {
-  const { eventId } = useParams<{ eventId: string }>();
-  const {
-    data: event,
-    isLoading: eventLoading,
-    error: eventError,
-  } = useEvent(eventId ?? '');
-  const {
-    data: guests,
-    isLoading: guestsLoading,
-    error: guestsError,
-  } = useGuests(eventId ?? '');
-  const {
-    data: tables,
-    isLoading: tablesLoading,
-    error: tablesError,
-  } = useTables(eventId ?? '');
-  const {
-    data: rsvps,
-    isLoading: rsvpsLoading,
-    error: rsvpsError,
-  } = useRSVPs(eventId ?? '');
-
-  const stats = useMemo(() => {
-    const totalGuests = guests?.length ?? 0;
-    const totalTables = tables?.length ?? 0;
-    const attending =
-      rsvps?.filter((r) => r.status === 'attending').length ?? 0;
-    const declined =
-      rsvps?.filter((r) => r.status === 'not_attending').length ?? 0;
-    const pending = totalGuests - attending - declined;
-    const unassigned = guests?.filter((g) => !g.table_id).length ?? 0;
-    const seated = totalGuests - unassigned;
-    const totalCapacity = tables?.reduce((sum, t) => sum + t.capacity, 0) ?? 0;
-    const plusOnes = rsvps?.reduce((sum, r) => sum + r.plus_ones, 0) ?? 0;
-
-    return {
-      totalGuests,
-      totalTables,
-      attending,
-      declined,
-      pending,
-      unassigned,
-      seated,
-      totalCapacity,
-      plusOnes,
-    };
-  }, [guests, tables, rsvps]);
-
-  const guestsByTable = useMemo(() => {
-    const map = new Map<string, GuestWithTable[]>();
-    for (const guest of guests ?? []) {
-      if (guest.table_id) {
-        const list = map.get(guest.table_id) ?? [];
-        list.push(guest);
-        map.set(guest.table_id, list);
-      }
-    }
-    return map;
-  }, [guests]);
-
-  const seatingPercent =
-    stats.totalGuests > 0 ? (stats.seated / stats.totalGuests) * 100 : 0;
-  const rsvpPercent =
-    stats.totalGuests > 0
-      ? ((stats.attending + stats.declined) / stats.totalGuests) * 100
-      : 0;
-  const capacityPercent =
-    stats.totalCapacity > 0 ? (stats.seated / stats.totalCapacity) * 100 : 0;
-
-  const isLoading =
-    eventLoading || guestsLoading || tablesLoading || rsvpsLoading;
-  const error = eventError ?? guestsError ?? tablesError ?? rsvpsError;
-
-  if (isLoading) return <LoadingScreen message="Loading overview..." />;
-  if (error) return <ErrorScreen message={error.message} />;
-  if (!event) return <ErrorScreen message="Event not found" />;
-
-  const capacityColor = getCapacityColor(stats.seated, stats.totalCapacity);
-
-  return (
-    <div className="page">
-      <div className="page__header">
-        <div>
-          <Link
-            to={`/events/${eventId}`}
-            className="btn btn--ghost btn--sm"
-            style={{ marginBottom: 'var(--space-1)' }}
-          >
-            ← Back to Event
-          </Link>
-          <h1>{event.name} — Overview</h1>
-        </div>
+    <div
+      className="overview__table-item"
+      style={{
+        padding: 'var(--space-3)',
+        border: '1px solid var(--border)',
+        borderRadius: 8,
+      }}
+    >
+      <div
+        className="flex"
+        style={{
+          justifyContent: 'space-between',
+          marginBottom: 'var(--space-1)',
+        }}
+      >
+        <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>
+          {table.name} #{table.number}
+        </span>
+        <span
+          className="text-muted"
+          style={{
+            fontSize: '0.875rem',
+            color: overCapacity ? 'var(--error, #dc2626)' : undefined,
+            fontWeight: overCapacity ? 600 : undefined,
+          }}
+        >
+          {count}/{table.capacity}
+        </span>
       </div>
-
-      <div className="page__body">
-        <div className="overview__layout">
-          <div className="overview__stats-grid">
-            <StatCard label="Total Guests" value={stats.totalGuests} />
-            <StatCard label="Tables" value={stats.totalTables} />
-            <StatCard
-              label="Attending"
-              value={stats.attending}
-              variant="success"
-            />
-            <StatCard label="Declined" value={stats.declined} variant="error" />
-            <StatCard
-              label="Pending RSVP"
-              value={stats.pending}
-              variant="warning"
-            />
-            <StatCard
-              label="Unassigned"
-              value={stats.unassigned}
-              variant="warning"
-            />
-          </div>
-
-          <div
-            className="overview__progress-card card"
-            style={{ padding: 'var(--space-5)' }}
-          >
-            <h3 style={{ marginBottom: 'var(--space-4)' }}>Progress</h3>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 'var(--space-4)',
-              }}
-            >
-              <ProgressBar
-                label="Seating"
-                percent={seatingPercent}
-                color={
-                  seatingPercent >= 100 ? 'var(--success)' : 'var(--primary)'
-                }
-              />
-              <ProgressBar
-                label="RSVP Response"
-                percent={rsvpPercent}
-                color={
-                  rsvpPercent >= 75
-                    ? 'var(--success)'
-                    : rsvpPercent >= 50
-                      ? 'var(--warning)'
-                      : 'var(--error)'
-                }
-              />
-              <ProgressBar
-                label="Capacity Utilization"
-                percent={capacityPercent}
-                color={capacityColor}
-              />
-            </div>
-          </div>
-
-          <div
-            className="overview__tables-card card"
-            style={{ padding: 'var(--space-5)' }}
-          >
-            <h3 style={{ marginBottom: 'var(--space-4)' }}>Table Occupancy</h3>
-            <TableOccupancyGrid
-              tables={tables ?? []}
-              guestsByTable={guestsByTable}
-            />
-          </div>
-
-          <div
-            className="overview__actions-card card"
-            style={{ padding: 'var(--space-5)' }}
-          >
-            <h3 style={{ marginBottom: 'var(--space-4)' }}>Quick Actions</h3>
-            <div className="overview__actions-grid">
-              <Link
-                to={`/events/${eventId}/guests`}
-                className="overview__action"
-              >
-                <span style={{ fontSize: '1.5rem' }}>👥</span>
-                <span>Manage Guests</span>
-              </Link>
-              <Link
-                to={`/events/${eventId}/seating`}
-                className="overview__action"
-              >
-                <span style={{ fontSize: '1.5rem' }}>🪑</span>
-                <span>Seating</span>
-              </Link>
-              <Link to={`/events/${eventId}`} className="overview__action">
-                <span style={{ fontSize: '1.5rem' }}>⚙️</span>
-                <span>Settings</span>
-              </Link>
-              <Link to={`/e/${event.slug}`} className="overview__action">
-                <span style={{ fontSize: '1.5rem' }}>🔍</span>
-                <span>Find Your Seat</span>
-              </Link>
-              {event.invitation_enabled && (
-                <Link to={`/invite/${event.slug}`} className="overview__action">
-                  <span style={{ fontSize: '1.5rem' }}>✉️</span>
-                  <span>Invitation</span>
-                </Link>
-              )}
-            </div>
-          </div>
-        </div>
+      <div
+        style={{
+          height: 6,
+          background: 'var(--border)',
+          borderRadius: 3,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            width: `${Math.min(pct, 100)}%`,
+            height: '100%',
+            background: overCapacity
+              ? 'var(--error, #dc2626)'
+              : 'var(--primary)',
+            borderRadius: 3,
+          }}
+        />
       </div>
+      {overCapacity && (
+        <div
+          style={{
+            fontSize: '0.75rem',
+            color: 'var(--error, #dc2626)',
+            marginTop: 'var(--space-1)',
+          }}
+        >
+          ⚠ Over capacity
+        </div>
+      )}
     </div>
   );
 }

@@ -13,6 +13,4 @@ export interface TableInput {
   name: string;
   number: number;
   capacity?: number;
-  position_x?: number | null;
-  position_y?: number | null;
 }

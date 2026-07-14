@@ -2,11 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import type { Guest, GuestWithTable } from '@/types/guest';
 
-const QUERY_KEY = 'guests';
+const QK = 'guests';
 
 export function useGuests(eventId: string) {
   return useQuery({
-    queryKey: [QUERY_KEY, eventId],
+    queryKey: [QK, eventId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('guests')
@@ -34,9 +34,7 @@ export function useCreateGuest(eventId: string) {
       if (error) throw error;
       return data as Guest;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [QUERY_KEY, eventId] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK, eventId] }),
   });
 }
 
@@ -52,9 +50,7 @@ export function useBulkCreateGuests(eventId: string) {
       if (error) throw error;
       return data as Pick<Guest, 'id' | 'name'>[];
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [QUERY_KEY, eventId] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK, eventId] }),
   });
 }
 
@@ -82,9 +78,7 @@ export function useUpdateGuest(eventId: string) {
       if (error) throw error;
       return data as Guest;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [QUERY_KEY, eventId] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK, eventId] }),
   });
 }
 
@@ -95,9 +89,7 @@ export function useDeleteGuest(eventId: string) {
       const { error } = await supabase.from('guests').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [QUERY_KEY, eventId] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK, eventId] }),
   });
 }
 
@@ -106,7 +98,6 @@ export function useGuestSearch(eventId: string, query: string) {
     queryKey: ['guest-search', eventId, query],
     queryFn: async () => {
       if (!query.trim()) return [] as GuestWithTable[];
-
       const { data, error } = await supabase
         .from('guests')
         .select(
@@ -116,7 +107,6 @@ export function useGuestSearch(eventId: string, query: string) {
         .ilike('name', `%${query.trim()}%`)
         .order('name')
         .limit(10);
-
       if (error) throw error;
       return data as unknown as GuestWithTable[];
     },
@@ -136,7 +126,6 @@ export function useGuestById(eventId: string, guestId: string | null) {
         .eq('event_id', eventId)
         .eq('id', guestId!)
         .maybeSingle();
-
       if (error) throw error;
       return data as unknown as GuestWithTable | null;
     },

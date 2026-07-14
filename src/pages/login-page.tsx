@@ -1,10 +1,12 @@
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/providers/auth-provider';
+import { useToast } from '@/providers/toast-provider';
 import { Spinner } from '@/components/ui/feedback';
 
 export function LoginPage() {
-  const { user, loading, signIn, signUp } = useAuth();
+  const { user, signIn, signUp } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
@@ -13,49 +15,49 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  if (loading) {
-    return (
-      <div className="loading-screen">
-        <Spinner size={32} />
-      </div>
-    );
-  }
+  if (user) return <Navigate to="/" replace />;
 
-  if (user) {
-    return <Navigate to="/" replace />;
-  }
-
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!email.trim() || !password.trim()) {
+      setError('Please enter your email and password.');
+      return;
+    }
     setSubmitting(true);
-
     try {
       if (mode === 'signin') {
-        await signIn(email, password);
+        await signIn(email.trim(), password);
+        toast('Welcome back!', 'success');
       } else {
-        await signUp(email, password);
+        await signUp(email.trim(), password);
+        toast(
+          'Account created! Please check your email to confirm.',
+          'success',
+        );
       }
       navigate('/');
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Something went wrong';
+        err instanceof Error ? err.message : 'Something went wrong.';
       setError(message);
     } finally {
       setSubmitting(false);
     }
   };
 
+  const switchMode = () => {
+    setMode((m) => (m === 'signin' ? 'signup' : 'signin'));
+    setError(null);
+  };
+
   return (
-    <div
-      className="loading-screen"
-      style={{ minHeight: '100vh', padding: 'var(--space-4)' }}
-    >
+    <div className="loading-screen" style={{ minHeight: '100vh' }}>
       <div
         className="card"
         style={{
           width: '100%',
-          maxWidth: '420px',
+          maxWidth: 400,
           padding: 'var(--space-8)',
         }}
       >
@@ -76,69 +78,68 @@ export function LoginPage() {
           className="flex"
           style={{
             marginBottom: 'var(--space-5)',
-            gap: 'var(--space-1)',
-            background: 'var(--bg-secondary)',
-            borderRadius: 'var(--radius-md)',
-            padding: 'var(--space-1)',
+            borderRadius: 8,
+            overflow: 'hidden',
+            border: '1px solid var(--border)',
           }}
         >
           <button
             type="button"
-            className={`btn ${mode === 'signin' ? 'btn--primary' : 'btn--ghost'}`}
-            style={{ flex: 1 }}
-            onClick={() => {
-              setMode('signin');
-              setError(null);
+            className="btn btn--sm"
+            style={{
+              flex: 1,
+              borderRadius: 0,
+              background: mode === 'signin' ? 'var(--primary)' : 'transparent',
+              color: mode === 'signin' ? '#fff' : 'var(--text)',
             }}
+            onClick={() => setMode('signin')}
           >
             Sign In
           </button>
           <button
             type="button"
-            className={`btn ${mode === 'signup' ? 'btn--primary' : 'btn--ghost'}`}
-            style={{ flex: 1 }}
-            onClick={() => {
-              setMode('signup');
-              setError(null);
+            className="btn btn--sm"
+            style={{
+              flex: 1,
+              borderRadius: 0,
+              background: mode === 'signup' ? 'var(--primary)' : 'transparent',
+              color: mode === 'signup' ? '#fff' : 'var(--text)',
             }}
+            onClick={() => setMode('signup')}
           >
             Sign Up
           </button>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="form-field">
-            <label className="form-field__label" htmlFor="email">
-              Email
-            </label>
+          <div
+            className="form-field"
+            style={{ marginBottom: 'var(--space-4)' }}
+          >
+            <label className="form-field__label">Email</label>
             <input
-              id="email"
-              className="input w-full"
               type="email"
+              className="input w-full"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              required
               autoComplete="email"
             />
           </div>
-
-          <div className="form-field">
-            <label className="form-field__label" htmlFor="password">
-              Password
-            </label>
+          <div
+            className="form-field"
+            style={{ marginBottom: 'var(--space-5)' }}
+          >
+            <label className="form-field__label">Password</label>
             <input
-              id="password"
-              className="input w-full"
               type="password"
+              className="input w-full"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              required
               autoComplete={
                 mode === 'signin' ? 'current-password' : 'new-password'
               }
-              minLength={6}
             />
           </div>
 
@@ -146,14 +147,20 @@ export function LoginPage() {
             <div
               className="card"
               style={{
-                background: 'var(--error-bg)',
                 padding: 'var(--space-3)',
                 marginBottom: 'var(--space-4)',
-                color: 'var(--error)',
-                fontSize: '0.875rem',
+                background: 'var(--error-bg, rgba(220,38,38,0.1))',
+                border: '1px solid var(--error)',
               }}
             >
-              {error}
+              <p
+                style={{
+                  color: 'var(--error)',
+                  fontSize: '0.875rem',
+                }}
+              >
+                {error}
+              </p>
             </div>
           )}
 
@@ -161,10 +168,14 @@ export function LoginPage() {
             type="submit"
             className="btn btn--primary w-full"
             disabled={submitting}
-            style={{ gap: 'var(--space-2)' }}
           >
-            {submitting && <Spinner size={16} />}
-            {mode === 'signin' ? 'Sign In' : 'Create Account'}
+            {submitting ? (
+              <Spinner size={18} />
+            ) : mode === 'signin' ? (
+              'Sign In'
+            ) : (
+              'Create Account'
+            )}
           </button>
         </form>
 
@@ -172,8 +183,8 @@ export function LoginPage() {
           className="text-muted"
           style={{
             textAlign: 'center',
-            marginTop: 'var(--space-5)',
-            fontSize: '0.8125rem',
+            marginTop: 'var(--space-4)',
+            fontSize: '0.875rem',
           }}
         >
           {mode === 'signin'
@@ -181,11 +192,14 @@ export function LoginPage() {
             : 'Already have an account? '}
           <button
             type="button"
-            className="btn btn--ghost btn--sm"
-            style={{ display: 'inline-flex', padding: '0' }}
-            onClick={() => {
-              setMode(mode === 'signin' ? 'signup' : 'signin');
-              setError(null);
+            onClick={switchMode}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--primary)',
+              cursor: 'pointer',
+              font: 'inherit',
+              padding: 0,
             }}
           >
             {mode === 'signin' ? 'Sign up' : 'Sign in'}

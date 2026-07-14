@@ -3,11 +3,11 @@ import { supabase } from '@/lib/supabase';
 import { generateSlug } from '@/lib/slug';
 import type { Event, EventInput } from '@/types/event';
 
-const QUERY_KEY = 'events';
+const QK = 'events';
 
 export function useEvents() {
   return useQuery({
-    queryKey: [QUERY_KEY],
+    queryKey: [QK],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('events')
@@ -21,7 +21,7 @@ export function useEvents() {
 
 export function useEvent(id: string) {
   return useQuery({
-    queryKey: [QUERY_KEY, id],
+    queryKey: [QK, id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('events')
@@ -37,7 +37,7 @@ export function useEvent(id: string) {
 
 export function useEventBySlug(slug: string) {
   return useQuery({
-    queryKey: [QUERY_KEY, 'slug', slug],
+    queryKey: [QK, 'slug', slug],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('events')
@@ -57,7 +57,6 @@ export function useCreateEvent() {
     mutationFn: async (input: EventInput) => {
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) throw new Error('Not authenticated');
-
       const slug = generateSlug(input.name);
       const { data, error } = await supabase
         .from('events')
@@ -67,8 +66,6 @@ export function useCreateEvent() {
           date: input.date ?? null,
           time: input.time ?? null,
           venue: input.venue ?? null,
-          logo_url: input.logo_url ?? null,
-          cover_url: input.cover_url ?? null,
           accent_color: input.accent_color ?? null,
           invitation_enabled: input.invitation_enabled ?? false,
         })
@@ -77,9 +74,7 @@ export function useCreateEvent() {
       if (error) throw error;
       return data as Event;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [QUERY_KEY] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK] }),
   });
 }
 
@@ -95,10 +90,7 @@ export function useUpdateEvent() {
     }) => {
       const { data, error } = await supabase
         .from('events')
-        .update({
-          ...input,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ ...input, updated_at: new Date().toISOString() })
         .eq('id', id)
         .select()
         .single();
@@ -106,11 +98,9 @@ export function useUpdateEvent() {
       return data as Event;
     },
     onSuccess: (updated) => {
-      qc.invalidateQueries({ queryKey: [QUERY_KEY] });
-      qc.invalidateQueries({ queryKey: [QUERY_KEY, updated.id] });
-      qc.invalidateQueries({
-        queryKey: [QUERY_KEY, 'slug', updated.slug],
-      });
+      qc.invalidateQueries({ queryKey: [QK] });
+      qc.invalidateQueries({ queryKey: [QK, updated.id] });
+      qc.invalidateQueries({ queryKey: [QK, 'slug', updated.slug] });
     },
   });
 }
@@ -122,8 +112,6 @@ export function useDeleteEvent() {
       const { error } = await supabase.from('events').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [QUERY_KEY] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK] }),
   });
 }
