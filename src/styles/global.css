@@ -32,6 +32,17 @@
   --radius-xl: 20px;
   --radius-full: 9999px;
 
+  /* Input styling — consistent rectangular with rounded corners */
+  --input-radius: 12px;
+  --input-height: 44px;
+  --input-padding-x: 14px;
+  --input-padding-y: 10px;
+  --input-border: 1px solid var(--mid-grey);
+  --input-border-focus: 1px solid var(--near-black);
+  --input-bg: var(--white);
+  --input-font-size: 14px;
+  --input-gap: 16px;
+
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
@@ -76,6 +87,13 @@ img { display: block; max-width: 100%; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ============================================================
+   GLOBAL INPUT STYLING — Rectangular with rounded corners
+   Applied consistently across all pages via scoped CSS
+   ============================================================ */
+
+/* Base input style mixin — pages should apply these via their scoped classes */
+
+/* ============================================================
    GUEST PAGE STYLES — Premium reference design
    Prefix: gp-
    ============================================================ */
@@ -110,6 +128,7 @@ img { display: block; max-width: 100%; }
   font-weight: 500;
 }
 
+/* ── Language switcher (top right) ── */
 .gp-lang-switcher {
   position: absolute;
   top: 24px;
@@ -142,6 +161,7 @@ img { display: block; max-width: 100%; }
   background: rgba(0,0,0,0.04);
 }
 
+/* ── Hero section ── */
 .gp-hero {
   display: flex;
   flex-direction: column;
@@ -152,16 +172,12 @@ img { display: block; max-width: 100%; }
 }
 
 .gp-logo {
-  width: 64px;
-  height: 64px;
   object-fit: contain;
   margin-bottom: 20px;
   border-radius: 50%;
 }
 
 .gp-monogram {
-  width: 64px;
-  height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -192,6 +208,7 @@ img { display: block; max-width: 100%; }
   line-height: 1.8;
 }
 
+/* ── Segmented tabs ── */
 .gp-tabs-wrap {
   display: flex;
   justify-content: center;
@@ -233,8 +250,9 @@ img { display: block; max-width: 100%; }
   opacity: 0.5;
 }
 
+/* ── Content area ── */
 .gp-content {
-  max-width: 600px;
+  max-width: 720px;
   margin: 0 auto;
   padding: 0 24px 80px;
 }
@@ -253,6 +271,7 @@ img { display: block; max-width: 100%; }
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ── Search box — matches page background, accent border ── */
 .gp-search-wrap {
   margin-bottom: 24px;
 }
@@ -264,8 +283,8 @@ img { display: block; max-width: 100%; }
   padding: 0 20px;
   height: 56px;
   border: 1.5px solid var(--accent);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  background: var(--bg, transparent);
   transition: box-shadow 200ms ease;
 }
 
@@ -293,13 +312,14 @@ img { display: block; max-width: 100%; }
   opacity: 0.7;
 }
 
+/* ── Results ── */
 .gp-results-wrap {
   margin-top: 8px;
 }
 
 .gp-results-list {
   border: 1px solid var(--accent);
-  border-radius: 16px;
+  border-radius: 12px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.5);
 }
@@ -355,13 +375,14 @@ img { display: block; max-width: 100%; }
   opacity: 0.7;
 }
 
+/* ── Venue layout tab — larger preview ── */
 .gp-venue-wrap {
   position: relative;
 }
 
 .gp-venue-viewport {
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 10;
   border: 1px solid var(--accent);
   border-radius: 16px;
   overflow: hidden;
@@ -451,6 +472,16 @@ img { display: block; max-width: 100%; }
   opacity: 0.6;
 }
 
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .gp-content {
+    max-width: 100%;
+  }
+  .gp-venue-viewport {
+    aspect-ratio: 4 / 3;
+  }
+}
+
 @media (max-width: 640px) {
   .gp-hero {
     padding: 60px 20px 36px;
@@ -472,6 +503,7 @@ img { display: block; max-width: 100%; }
   }
   .gp-search-box {
     height: 52px;
+    border-radius: 12px;
   }
   .gp-content {
     padding: 0 16px 60px;

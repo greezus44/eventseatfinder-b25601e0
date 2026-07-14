@@ -1,13 +1,13 @@
-import { useEffect, type ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 
 interface ModalProps {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
-  width?: number;
+  maxWidth?: number;
 }
 
-export function Modal({ open, onClose, children, width = 440 }: ModalProps) {
+export function Modal({ open, onClose, children, maxWidth = 420 }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -20,10 +20,30 @@ export function Modal({ open, onClose, children, width = 440 }: ModalProps) {
   if (!open) return null;
 
   return (
-    <div style={overlayStyle} onClick={onClose}>
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(26, 26, 26, 0.4)',
+        padding: 16,
+      }}
+    >
       <div
-        style={{ ...cardStyle, width }}
         onClick={(e) => e.stopPropagation()}
+        style={{
+          background: '#FFFFFF',
+          borderRadius: 12,
+          padding: 32,
+          maxWidth,
+          width: '100%',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+          fontFamily: 'Inter, sans-serif',
+        }}
       >
         {children}
       </div>
@@ -51,84 +71,47 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    <Modal open={open} onClose={onCancel} width={420}>
-      <h2 style={titleStyle}>{title}</h2>
-      <p style={messageStyle}>{message}</p>
-      <div style={actionsStyle}>
-        <button style={cancelBtnStyle} onClick={onCancel}>
+    <Modal open={open} onClose={onCancel}>
+      <h2 style={{ margin: '0 0 12px', fontSize: 20, fontWeight: 600, color: '#1A1A1A' }}>
+        {title}
+      </h2>
+      <p style={{ margin: '0 0 24px', fontSize: 15, lineHeight: 1.5, color: '#4A4A4A' }}>
+        {message}
+      </p>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+        <button
+          onClick={onCancel}
+          style={{
+            padding: '10px 20px',
+            borderRadius: 8,
+            border: '1px solid #DADADA',
+            background: '#FFFFFF',
+            color: '#1A1A1A',
+            fontSize: 14,
+            fontWeight: 500,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
           {cancelLabel}
         </button>
-        <button style={confirmBtnStyle} onClick={onConfirm}>
+        <button
+          onClick={onConfirm}
+          style={{
+            padding: '10px 20px',
+            borderRadius: 8,
+            border: 'none',
+            background: '#1A1A1A',
+            color: '#FFFFFF',
+            fontSize: 14,
+            fontWeight: 500,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
           {confirmLabel}
         </button>
       </div>
     </Modal>
   );
 }
-
-const overlayStyle: React.CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'rgba(26,26,26,0.4)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 1000,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: '#FFFFFF',
-  borderRadius: 12,
-  padding: 32,
-  boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-  maxWidth: '90vw',
-  maxHeight: '90vh',
-  overflowY: 'auto',
-};
-
-const titleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: 20,
-  fontWeight: 600,
-  color: '#1A1A1A',
-  fontFamily: 'Inter, system-ui, sans-serif',
-};
-
-const messageStyle: React.CSSProperties = {
-  marginTop: 12,
-  marginBottom: 24,
-  fontSize: 15,
-  lineHeight: 1.5,
-  color: '#4A4A4A',
-  fontFamily: 'Inter, system-ui, sans-serif',
-};
-
-const actionsStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'flex-end',
-  gap: 12,
-};
-
-const cancelBtnStyle: React.CSSProperties = {
-  padding: '10px 20px',
-  borderRadius: 8,
-  border: '1px solid #DADADA',
-  background: '#FFFFFF',
-  color: '#4A4A4A',
-  fontSize: 14,
-  fontWeight: 500,
-  cursor: 'pointer',
-  fontFamily: 'Inter, system-ui, sans-serif',
-};
-
-const confirmBtnStyle: React.CSSProperties = {
-  padding: '10px 20px',
-  borderRadius: 8,
-  border: 'none',
-  background: '#1A1A1A',
-  color: '#FFFFFF',
-  fontSize: 14,
-  fontWeight: 500,
-  cursor: 'pointer',
-  fontFamily: 'Inter, system-ui, sans-serif',
-};

@@ -1,12 +1,14 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import type { Event, EventInput } from '@/types/event';
 
-const EVENTS_KEY = 'events';
-
 export function useEvents() {
-  return useQuery<Event[]>({
-    queryKey: [EVENTS_KEY],
+  return useQuery({
+    queryKey: ['events'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('events')
@@ -19,8 +21,8 @@ export function useEvents() {
 }
 
 export function useEvent(eventId: string | undefined) {
-  return useQuery<Event | null>({
-    queryKey: [EVENTS_KEY, eventId],
+  return useQuery({
+    queryKey: ['event', eventId],
     enabled: !!eventId,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -35,8 +37,8 @@ export function useEvent(eventId: string | undefined) {
 }
 
 export function useEventBySlug(slug: string | undefined) {
-  return useQuery<Event | null>({
-    queryKey: [EVENTS_KEY, 'slug', slug],
+  return useQuery({
+    queryKey: ['event', 'slug', slug],
     enabled: !!slug,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -63,7 +65,7 @@ export function useCreateEvent() {
       return data as Event;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [EVENTS_KEY] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
     },
   });
 }
@@ -81,8 +83,9 @@ export function useUpdateEvent() {
       if (error) throw error;
       return data as Event;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [EVENTS_KEY] });
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['event', variables.id] });
     },
   });
 }
@@ -95,7 +98,7 @@ export function useDeleteEvent() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [EVENTS_KEY] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
     },
   });
 }

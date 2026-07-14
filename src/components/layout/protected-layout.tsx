@@ -1,39 +1,36 @@
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { type ReactNode, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/providers/auth-provider';
 
-export function ProtectedLayout() {
+export function ProtectedLayout({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth();
+  const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    if (!loading && !session) {
+      navigate('/login', { replace: true, state: { from: location.pathname } });
+    }
+  }, [loading, session, navigate, location.pathname]);
 
   if (loading) {
     return (
-      <div style={loadingStyle}>
-        <span style={spinnerStyle} />
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#F8F8F8',
+          fontFamily: 'Inter, sans-serif',
+        }}
+      >
+        <span style={{ fontSize: 16, color: '#4A4A4A' }}>Loading…</span>
       </div>
     );
   }
 
-  if (!session) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
+  if (!session) return null;
 
-  return <Outlet />;
+  return <>{children}</>;
 }
-
-const loadingStyle: React.CSSProperties = {
-  minHeight: '100vh',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  background: '#F8F8F8',
-};
-
-const spinnerStyle: React.CSSProperties = {
-  display: 'inline-block',
-  width: 32,
-  height: 32,
-  border: '3px solid #EFEFEF',
-  borderTopColor: '#1A1A1A',
-  borderRadius: '50%',
-  animation: 'spin 0.8s linear infinite',
-};

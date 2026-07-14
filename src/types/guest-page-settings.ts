@@ -1,25 +1,21 @@
-export interface ScheduleItem {
-  time: string;
-  label: string;
-}
-
 export interface GuestPageSettings {
   id: string;
   event_id: string;
   venue_image_url: string | null;
   cover_image: string | null;
   logo_url: string | null;
-  color_primary: string;
-  color_secondary: string;
-  color_background: string;
-  color_button: string;
-  color_button_text: string;
-  color_link: string;
-  color_footer: string;
-  font_heading: string;
-  font_body: string;
-  radius: number;
-  schedule_items: ScheduleItem[];
+  logo_size: number;
+  color_primary: string | null;
+  color_secondary: string | null;
+  color_background: string | null;
+  color_button: string | null;
+  color_button_text: string | null;
+  color_link: string | null;
+  color_footer: string | null;
+  font_heading: string | null;
+  font_body: string | null;
+  radius: number | null;
+  schedule_items: unknown;
   created_at: string;
   updated_at: string;
 }
@@ -29,17 +25,18 @@ export interface GuestPageSettingsInput {
   venue_image_url?: string | null;
   cover_image?: string | null;
   logo_url?: string | null;
-  color_primary?: string;
-  color_secondary?: string;
-  color_background?: string;
-  color_button?: string;
-  color_button_text?: string;
-  color_link?: string;
-  color_footer?: string;
-  font_heading?: string;
-  font_body?: string;
-  radius?: number;
-  schedule_items?: ScheduleItem[];
+  logo_size?: number;
+  color_primary?: string | null;
+  color_secondary?: string | null;
+  color_background?: string | null;
+  color_button?: string | null;
+  color_button_text?: string | null;
+  color_link?: string | null;
+  color_footer?: string | null;
+  font_heading?: string | null;
+  font_body?: string | null;
+  radius?: number | null;
+  schedule_items?: unknown;
 }
 
 export const DEFAULT_SETTINGS: GuestPageSettingsInput = {
@@ -47,6 +44,7 @@ export const DEFAULT_SETTINGS: GuestPageSettingsInput = {
   venue_image_url: null,
   cover_image: null,
   logo_url: null,
+  logo_size: 64,
   color_primary: '#1A1A1A',
   color_secondary: '#4A4A4A',
   color_background: '#FAF3E8',
@@ -80,7 +78,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     color_button: '#1A1A1A',
     color_button_text: '#FFFFFF',
     color_link: '#1A1A1A',
-    color_footer: '#F8F8F8',
+    color_footer: '#1A1A1A',
   },
   {
     name: 'Modern Black',
@@ -95,17 +93,17 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     name: 'Minimal Grey',
     color_primary: '#4A4A4A',
-    color_secondary: '#7A7A7A',
-    color_background: '#EFEFEF',
+    color_secondary: '#1A1A1A',
+    color_background: '#F8F8F8',
     color_button: '#4A4A4A',
     color_button_text: '#FFFFFF',
     color_link: '#4A4A4A',
-    color_footer: '#DADADA',
+    color_footer: '#EFEFEF',
   },
   {
     name: 'Emerald',
     color_primary: '#047857',
-    color_secondary: '#34D399',
+    color_secondary: '#065F46',
     color_background: '#ECFDF5',
     color_button: '#047857',
     color_button_text: '#FFFFFF',
@@ -115,22 +113,22 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     name: 'Royal Blue',
     color_primary: '#1E40AF',
-    color_secondary: '#60A5FA',
+    color_secondary: '#1E3A8A',
     color_background: '#EFF6FF',
     color_button: '#1E40AF',
     color_button_text: '#FFFFFF',
     color_link: '#1E40AF',
-    color_footer: '#1E3A8A',
+    color_footer: '#172554',
   },
   {
     name: 'Romantic Blush',
     color_primary: '#9F1239',
-    color_secondary: '#FB7185',
+    color_secondary: '#881337',
     color_background: '#FFF1F2',
     color_button: '#9F1239',
     color_button_text: '#FFFFFF',
     color_link: '#9F1239',
-    color_footer: '#881337',
+    color_footer: '#4C0519',
   },
 ];
 
@@ -149,13 +147,13 @@ export const FONT_OPTIONS: FontOption[] = [
   { label: 'Raleway', value: 'Raleway' },
   { label: 'Nunito', value: 'Nunito' },
   { label: 'Playfair Display', value: 'Playfair Display' },
-  { label: 'Cormorant Garamond', value: 'Cormorant Garamond' },
   { label: 'Merriweather', value: 'Merriweather' },
   { label: 'Lora', value: 'Lora' },
-  { label: 'Source Serif Pro', value: 'Source Serif Pro' },
-  { label: 'EB Garamond', value: 'EB Garamond' },
-  { label: 'Cinzel', value: 'Cinzel' },
-  { label: 'Josefin Sans', value: 'Josefin Sans' },
+  { label: 'Cormorant Garamond', value: 'Cormorant Garamond' },
+  { label: 'Source Sans Pro', value: 'Source Sans Pro' },
   { label: 'Work Sans', value: 'Work Sans' },
   { label: 'DM Sans', value: 'DM Sans' },
+  { label: 'Manrope', value: 'Manrope' },
+  { label: 'Karla', value: 'Karla' },
+  { label: 'Libre Baskerville', value: 'Libre Baskerville' },
 ];

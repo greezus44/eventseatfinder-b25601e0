@@ -2,461 +2,258 @@ import { useParams, Link } from 'react-router-dom';
 import { useEvent } from '@/hooks/use-events';
 import { useTables } from '@/hooks/use-tables';
 import { useGuests } from '@/hooks/use-guests';
+import type { GuestWithTable } from '@/types/guest';
+import type { Table } from '@/types/table';
+
+const PSC_CSS = `
+.psc-root {
+  min-height: 100vh; background: #F8F8F8; font-family: 'Inter', sans-serif;
+  color: #1A1A1A; padding: 32px 24px 64px; box-sizing: border-box;
+}
+.psc-container { max-width: 900px; margin: 0 auto; }
+
+/* ---- Toolbar (hidden in print) ---- */
+.psc-toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin-bottom: 28px; flex-wrap: wrap;
+}
+.psc-toolbar-left { display: flex; align-items: center; gap: 12px; }
+.psc-back-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 40px; padding: 0 14px;
+  border: 1px solid #DADADA; border-radius: 10px;
+  background: #FFFFFF; color: #4A4A4A; font-size: 13px; font-weight: 500;
+  font-family: inherit; text-decoration: none; cursor: pointer;
+  transition: all 200ms ease;
+}
+.psc-back-btn:hover { background: #EFEFEF; color: #1A1A1A; }
+.psc-print-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 44px; padding: 0 20px;
+  border: none; border-radius: 12px;
+  background: #1A1A1A; color: #FFFFFF;
+  font-size: 14px; font-weight: 600; font-family: inherit;
+  cursor: pointer; transition: background 200ms ease;
+}
+.psc-print-btn:hover { background: #333333; }
+
+/* ---- Header ---- */
+.psc-header { margin-bottom: 32px; }
+.psc-header h1 {
+  margin: 0 0 6px; font-size: 28px; font-weight: 700; color: #1A1A1A;
+  letter-spacing: -0.5px;
+}
+.psc-header-meta { font-size: 14px; color: #4A4A4A; margin: 0; }
+.psc-header-meta span { margin-right: 16px; }
+.psc-header-meta span:last-child { margin-right: 0; }
+
+/* ---- Table list ---- */
+.psc-tables { display: flex; flex-direction: column; gap: 16px; }
+.psc-table-card {
+  background: #FFFFFF; border: 1px solid #EFEFEF; border-radius: 14px;
+  overflow: hidden;
+}
+.psc-table-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid #EFEFEF; background: #F8F8F8;
+}
+.psc-table-name { font-size: 16px; font-weight: 600; color: #1A1A1A; display: flex; align-items: center; gap: 8px; }
+.psc-table-number {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 28px; height: 28px; padding: 0 8px; border-radius: 8px;
+  background: #1A1A1A; color: #FFFFFF; font-size: 13px; font-weight: 700;
+}
+.psc-table-capacity { font-size: 13px; color: #4A4A4A; font-weight: 500; }
+.psc-guest-list { list-style: none; margin: 0; padding: 0; }
+.psc-guest-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; border-bottom: 1px solid #EFEFEF;
+  font-size: 14px; color: #1A1A1A;
+}
+.psc-guest-item:last-child { border-bottom: none; }
+.psc-guest-name { font-weight: 500; }
+.psc-guest-party { font-size: 13px; color: #4A4A4A; }
+.psc-guest-empty { padding: 16px 20px; font-size: 14px; color: #B0B0B0; font-style: italic; }
+
+/* ---- Unassigned ---- */
+.psc-unassigned { margin-top: 24px; }
+.psc-unassigned-title {
+  font-size: 16px; font-weight: 600; color: #1A1A1A; margin-bottom: 12px;
+  padding-bottom: 8px; border-bottom: 2px solid #1A1A1A;
+}
+
+/* ---- Loading / Error ---- */
+.psc-loading, .psc-error { text-align: center; padding: 80px 20px; }
+.psc-loading-dot {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 3px solid #EFEFEF; border-top-color: #1A1A1A;
+  animation: psc-spin 0.7s linear infinite; margin: 0 auto 16px;
+}
+@keyframes psc-spin { to { transform: rotate(360deg); } }
+.psc-loading-text { font-size: 14px; color: #4A4A4A; }
+.psc-error-icon {
+  width: 56px; height: 56px; margin: 0 auto 16px; border-radius: 14px;
+  background: #EFEFEF; display: flex; align-items: center; justify-content: center;
+  color: #4A4A4A;
+}
+.psc-error h2 { margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #1A1A1A; }
+.psc-error p { margin: 0; font-size: 14px; color: #4A4A4A; }
+
+/* ---- Print styles ---- */
+@media print {
+  .psc-root { background: #FFFFFF; padding: 0; }
+  .psc-toolbar { display: none !important; }
+  .psc-table-card { border: 1px solid #DADADA; break-inside: avoid; page-break-inside: avoid; }
+  .psc-table-header { background: #F8F8F8; }
+  .psc-container { max-width: 100%; }
+  @page { margin: 1.5cm; }
+}
+`;
+
+function formatPscDate(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 export function PrintSeatingChartPage() {
   const { eventId } = useParams<{ eventId: string }>();
-  const { data: event, isLoading: eventLoading } = useEvent(eventId ?? '');
-  const { data: tables } = useTables(eventId ?? '');
-  const { data: guests } = useGuests(eventId ?? '');
+  const eid = eventId ?? '';
 
-  const tableList = tables ?? [];
-  const guestList = guests ?? [];
+  const { data: event, isLoading: eventLoading } = useEvent(eid || undefined);
+  const { data: tables = [], isLoading: tablesLoading } = useTables(eid || undefined);
+  const { data: guests = [], isLoading: guestsLoading } = useGuests(eid || undefined);
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '';
-    try {
-      return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-    } catch {
-      return dateStr;
+  const isLoading = eventLoading || tablesLoading || guestsLoading;
+
+  // Group guests by table_id
+  const guestsByTable = new Map<string, GuestWithTable[]>();
+  const unassigned: GuestWithTable[] = [];
+  for (const g of guests) {
+    if (g.table_id) {
+      const arr = guestsByTable.get(g.table_id) ?? [];
+      arr.push(g);
+      guestsByTable.set(g.table_id, arr);
+    } else {
+      unassigned.push(g);
     }
-  };
-
-  const guestsForTable = (tableId: string) =>
-    guestList.filter((g) => g.table_id === tableId);
-
-  const unassignedGuests = guestList.filter((g) => !g.table_id);
-
-  if (eventLoading) {
-    return (
-      <>
-        <style>{PSC_CSS}</style>
-        <div className="psc-page">
-          <div className="psc-loading">
-            <div className="psc-spinner" />
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  if (!event) {
-    return (
-      <>
-        <style>{PSC_CSS}</style>
-        <div className="psc-page">
-          <div className="psc-not-found">
-            <p>Event not found.</p>
-            <Link to="/" className="psc-back-link">← Back to Dashboard</Link>
-          </div>
-        </div>
-      </>
-    );
   }
 
   return (
-    <>
+    <div className="psc-root">
       <style>{PSC_CSS}</style>
-      <div className="psc-page">
-        {/* Toolbar — hidden on print */}
+      <div className="psc-container">
+        {/* Toolbar */}
         <div className="psc-toolbar">
-          <Link to={`/events/${event.id}`} className="psc-back-link">← Back to Editor</Link>
+          <div className="psc-toolbar-left">
+            <Link to={`/e/${eid}`} className="psc-back-btn">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M9 3L4 7l5 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Back to Event
+            </Link>
+          </div>
           <button className="psc-print-btn" onClick={() => window.print()}>
-            Print
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M4 6V2h8v4M4 11H2V7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v4h-2M4 9h8v5H4z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Print Seating Chart
           </button>
         </div>
 
-        {/* Header */}
-        <header className="psc-header">
-          <h1 className="psc-event-name">{event.name}</h1>
-          {event.date && <p className="psc-event-date">{formatDate(event.date)}</p>}
-          {event.venue && <p className="psc-event-venue">{event.venue}</p>}
-          <div className="psc-subtitle">Seating Chart</div>
-        </header>
-
-        {/* Summary */}
-        <div className="psc-summary">
-          <div className="psc-summary-item">
-            <span className="psc-summary-value">{tableList.length}</span>
-            <span className="psc-summary-label">Tables</span>
+        {isLoading ? (
+          <div className="psc-loading">
+            <div className="psc-loading-dot" />
+            <p className="psc-loading-text">Loading seating chart...</p>
           </div>
-          <div className="psc-summary-item">
-            <span className="psc-summary-value">{guestList.length}</span>
-            <span className="psc-summary-label">Guests</span>
+        ) : !event ? (
+          <div className="psc-error">
+            <div className="psc-error-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </div>
+            <h2>Event Not Found</h2>
+            <p>This event may have been removed.</p>
           </div>
-          <div className="psc-summary-item">
-            <span className="psc-summary-value">{guestList.filter((g) => g.table_id).length}</span>
-            <span className="psc-summary-label">Seated</span>
-          </div>
-          <div className="psc-summary-item">
-            <span className="psc-summary-value">{unassignedGuests.length}</span>
-            <span className="psc-summary-label">Unassigned</span>
-          </div>
-        </div>
-
-        {/* Tables Grid */}
-        {tableList.length === 0 ? (
-          <p className="psc-empty">No tables have been created yet.</p>
         ) : (
-          <div className="psc-tables-grid">
-            {tableList.map((table) => {
-              const assigned = guestsForTable(table.id);
-              return (
-                <div key={table.id} className="psc-table-card">
-                  <div className="psc-table-header">
-                    <span className="psc-table-number">Table {table.number}</span>
-                    {table.name !== String(table.number) && (
-                      <span className="psc-table-name">{table.name}</span>
-                    )}
-                    <span className="psc-table-count">
-                      {assigned.length}/{table.capacity}
-                    </span>
-                  </div>
-                  <div className="psc-table-guests">
-                    {assigned.length === 0 ? (
-                      <span className="psc-no-guests">No guests assigned</span>
+          <>
+            {/* Header */}
+            <div className="psc-header">
+              <h1>Seating Chart — {event.name}</h1>
+              <p className="psc-header-meta">
+                {event.date && <span>{formatPscDate(event.date)}</span>}
+                {event.venue && <span>{event.venue}</span>}
+                <span>{tables.length} tables · {guests.length} guests</span>
+              </p>
+            </div>
+
+            {/* Tables */}
+            <div className="psc-tables">
+              {tables.map((table: Table) => {
+                const tableGuests = guestsByTable.get(table.id) ?? [];
+                return (
+                  <div key={table.id} className="psc-table-card">
+                    <div className="psc-table-header">
+                      <div className="psc-table-name">
+                        <span className="psc-table-number">{table.number}</span>
+                        {table.name || `Table ${table.number}`}
+                      </div>
+                      <span className="psc-table-capacity">
+                        {tableGuests.length} / {table.capacity} seated
+                      </span>
+                    </div>
+                    {tableGuests.length === 0 ? (
+                      <div className="psc-guest-empty">No guests assigned</div>
                     ) : (
                       <ul className="psc-guest-list">
-                        {assigned.map((guest) => (
-                          <li key={guest.id} className="psc-guest-item">
-                            <span className="psc-guest-name">{guest.name}</span>
-                            {guest.party_size > 1 && (
-                              <span className="psc-guest-party">×{guest.party_size}</span>
-                            )}
+                        {tableGuests.map((g: GuestWithTable) => (
+                          <li key={g.id} className="psc-guest-item">
+                            <span className="psc-guest-name">{g.name}</span>
+                            <span className="psc-guest-party">
+                              {g.party_size} {g.party_size === 1 ? 'guest' : 'guests'}
+                            </span>
                           </li>
                         ))}
                       </ul>
                     )}
                   </div>
+                );
+              })}
+            </div>
+
+            {/* Unassigned guests */}
+            {unassigned.length > 0 && (
+              <div className="psc-unassigned">
+                <h2 className="psc-unassigned-title">
+                  Unassigned ({unassigned.length})
+                </h2>
+                <div className="psc-tables">
+                  <div className="psc-table-card">
+                    <ul className="psc-guest-list">
+                      {unassigned.map((g: GuestWithTable) => (
+                        <li key={g.id} className="psc-guest-item">
+                          <span className="psc-guest-name">{g.name}</span>
+                          <span className="psc-guest-party">
+                            {g.party_size} {g.party_size === 1 ? 'guest' : 'guests'}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            )}
+          </>
         )}
-
-        {/* Unassigned Guests */}
-        {unassignedGuests.length > 0 && (
-          <div className="psc-unassigned">
-            <h2 className="psc-unassigned-title">Unassigned Guests ({unassignedGuests.length})</h2>
-            <ul className="psc-guest-list psc-guest-list--inline">
-              {unassignedGuests.map((guest) => (
-                <li key={guest.id} className="psc-guest-item psc-guest-item--inline">
-                  <span className="psc-guest-name">{guest.name}</span>
-                  {guest.party_size > 1 && (
-                    <span className="psc-guest-party">×{guest.party_size}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Footer */}
-        <footer className="psc-footer">
-          <span>Generated by Seatly</span>
-          <span>{new Date().toLocaleDateString('en-US')}</span>
-        </footer>
       </div>
-    </>
+    </div>
   );
 }
-
-const PSC_CSS = `
-.psc-page {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  color: #1A1A1A;
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 32px;
-}
-
-/* Toolbar */
-.psc-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 32px;
-}
-
-.psc-back-link {
-  color: #4A4A4A;
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.psc-back-link:hover {
-  color: #1A1A1A;
-}
-
-.psc-print-btn {
-  padding: 10px 24px;
-  border: none;
-  border-radius: 8px;
-  background: #1A1A1A;
-  color: #FFFFFF;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.15s;
-}
-
-.psc-print-btn:hover {
-  background: #4A4A4A;
-}
-
-/* Header */
-.psc-header {
-  text-align: center;
-  margin-bottom: 32px;
-  padding-bottom: 24px;
-  border-bottom: 2px solid #1A1A1A;
-}
-
-.psc-event-name {
-  font-size: 28px;
-  font-weight: 700;
-  margin: 0;
-  color: #1A1A1A;
-}
-
-.psc-event-date {
-  font-size: 15px;
-  color: #4A4A4A;
-  margin: 8px 0 0 0;
-}
-
-.psc-event-venue {
-  font-size: 15px;
-  color: #4A4A4A;
-  margin: 4px 0 0 0;
-}
-
-.psc-subtitle {
-  font-size: 13px;
-  font-weight: 600;
-  color: #4A4A4A;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-top: 12px;
-}
-
-/* Summary */
-.psc-summary {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 32px;
-}
-
-.psc-summary-item {
-  text-align: center;
-  padding: 16px;
-  border: 1px solid #EFEFEF;
-  border-radius: 10px;
-  background: #F8F8F8;
-}
-
-.psc-summary-value {
-  display: block;
-  font-size: 28px;
-  font-weight: 700;
-  color: #1A1A1A;
-  line-height: 1;
-}
-
-.psc-summary-label {
-  display: block;
-  font-size: 12px;
-  color: #4A4A4A;
-  margin-top: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-/* Tables Grid */
-.psc-tables-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
-}
-
-.psc-table-card {
-  border: 1px solid #DADADA;
-  border-radius: 10px;
-  overflow: hidden;
-  break-inside: avoid;
-}
-
-.psc-table-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: #1A1A1A;
-  color: #FFFFFF;
-  gap: 8px;
-}
-
-.psc-table-number {
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.psc-table-name {
-  font-size: 13px;
-  color: #DADADA;
-  flex: 1;
-  text-align: center;
-}
-
-.psc-table-count {
-  font-size: 12px;
-  color: #DADADA;
-  white-space: nowrap;
-}
-
-.psc-table-guests {
-  padding: 12px 16px;
-  min-height: 48px;
-}
-
-.psc-guest-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.psc-guest-list--inline {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.psc-guest-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 0;
-  border-bottom: 1px solid #EFEFEF;
-  font-size: 14px;
-}
-
-.psc-guest-item:last-child {
-  border-bottom: none;
-}
-
-.psc-guest-item--inline {
-  border: 1px solid #EFEFEF;
-  border-radius: 6px;
-  padding: 4px 10px;
-  background: #F8F8F8;
-}
-
-.psc-guest-name {
-  color: #1A1A1A;
-  font-weight: 500;
-}
-
-.psc-guest-party {
-  color: #4A4A4A;
-  font-size: 12px;
-}
-
-.psc-no-guests {
-  color: #4A4A4A;
-  font-size: 13px;
-  font-style: italic;
-}
-
-/* Unassigned */
-.psc-unassigned {
-  margin-top: 32px;
-  padding: 20px;
-  border: 1px dashed #DADADA;
-  border-radius: 10px;
-  background: #F8F8F8;
-}
-
-.psc-unassigned-title {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0 0 12px 0;
-  color: #1A1A1A;
-}
-
-/* Empty */
-.psc-empty {
-  text-align: center;
-  color: #4A4A4A;
-  font-size: 15px;
-  padding: 48px;
-}
-
-/* Footer */
-.psc-footer {
-  margin-top: 40px;
-  padding-top: 16px;
-  border-top: 1px solid #EFEFEF;
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: #4A4A4A;
-}
-
-/* Loading */
-.psc-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 50vh;
-}
-
-.psc-spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid #EFEFEF;
-  border-top-color: #1A1A1A;
-  border-radius: 50%;
-  animation: psc-spin 0.8s linear infinite;
-}
-
-@keyframes psc-spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Not Found */
-.psc-not-found {
-  text-align: center;
-  padding: 64px;
-  font-size: 16px;
-  color: #4A4A4A;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-
-/* Print Styles */
-@media print {
-  .psc-toolbar {
-    display: none !important;
-  }
-  .psc-page {
-    max-width: none;
-    padding: 0;
-  }
-  .psc-table-card {
-    break-inside: avoid;
-  }
-  .psc-summary-item {
-    background: #FFFFFF !important;
-    border: 1px solid #DADADA !important;
-  }
-}
-`;

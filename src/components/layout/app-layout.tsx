@@ -11,82 +11,54 @@ export function AppLayout() {
   };
 
   return (
-    <div style={layoutStyle}>
-      <header style={headerStyle}>
-        <div style={brandStyle}>
-          <span style={logoStyle}>Seatly</span>
+    <div style={{ minHeight: '100vh', background: '#F8F8F8', fontFamily: 'Inter, sans-serif' }}>
+      <header
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '16px 32px',
+          background: '#FFFFFF',
+          borderBottom: '1px solid #EFEFEF',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span
+            style={{
+              fontSize: 22,
+              fontWeight: 700,
+              letterSpacing: '-0.02em',
+              color: '#1A1A1A',
+            }}
+          >
+            Seatly
+          </span>
         </div>
-        <div style={userSectionStyle}>
-          {user?.email && <span style={emailStyle}>{user.email}</span>}
-          <button style={signOutBtnStyle} onClick={handleSignOut}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          {user && (
+            <span style={{ fontSize: 14, color: '#4A4A4A' }}>{user.email}</span>
+          )}
+          <button
+            onClick={handleSignOut}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: '1px solid #DADADA',
+              background: '#FFFFFF',
+              color: '#1A1A1A',
+              fontSize: 14,
+              fontWeight: 500,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
             Sign out
           </button>
         </div>
       </header>
-      <main style={mainStyle}>
+      <main>
         <Outlet />
       </main>
     </div>
   );
 }
-
-const layoutStyle: React.CSSProperties = {
-  minHeight: '100vh',
-  background: '#F8F8F8',
-  display: 'flex',
-  flexDirection: 'column',
-  fontFamily: 'Inter, system-ui, sans-serif',
-};
-
-const headerStyle: React.CSSProperties = {
-  height: 64,
-  background: '#FFFFFF',
-  borderBottom: '1px solid #EFEFEF',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  padding: '0 32px',
-  position: 'sticky',
-  top: 0,
-  zIndex: 100,
-};
-
-const brandStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-};
-
-const logoStyle: React.CSSProperties = {
-  fontSize: 20,
-  fontWeight: 700,
-  color: '#1A1A1A',
-  letterSpacing: '-0.02em',
-};
-
-const userSectionStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 16,
-};
-
-const emailStyle: React.CSSProperties = {
-  fontSize: 13,
-  color: '#4A4A4A',
-};
-
-const signOutBtnStyle: React.CSSProperties = {
-  padding: '8px 16px',
-  borderRadius: 8,
-  border: '1px solid #DADADA',
-  background: '#FFFFFF',
-  color: '#1A1A1A',
-  fontSize: 13,
-  fontWeight: 500,
-  cursor: 'pointer',
-  fontFamily: 'inherit',
-};
-
-const mainStyle: React.CSSProperties = {
-  flex: 1,
-  padding: 32,
-};

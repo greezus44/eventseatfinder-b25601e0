@@ -1,418 +1,295 @@
 import { useParams, Link } from 'react-router-dom';
 import { useEvent } from '@/hooks/use-events';
 import { useGuests } from '@/hooks/use-guests';
+import type { GuestWithTable } from '@/types/guest';
+
+const PGL_CSS = `
+.pgl-root {
+  min-height: 100vh; background: #F8F8F8; font-family: 'Inter', sans-serif;
+  color: #1A1A1A; padding: 32px 24px 64px; box-sizing: border-box;
+}
+.pgl-container { max-width: 900px; margin: 0 auto; }
+
+/* ---- Toolbar (hidden in print) ---- */
+.pgl-toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin-bottom: 28px; flex-wrap: wrap;
+}
+.pgl-toolbar-left { display: flex; align-items: center; gap: 12px; }
+.pgl-back-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 40px; padding: 0 14px;
+  border: 1px solid #DADADA; border-radius: 10px;
+  background: #FFFFFF; color: #4A4A4A; font-size: 13px; font-weight: 500;
+  font-family: inherit; text-decoration: none; cursor: pointer;
+  transition: all 200ms ease;
+}
+.pgl-back-btn:hover { background: #EFEFEF; color: #1A1A1A; }
+.pgl-print-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 44px; padding: 0 20px;
+  border: none; border-radius: 12px;
+  background: #1A1A1A; color: #FFFFFF;
+  font-size: 14px; font-weight: 600; font-family: inherit;
+  cursor: pointer; transition: background 200ms ease;
+}
+.pgl-print-btn:hover { background: #333333; }
+
+/* ---- Header ---- */
+.pgl-header { margin-bottom: 32px; }
+.pgl-header h1 {
+  margin: 0 0 6px; font-size: 28px; font-weight: 700; color: #1A1A1A;
+  letter-spacing: -0.5px;
+}
+.pgl-header-meta { font-size: 14px; color: #4A4A4A; margin: 0; }
+.pgl-header-meta span { margin-right: 16px; }
+.pgl-header-meta span:last-child { margin-right: 0; }
+
+/* ---- Stats ---- */
+.pgl-stats {
+  display: flex; gap: 16px; margin-bottom: 28px; flex-wrap: wrap;
+}
+.pgl-stat {
+  background: #FFFFFF; border: 1px solid #EFEFEF; border-radius: 12px;
+  padding: 16px 20px; flex: 1; min-width: 140px;
+}
+.pgl-stat-label {
+  font-size: 12px; font-weight: 600; color: #4A4A4A;
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
+}
+.pgl-stat-value { font-size: 24px; font-weight: 700; color: #1A1A1A; }
+
+/* ---- Guest table ---- */
+.pgl-table-wrap {
+  background: #FFFFFF; border: 1px solid #EFEFEF; border-radius: 14px;
+  overflow: hidden;
+}
+.pgl-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.pgl-table thead { background: #F8F8F8; }
+.pgl-table th {
+  text-align: left; padding: 12px 16px; font-size: 12px; font-weight: 600;
+  color: #4A4A4A; text-transform: uppercase; letter-spacing: 0.5px;
+  border-bottom: 1px solid #EFEFEF;
+}
+.pgl-table td {
+  padding: 12px 16px; border-bottom: 1px solid #EFEFEF; color: #1A1A1A;
+}
+.pgl-table tbody tr:last-child td { border-bottom: none; }
+.pgl-table tbody tr:hover { background: #F8F8F8; }
+
+.pgl-guest-name { font-weight: 600; }
+.pgl-table-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 28px; height: 26px; padding: 0 8px; border-radius: 8px;
+  background: #1A1A1A; color: #FFFFFF; font-size: 12px; font-weight: 700;
+}
+.pgl-table-badge--none {
+  background: #EFEFEF; color: #4A4A4A; font-weight: 500; min-width: auto;
+  padding: 0 10px;
+}
+.pgl-contact { font-size: 13px; color: #4A4A4A; }
+.pgl-contact--none { color: #B0B0B0; font-style: italic; }
+.pgl-dietary {
+  font-size: 13px; color: #4A4A4A; max-width: 200px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pgl-dietary--none { color: #B0B0B0; font-style: italic; }
+.pgl-empty-row { text-align: center; padding: 40px 16px; color: #B0B0B0; font-size: 14px; }
+
+/* ---- Loading / Error ---- */
+.pgl-loading, .pgl-error { text-align: center; padding: 80px 20px; }
+.pgl-loading-dot {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 3px solid #EFEFEF; border-top-color: #1A1A1A;
+  animation: pgl-spin 0.7s linear infinite; margin: 0 auto 16px;
+}
+@keyframes pgl-spin { to { transform: rotate(360deg); } }
+.pgl-loading-text { font-size: 14px; color: #4A4A4A; }
+.pgl-error-icon {
+  width: 56px; height: 56px; margin: 0 auto 16px; border-radius: 14px;
+  background: #EFEFEF; display: flex; align-items: center; justify-content: center;
+  color: #4A4A4A;
+}
+.pgl-error h2 { margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #1A1A1A; }
+.pgl-error p { margin: 0; font-size: 14px; color: #4A4A4A; }
+
+/* ---- Print styles ---- */
+@media print {
+  .pgl-root { background: #FFFFFF; padding: 0; }
+  .pgl-toolbar { display: none !important; }
+  .pgl-table-wrap { border: 1px solid #DADADA; }
+  .pgl-table th { background: #F8F8F8; }
+  .pgl-table tbody tr:hover { background: transparent; }
+  .pgl-container { max-width: 100%; }
+  @page { margin: 1.5cm; }
+}
+`;
+
+function formatPglDate(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 export function PrintGuestListPage() {
   const { eventId } = useParams<{ eventId: string }>();
-  const { data: event, isLoading: eventLoading } = useEvent(eventId ?? '');
-  const { data: guests } = useGuests(eventId ?? '');
+  const eid = eventId ?? '';
 
-  const guestList = guests ?? [];
+  const { data: event, isLoading: eventLoading } = useEvent(eid || undefined);
+  const { data: guests = [], isLoading: guestsLoading } = useGuests(eid || undefined);
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '';
-    try {
-      return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-    } catch {
-      return dateStr;
-    }
-  };
+  const isLoading = eventLoading || guestsLoading;
 
-  const totalPartySize = guestList.reduce((sum, g) => sum + g.party_size, 0);
-  const assignedCount = guestList.filter((g) => g.table_id).length;
-  const unassignedCount = guestList.length - assignedCount;
+  const assignedCount = guests.filter((g) => g.table_id !== null).length;
+  const unassignedCount = guests.length - assignedCount;
+  const totalParty = guests.reduce((sum, g) => sum + (g.party_size || 1), 0);
 
-  if (eventLoading) {
-    return (
-      <>
-        <style>{PGL_CSS}</style>
-        <div className="pgl-page">
-          <div className="pgl-loading">
-            <div className="pgl-spinner" />
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  if (!event) {
-    return (
-      <>
-        <style>{PGL_CSS}</style>
-        <div className="pgl-page">
-          <div className="pgl-not-found">
-            <p>Event not found.</p>
-            <Link to="/" className="pgl-back-link">← Back to Dashboard</Link>
-          </div>
-        </div>
-      </>
-    );
-  }
+  // Sort guests alphabetically by name
+  const sortedGuests = [...guests].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
 
   return (
-    <>
+    <div className="pgl-root">
       <style>{PGL_CSS}</style>
-      <div className="pgl-page">
-        {/* Toolbar — hidden on print */}
+      <div className="pgl-container">
+        {/* Toolbar */}
         <div className="pgl-toolbar">
-          <Link to={`/events/${event.id}`} className="pgl-back-link">← Back to Editor</Link>
+          <div className="pgl-toolbar-left">
+            <Link to={`/e/${eid}`} className="pgl-back-btn">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M9 3L4 7l5 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Back to Event
+            </Link>
+          </div>
           <button className="pgl-print-btn" onClick={() => window.print()}>
-            Print
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M4 6V2h8v4M4 11H2V7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v4h-2M4 9h8v5H4z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Print Guest List
           </button>
         </div>
 
-        {/* Header */}
-        <header className="pgl-header">
-          <h1 className="pgl-event-name">{event.name}</h1>
-          {event.date && <p className="pgl-event-date">{formatDate(event.date)}</p>}
-          {event.venue && <p className="pgl-event-venue">{event.venue}</p>}
-          <div className="pgl-subtitle">Guest List</div>
-        </header>
-
-        {/* Summary */}
-        <div className="pgl-summary">
-          <div className="pgl-summary-item">
-            <span className="pgl-summary-value">{guestList.length}</span>
-            <span className="pgl-summary-label">Guests</span>
+        {isLoading ? (
+          <div className="pgl-loading">
+            <div className="pgl-loading-dot" />
+            <p className="pgl-loading-text">Loading guest list...</p>
           </div>
-          <div className="pgl-summary-item">
-            <span className="pgl-summary-value">{totalPartySize}</span>
-            <span className="pgl-summary-label">Total Party</span>
+        ) : !event ? (
+          <div className="pgl-error">
+            <div className="pgl-error-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </div>
+            <h2>Event Not Found</h2>
+            <p>This event may have been removed.</p>
           </div>
-          <div className="pgl-summary-item">
-            <span className="pgl-summary-value">{assignedCount}</span>
-            <span className="pgl-summary-label">Seated</span>
-          </div>
-          <div className="pgl-summary-item">
-            <span className="pgl-summary-value">{unassignedCount}</span>
-            <span className="pgl-summary-label">Unassigned</span>
-          </div>
-        </div>
-
-        {/* Guest Table */}
-        {guestList.length === 0 ? (
-          <p className="pgl-empty">No guests have been added yet.</p>
         ) : (
-          <div className="pgl-table-wrap">
-            <table className="pgl-table">
-              <thead>
-                <tr>
-                  <th className="pgl-th pgl-th--num">#</th>
-                  <th className="pgl-th">Name</th>
-                  <th className="pgl-th">Email</th>
-                  <th className="pgl-th">Phone</th>
-                  <th className="pgl-th pgl-th--party">Party</th>
-                  <th className="pgl-th">Table</th>
-                  <th className="pgl-th">Dietary Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {guestList.map((guest, idx) => (
-                  <tr key={guest.id} className="pgl-row">
-                    <td className="pgl-td pgl-td--num">{idx + 1}</td>
-                    <td className="pgl-td pgl-td--name">{guest.name}</td>
-                    <td className="pgl-td">{guest.email ?? '—'}</td>
-                    <td className="pgl-td">{guest.phone ?? '—'}</td>
-                    <td className="pgl-td pgl-td--party">{guest.party_size}</td>
-                    <td className="pgl-td pgl-td--table">
-                      {guest.table ? (
-                        <span className="pgl-table-badge">
-                          {guest.table.name}
-                        </span>
-                      ) : (
-                        <span className="pgl-unassigned-badge">—</span>
-                      )}
-                    </td>
-                    <td className="pgl-td pgl-td--notes">{guest.dietary_notes ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+          <>
+            {/* Header */}
+            <div className="pgl-header">
+              <h1>Guest List — {event.name}</h1>
+              <p className="pgl-header-meta">
+                {event.date && <span>{formatPglDate(event.date)}</span>}
+                {event.venue && <span>{event.venue}</span>}
+              </p>
+            </div>
 
-        {/* Footer */}
-        <footer className="pgl-footer">
-          <span>Generated by Seatly</span>
-          <span>{new Date().toLocaleDateString('en-US')}</span>
-        </footer>
+            {/* Stats */}
+            <div className="pgl-stats">
+              <div className="pgl-stat">
+                <div className="pgl-stat-label">Total Guests</div>
+                <div className="pgl-stat-value">{guests.length}</div>
+              </div>
+              <div className="pgl-stat">
+                <div className="pgl-stat-label">Total Party Size</div>
+                <div className="pgl-stat-value">{totalParty}</div>
+              </div>
+              <div className="pgl-stat">
+                <div className="pgl-stat-label">Assigned</div>
+                <div className="pgl-stat-value">{assignedCount}</div>
+              </div>
+              <div className="pgl-stat">
+                <div className="pgl-stat-label">Unassigned</div>
+                <div className="pgl-stat-value">{unassignedCount}</div>
+              </div>
+            </div>
+
+            {/* Guest table */}
+            <div className="pgl-table-wrap">
+              <table className="pgl-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '28%' }}>Name</th>
+                    <th style={{ width: '15%' }}>Party Size</th>
+                    <th style={{ width: '15%' }}>Table</th>
+                    <th style={{ width: '22%' }}>Contact</th>
+                    <th style={{ width: '20%' }}>Dietary Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedGuests.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="pgl-empty-row">
+                        No guests have been added yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    sortedGuests.map((g: GuestWithTable) => (
+                      <tr key={g.id}>
+                        <td className="pgl-guest-name">{g.name}</td>
+                        <td>{g.party_size}</td>
+                        <td>
+                          {g.table ? (
+                            <span className="pgl-table-badge">
+                              {g.table.number}
+                            </span>
+                          ) : (
+                            <span className="pgl-table-badge pgl-table-badge--none">
+                              Unassigned
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          {g.email || g.phone ? (
+                            <span className="pgl-contact">
+                              {g.email || g.phone}
+                            </span>
+                          ) : (
+                            <span className="pgl-contact pgl-contact--none">
+                              —
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          {g.dietary_notes ? (
+                            <span className="pgl-dietary" title={g.dietary_notes}>
+                              {g.dietary_notes}
+                            </span>
+                          ) : (
+                            <span className="pgl-dietary pgl-dietary--none">
+                              —
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
-    </>
+    </div>
   );
 }
-
-const PGL_CSS = `
-.pgl-page {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  color: #1A1A1A;
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 32px;
-}
-
-/* Toolbar */
-.pgl-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 32px;
-}
-
-.pgl-back-link {
-  color: #4A4A4A;
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.pgl-back-link:hover {
-  color: #1A1A1A;
-}
-
-.pgl-print-btn {
-  padding: 10px 24px;
-  border: none;
-  border-radius: 8px;
-  background: #1A1A1A;
-  color: #FFFFFF;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.15s;
-}
-
-.pgl-print-btn:hover {
-  background: #4A4A4A;
-}
-
-/* Header */
-.pgl-header {
-  text-align: center;
-  margin-bottom: 32px;
-  padding-bottom: 24px;
-  border-bottom: 2px solid #1A1A1A;
-}
-
-.pgl-event-name {
-  font-size: 28px;
-  font-weight: 700;
-  margin: 0;
-  color: #1A1A1A;
-}
-
-.pgl-event-date {
-  font-size: 15px;
-  color: #4A4A4A;
-  margin: 8px 0 0 0;
-}
-
-.pgl-event-venue {
-  font-size: 15px;
-  color: #4A4A4A;
-  margin: 4px 0 0 0;
-}
-
-.pgl-subtitle {
-  font-size: 13px;
-  font-weight: 600;
-  color: #4A4A4A;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-top: 12px;
-}
-
-/* Summary */
-.pgl-summary {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 32px;
-}
-
-.pgl-summary-item {
-  text-align: center;
-  padding: 16px;
-  border: 1px solid #EFEFEF;
-  border-radius: 10px;
-  background: #F8F8F8;
-}
-
-.pgl-summary-value {
-  display: block;
-  font-size: 28px;
-  font-weight: 700;
-  color: #1A1A1A;
-  line-height: 1;
-}
-
-.pgl-summary-label {
-  display: block;
-  font-size: 12px;
-  color: #4A4A4A;
-  margin-top: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-/* Table */
-.pgl-table-wrap {
-  overflow-x: auto;
-}
-
-.pgl-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-
-.pgl-th {
-  text-align: left;
-  padding: 12px 14px;
-  font-weight: 600;
-  color: #FFFFFF;
-  background: #1A1A1A;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-
-.pgl-th--num {
-  width: 40px;
-  text-align: center;
-}
-
-.pgl-th--party {
-  width: 60px;
-  text-align: center;
-}
-
-.pgl-row {
-  break-inside: avoid;
-}
-
-.pgl-row:nth-child(even) {
-  background: #F8F8F8;
-}
-
-.pgl-td {
-  padding: 10px 14px;
-  border-bottom: 1px solid #EFEFEF;
-  color: #1A1A1A;
-  vertical-align: top;
-}
-
-.pgl-td--num {
-  text-align: center;
-  color: #4A4A4A;
-  font-weight: 500;
-}
-
-.pgl-td--name {
-  font-weight: 600;
-}
-
-.pgl-td--party {
-  text-align: center;
-}
-
-.pgl-td--table {
-  white-space: nowrap;
-}
-
-.pgl-td--notes {
-  max-width: 200px;
-  color: #4A4A4A;
-  font-size: 13px;
-}
-
-.pgl-table-badge {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 4px;
-  background: #1A1A1A;
-  color: #FFFFFF;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.pgl-unassigned-badge {
-  color: #DADADA;
-}
-
-/* Empty */
-.pgl-empty {
-  text-align: center;
-  color: #4A4A4A;
-  font-size: 15px;
-  padding: 48px;
-}
-
-/* Footer */
-.pgl-footer {
-  margin-top: 40px;
-  padding-top: 16px;
-  border-top: 1px solid #EFEFEF;
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: #4A4A4A;
-}
-
-/* Loading */
-.pgl-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 50vh;
-}
-
-.pgl-spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid #EFEFEF;
-  border-top-color: #1A1A1A;
-  border-radius: 50%;
-  animation: pgl-spin 0.8s linear infinite;
-}
-
-@keyframes pgl-spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Not Found */
-.pgl-not-found {
-  text-align: center;
-  padding: 64px;
-  font-size: 16px;
-  color: #4A4A4A;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-
-/* Print Styles */
-@media print {
-  .pgl-toolbar {
-    display: none !important;
-  }
-  .pgl-page {
-    max-width: none;
-    padding: 0;
-  }
-  .pgl-row {
-    break-inside: avoid;
-  }
-  .pgl-summary-item {
-    background: #FFFFFF !important;
-    border: 1px solid #DADADA !important;
-  }
-}
-`;

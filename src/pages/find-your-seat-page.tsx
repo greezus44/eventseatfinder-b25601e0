@@ -30,7 +30,7 @@ const TRANSLATIONS: Record<Lang, Translation> = {
     langLabel: 'ENGLISH',
     langAlt: 'BAHASA MELAYU',
     tabFind: 'FIND SEAT',
-    tabVenue: 'LAYOUT',
+    tabVenue: 'VENUE LAYOUT',
     searchPlaceholder: 'SEARCH YOUR NAME',
     noResult: 'No guest found. Please check your name.',
     seatLabel: 'SEAT',
@@ -82,6 +82,7 @@ export function FindYourSeatPage() {
 
   const accent = event?.accent_color ?? effectiveSettings.color_primary ?? '#1A1A1A';
   const bg = effectiveSettings.color_background ?? '#FAF3E8';
+  const logoSize = effectiveSettings.logo_size ?? 64;
 
   const handleSearch = useCallback((value: string) => {
     setSearchQuery(value);
@@ -177,9 +178,14 @@ export function FindYourSeatPage() {
 
       <div className="gp-hero">
         {effectiveSettings.logo_url ? (
-          <img className="gp-logo" src={effectiveSettings.logo_url} alt={event.name} />
+          <img
+            className="gp-logo"
+            src={effectiveSettings.logo_url}
+            alt={event.name}
+            style={{ width: `${logoSize}px`, height: `${logoSize}px` }}
+          />
         ) : (
-          <div className="gp-monogram" style={{ color: accent }}>
+          <div className="gp-monogram" style={{ color: accent, width: `${logoSize}px`, height: `${logoSize}px`, fontSize: `${logoSize / 2}px` }}>
             {event.name.charAt(0)}
           </div>
         )}
@@ -219,9 +225,11 @@ export function FindYourSeatPage() {
 
       <div className="gp-content">
 
+        {/* FIND SEAT TAB */}
         <div className={`gp-tab-panel${activeTab === 'find' ? ' gp-tab-panel--active' : ''}`}>
           <div className="gp-search-wrap">
-            <div className="gp-search-box" style={{ borderColor: accent }}>
+            {/* Search box: matches page background, accent border, rectangular with 12px radius */}
+            <div className="gp-search-box" style={{ borderColor: accent, background: bg }}>
               <svg className="gp-search-icon" style={{ color: accent }} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <circle cx="8.5" cy="8.5" r="5.5" />
                 <path d="M15 15l-3-3" strokeLinecap="round" />
@@ -253,6 +261,7 @@ export function FindYourSeatPage() {
           )}
         </div>
 
+        {/* VENUE LAYOUT TAB — larger preview */}
         <div className={`gp-tab-panel${activeTab === 'venue' ? ' gp-tab-panel--active' : ''}`}>
           {venueImageUrl ? (
             <div className="gp-venue-wrap">

@@ -1,12 +1,17 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { GuestPageSettings, GuestPageSettingsInput } from '@/types/guest-page-settings';
-
-const SETTINGS_KEY = 'guest-page-settings';
+import type {
+  GuestPageSettings,
+  GuestPageSettingsInput,
+} from '@/types/guest-page-settings';
 
 export function useGuestPageSettings(eventId: string | undefined) {
-  return useQuery<GuestPageSettings | null>({
-    queryKey: [SETTINGS_KEY, eventId],
+  return useQuery({
+    queryKey: ['guest-page-settings', eventId],
     enabled: !!eventId,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -15,30 +20,23 @@ export function useGuestPageSettings(eventId: string | undefined) {
         .eq('event_id', eventId!)
         .maybeSingle();
       if (error) throw error;
-      return (data as GuestPageSettings) ?? null;
+      return data as GuestPageSettings | null;
     },
   });
 }
 
 export function useGuestPageSettingsBySlug(slug: string | undefined) {
-  return useQuery<GuestPageSettings | null>({
-    queryKey: [SETTINGS_KEY, 'slug', slug],
+  return useQuery({
+    queryKey: ['guest-page-settings', 'slug', slug],
     enabled: !!slug,
     queryFn: async () => {
-      const { data: eventData, error: eventError } = await supabase
-        .from('events')
-        .select('id')
-        .eq('slug', slug!)
-        .single();
-      if (eventError) throw eventError;
-
       const { data, error } = await supabase
         .from('guest_page_settings')
-        .select('*')
-        .eq('event_id', (eventData as { id: string }).id)
+        .select('*, event:events!inner(slug)')
+        .eq('event.slug', slug!)
         .maybeSingle();
       if (error) throw error;
-      return (data as GuestPageSettings) ?? null;
+      return data as (GuestPageSettings & { event: { slug: string } }) | null;
     },
   });
 }
@@ -56,8 +54,7 @@ export function useUpsertGuestPageSettings() {
       return data as GuestPageSettings;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: [SETTINGS_KEY, data.event_id] });
-      queryClient.invalidateQueries({ queryKey: [SETTINGS_KEY] });
+      queryClient.invalidateQueries({ queryKey: ['guest-page-settings', data.event_id] });
     },
   });
 }
