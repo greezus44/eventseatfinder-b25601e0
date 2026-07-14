@@ -168,6 +168,12 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
   const [time, setTime] = useState(event.time ?? '09:00')
   const [venue, setVenue] = useState(event.venue ?? '')
   const [detailsDirty, setDetailsDirty] = useState(false)
+
+  // FIX: logoUrl always holds either a real Supabase Storage public URL or null.
+  // The logo is uploaded to storage IMMEDIATELY when the user selects a file,
+  // not deferred to save time. This eliminates the state race condition where
+  // a data: URL could be passed to the upsert or where the save could overwrite
+  // the logo with an empty/stale value.
   const [logoUrl, setLogoUrl] = useState<string | null>(settings?.logo_url ?? null)
   const [logoSize, setLogoSize] = useState<number>(settings?.logo_size ?? 80)
   const [logoUploading, setLogoUploading] = useState(false)
@@ -240,6 +246,10 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
     )
   }, [titleFont, titleSize, titleColor, subtitleFont, subtitleSize, subtitleColor, datetimeFont, datetimeSize, datetimeColor, venueFont, venueSize, venueColor, settings])
 
+  // FIX: Upload the logo to Supabase Storage IMMEDIATELY when the user selects a file.
+  // This means logoUrl in state always holds a real public URL (or null if removed).
+  // When Save is clicked, logoUrl is already a real URL — no data: URL conversion needed,
+  // no state race condition, and the save payload always contains the correct value.
   const handleLogoFile = async (file: File) => {
     if (!file.type.match(/image\/(png|jpe?g|svg\+xml|webp)/)) {
       toast('Please use PNG, JPG, SVG, or WebP', 'error')
@@ -247,60 +257,23 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
     }
     setLogoUploading(true)
     try {
-      const reader = new FileReader()
-      reader.onload = () => {
-        setLogoUrl(reader.result as string)
-        setLogoUploading(false)
-      }
-      reader.readAsDataURL(file)
+      const publicUrl = await uploadEventImage(eventId, file, 'logo')
+      setLogoUrl(publicUrl)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load image', 'error')
+      toast(err instanceof Error ? err.message : 'Failed to upload logo', 'error')
+    } finally {
       setLogoUploading(false)
     }
   }
 
   const handleRemoveLogo = () => { setLogoUrl(null) }
 
-  // FIX: Upload logo to Supabase Storage and return the public URL.
-  // Does NOT call setLogoUrl mid-save (previous bug caused state race conditions
-  // where the save would complete before the state update, causing the old data: URL
-  // or null to be written, effectively removing the logo).
-  // Does NOT re-throw errors (previous bug aborted the entire save when logo upload failed).
-  const uploadLogoToStorage = async (dataUrl: string): Promise<string | null> => {
-    try {
-      const response = await fetch(dataUrl)
-      const blob = await response.blob()
-      const file = new File([blob], `logo-${Date.now()}.png`, { type: blob.type || 'image/png' })
-      const publicUrl = await uploadEventImage(eventId, file, 'logo')
-      return publicUrl
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to upload logo', 'error')
-      return null
-    }
-  }
-
-  // FIX: Save flow now correctly persists the logo.
-  // 1. Upload logo to storage FIRST (if it's still a data: URL).
-  //    The uploaded public URL is stored in a local variable, NOT in React state,
-  //    so there's no state update race that could cause the save to use a stale value.
-  // 2. Save event details.
-  // 3. Upsert settings with the uploaded logo URL.
-  // 4. Only AFTER the database write succeeds, update local state to the persisted URL.
-  //    This ensures the logo survives refresh because the DB has the real URL,
-  //    and local state matches the DB.
   const handleSaveDetails = async () => {
-    let finalLogoUrl: string | null = logoUrl
-
-    // Upload logo if it's still a data URL (not yet persisted to storage)
-    if (logoUrl && logoUrl.startsWith('data:')) {
-      finalLogoUrl = await uploadLogoToStorage(logoUrl)
-    }
-
     try {
       await updateEvent.mutateAsync({ id: eventId, name, slug: event.slug, date: date || null, time: time || null, venue: venue || null })
-      await upsertSettings.mutateAsync({ event_id: eventId, event_subtitle: subtitle || null, logo_url: finalLogoUrl, logo_size: logoSize })
-      // Update local state to the persisted URL so it matches the database
-      setLogoUrl(finalLogoUrl)
+      // logoUrl is already a real public URL (uploaded at selection time) or null.
+      // This payload correctly persists the logo reference.
+      await upsertSettings.mutateAsync({ event_id: eventId, event_subtitle: subtitle || null, logo_url: logoUrl, logo_size: logoSize })
       toast('Event details saved')
       setDetailsDirty(false)
     } catch (err) {
