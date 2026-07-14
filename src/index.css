@@ -112,7 +112,7 @@ body { font-family: var(--font-sans); background: var(--color-bg); color: var(--
 .guest-filters .input { flex: 1; }
 .guest-filters .select { width: auto; }
 
-/* Sort toggle — compact two-button segmented control */
+/* Sort toggle */
 .sort-toggle { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
 .sort-toggle-btn { flex: 1; padding: var(--space-2) var(--space-4); font-size: 13px; font-weight: 600; border: 1px solid var(--color-primary); border-radius: 11px; background: transparent; color: var(--color-primary); cursor: pointer; transition: all .2s ease; text-align: center; }
 .sort-toggle-btn.active { background: var(--color-primary); color: #fff; }
@@ -242,7 +242,7 @@ body { font-family: var(--font-sans); background: var(--color-bg); color: var(--
 .gp-autocomplete-name { font-weight: 500; flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gp-autocomplete-empty { padding: var(--space-5); text-align: center; font-size: 14px; color: var(--color-text-muted); }
 
-/* Table badge — wider rectangular shape with generous horizontal padding */
+/* Table badge */
 .gp-table-badge { display: inline-flex; align-items: center; padding: 4px var(--space-5); font-size: 12px; font-weight: 600; border: 1px solid; white-space: nowrap; flex-shrink: 0; min-height: 28px; line-height: 1; }
 
 /* This Is Your Table view */
@@ -255,15 +255,24 @@ body { font-family: var(--font-sans); background: var(--color-bg); color: var(--
 .gp-table-info-badge { display: inline-flex; align-items: center; padding: var(--space-2) var(--space-5); font-weight: 600; border: 1px solid; }
 .gp-back-btn { margin-top: var(--space-5); }
 
-/* Layout tab */
+/* Layout tab — image displays cleanly, click to enlarge */
 .gp-layout-section { margin-top: var(--space-2); }
-.gp-layout-controls { display: flex; align-items: center; justify-content: center; gap: var(--space-2); margin-bottom: var(--space-3); }
-.gp-zoom-btn { padding: var(--space-2) var(--space-3); font-size: 16px; font-weight: 600; border: 1px solid var(--color-border); background: transparent; cursor: pointer; transition: background .15s ease; min-width: 36px; }
-.gp-zoom-btn:hover { background: rgba(15,118,110,.06); }
-.gp-zoom-label { font-size: 14px; font-weight: 500; min-width: 48px; text-align: center; }
-.gp-layout-viewport { overflow: hidden; border: 1px solid var(--color-border); background: var(--color-surface); display: flex; align-items: center; justify-content: center; min-height: 400px; }
+.gp-layout-viewport { overflow: hidden; border: 1px solid var(--color-border); background: var(--color-surface); display: flex; align-items: center; justify-content: center; min-height: 300px; cursor: pointer; transition: box-shadow .2s ease; }
+.gp-layout-viewport:hover { box-shadow: var(--shadow-md); }
 .gp-venue-img { max-width: 100%; max-height: 600px; object-fit: contain; user-select: none; }
 .gp-no-layout { text-align: center; padding: var(--space-7); }
+
+/* ===== Fullscreen Lightbox for Venue Layout ===== */
+.lightbox-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, .92); display: flex; align-items: center; justify-content: center; animation: lightbox-fade-in .2s ease-out; }
+.lightbox-closing { animation: lightbox-fade-out .2s ease-out forwards; }
+@keyframes lightbox-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lightbox-fade-out { from { opacity: 1; } to { opacity: 0; } }
+
+.lightbox-content { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; }
+.lightbox-img { max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; will-change: transform; }
+
+.lightbox-close { position: fixed; top: 16px; right: 16px; z-index: 10000; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border: none; border-radius: 50%; background: rgba(255, 255, 255, .15); color: #fff; cursor: pointer; transition: background .15s ease; backdrop-filter: blur(4px); }
+.lightbox-close:hover { background: rgba(255, 255, 255, .3); }
 
 /* ===== Responsive ===== */
 @media (max-width: 640px) {

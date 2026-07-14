@@ -32,11 +32,8 @@ export function InvitationPage() {
   const [loadingGuests, setLoadingGuests] = useState(false)
   const [guestsData, setGuestsData] = useState<GuestWithTable[]>([])
 
-  const [zoom, setZoom] = useState(1)
-  const [panX, setPanX] = useState(0)
-  const [panY, setPanY] = useState(0)
-  const [isDragging, setIsDragging] = useState(false)
-  const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 })
+  // Lightbox state for venue layout viewing
+  const [lightboxOpen, setLightboxOpen] = useState(false)
 
   const settings = data
   const event = data?.events
@@ -122,13 +119,6 @@ export function InvitationPage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [showDropdown])
 
-  const handleZoomIn = () => setZoom((z) => Math.min(z + 0.25, 4))
-  const handleZoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.5))
-  const handleZoomReset = () => { setZoom(1); setPanX(0); setPanY(0) }
-  const handleMouseDown = (e: React.MouseEvent) => { if (zoom === 1) return; setIsDragging(true); dragStart.current = { x: e.clientX, y: e.clientY, panX, panY } }
-  const handleMouseMove = useCallback((e: React.MouseEvent) => { if (!isDragging) return; setPanX(dragStart.current.panX + (e.clientX - dragStart.current.x)); setPanY(dragStart.current.panY + (e.clientY - dragStart.current.y)) }, [isDragging])
-  const handleMouseUp = () => setIsDragging(false)
-
   if (isLoading) return <div className="gp-loading"><div className="spinner spinner-lg" /></div>
   if (!settings || !event) return <div className="gp-loading"><p>Event not found</p></div>
 
@@ -140,6 +130,7 @@ export function InvitationPage() {
   const logoRounded = settings.logo_rounded ?? false
   const subtitle = settings.event_subtitle
   const logoUrl = settings.logo_url
+  const venueImageUrl = settings.venue_image_url
 
   const formatDate = () => { if (!event.date) return ''; return new Date(event.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }
 
@@ -225,23 +216,154 @@ export function InvitationPage() {
 
         {activeTab === 'layout' && (
           <div className="gp-layout-section">
-            {settings.venue_image_url ? (
-              <>
-                <div className="gp-layout-controls">
-                  <button className="gp-zoom-btn" onClick={handleZoomOut} style={{ borderColor: primary, color: primary, borderRadius: radius }}>−</button>
-                  <span className="gp-zoom-label" style={{ color: text }}>{Math.round(zoom * 100)}%</span>
-                  <button className="gp-zoom-btn" onClick={handleZoomIn} style={{ borderColor: primary, color: primary, borderRadius: radius }}>+</button>
-                  <button className="gp-zoom-btn" onClick={handleZoomReset} style={{ borderColor: primary, color: primary, borderRadius: radius }}>Reset</button>
-                </div>
-                <div className="gp-layout-viewport" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} style={{ cursor: isDragging ? 'grabbing' : zoom > 1 ? 'grab' : 'default', borderColor: primary, borderRadius: radius }}>
-                  <img src={settings.venue_image_url} alt="Venue layout" className="gp-venue-img" style={{ transform: `scale(${zoom}) translate(${panX / zoom}px, ${panY / zoom}px)`, transformOrigin: 'center', transition: isDragging ? 'none' : 'transform 0.2s ease', borderRadius: radius }} draggable={false} />
-                </div>
-              </>
+            {venueImageUrl ? (
+              <div className="gp-layout-viewport" style={{ borderColor: primary, borderRadius: radius }} onClick={() => setLightboxOpen(true)}>
+                <img src={venueImageUrl} alt="Venue layout" className="gp-venue-img" style={{ borderRadius: radius }} draggable={false} />
+              </div>
             ) : (
               <div className="gp-no-layout" style={{ color: text }}><p>No venue layout available.</p></div>
             )}
           </div>
         )}
+      </div>
+
+      {lightboxOpen && venueImageUrl && (
+        <VenueLightbox src={venueImageUrl} onClose={() => setLightboxOpen(false)} />
+      )}
+    </div>
+  )
+}
+
+function VenueLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  const [zoom, setZoom] = useState(1)
+  const [panX, setPanX] = useState(0)
+  const [panY, setPanY] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 })
+  const pinchStart = useRef({ dist: 0, zoom: 1 })
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const handleClose = useCallback(() => {
+    setClosing(true)
+    setTimeout(onClose, 200)
+  }, [onClose])
+
+  // Esc to close
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose() }
+    document.addEventListener('keydown', handleEsc)
+    return () => document.removeEventListener('keydown', handleEsc)
+  }, [handleClose])
+
+  // Lock body scroll
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
+
+  const clampZoom = (z: number) => Math.max(1, Math.min(z, 8))
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault()
+    const delta = -e.deltaY * 0.001
+    setZoom((prev) => clampZoom(prev + delta * prev))
+  }
+
+  const handleDoubleClick = () => {
+    setZoom((prev) => prev >= 2 ? 1 : 2)
+    if (zoom < 2) { setPanX(0); setPanY(0) }
+  }
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (zoom <= 1) return
+    setIsDragging(true)
+    dragStart.current = { x: e.clientX, y: e.clientY, panX, panY }
+  }
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging) return
+    setPanX(dragStart.current.panX + (e.clientX - dragStart.current.x))
+    setPanY(dragStart.current.panY + (e.clientY - dragStart.current.y))
+  }, [isDragging])
+
+  const handleMouseUp = () => setIsDragging(false)
+
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) handleClose()
+  }
+
+  // Touch / pinch handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      pinchStart.current = { dist: Math.sqrt(dx * dx + dy * dy), zoom }
+      setIsDragging(false)
+    } else if (e.touches.length === 1 && zoom > 1) {
+      setIsDragging(true)
+      dragStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, panX, panY }
+    }
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      e.preventDefault()
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (pinchStart.current.dist > 0) {
+        const scale = dist / pinchStart.current.dist
+        setZoom(clampZoom(pinchStart.current.zoom * scale))
+      }
+    } else if (e.touches.length === 1 && isDragging) {
+      e.preventDefault()
+      setPanX(dragStart.current.panX + (e.touches[0].clientX - dragStart.current.x))
+      setPanY(dragStart.current.panY + (e.touches[0].clientY - dragStart.current.y))
+    }
+  }
+
+  const handleTouchEnd = () => {
+    setIsDragging(false)
+  }
+
+  return (
+    <div
+      className={`lightbox-overlay ${closing ? 'lightbox-closing' : ''}`}
+      onClick={handleBackdropClick}
+      style={{ touchAction: 'none' }}
+    >
+      <button className="lightbox-close" onClick={handleClose} aria-label="Close">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+      <div
+        className="lightbox-content"
+        ref={containerRef}
+        onWheel={handleWheel}
+        onDoubleClick={handleDoubleClick}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{ cursor: isDragging ? 'grabbing' : zoom > 1 ? 'grab' : 'default' }}
+      >
+        <img
+          src={src}
+          alt="Venue layout"
+          className="lightbox-img"
+          style={{
+            transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
+            transformOrigin: 'center',
+            transition: isDragging ? 'none' : 'transform 0.15s ease-out',
+          }}
+          draggable={false}
+        />
       </div>
     </div>
   )

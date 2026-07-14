@@ -199,7 +199,6 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
 
 function GuestsTab({ eventId, guests, tables, toast, confirm }: any) {
   const [search, setSearch] = useState('')
-  // Simplified sort: 'name' or 'table', with ascending/descending toggle
   const [sortBy, setSortBy] = useState<'name' | 'table'>('name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [filterTable, setFilterTable] = useState('')
@@ -210,35 +209,10 @@ function GuestsTab({ eventId, guests, tables, toast, confirm }: any) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const updateGuest = useUpdateGuest(); const deleteGuest = useDeleteGuest(); const bulkCreateGuests = useBulkCreateGuests()
   const tableMap: Map<string, { id: string; name: string }> = new Map(tables.map((t: any) => [t.id, t] as [string, { id: string; name: string }]))
-
-  // Sort handler — clicking active toggle flips direction, clicking inactive switches field
   const handleSortClick = (field: 'name' | 'table') => {
-    if (sortBy === field) {
-      setSortDir((prev) => prev === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortBy(field)
-      setSortDir('asc')
-    }
+    if (sortBy === field) { setSortDir((prev) => prev === 'asc' ? 'desc' : 'asc') } else { setSortBy(field); setSortDir('asc') }
   }
-
-  const filtered = guests
-    .filter((g: any) => {
-      if (search && !g.name.toLowerCase().includes(search.toLowerCase())) return false
-      if (filterTable && g.table_id !== filterTable) return false
-      return true
-    })
-    .sort((a: any, b: any) => {
-      let cmp = 0
-      if (sortBy === 'name') {
-        cmp = a.name.localeCompare(b.name)
-      } else {
-        const ta = tableMap.get(a.table_id ?? '')?.name ?? 'Unassigned'
-        const tb = tableMap.get(b.table_id ?? '')?.name ?? 'Unassigned'
-        cmp = ta.localeCompare(tb)
-      }
-      return sortDir === 'asc' ? cmp : -cmp
-    })
-
+  const filtered = guests.filter((g: any) => { if (search && !g.name.toLowerCase().includes(search.toLowerCase())) return false; if (filterTable && g.table_id !== filterTable) return false; return true }).sort((a: any, b: any) => { let cmp = 0; if (sortBy === 'name') { cmp = a.name.localeCompare(b.name) } else { const ta = tableMap.get(a.table_id ?? '')?.name ?? 'Unassigned'; const tb = tableMap.get(b.table_id ?? '')?.name ?? 'Unassigned'; cmp = ta.localeCompare(tb) } return sortDir === 'asc' ? cmp : -cmp })
   const handleEdit = (g: any) => { setEditingId(g.id); setEditName(g.name); setEditTable(g.table_id ?? '') }
   const handleSaveEdit = async () => { if (!editingId || !editName.trim()) return; try { await updateGuest.mutateAsync({ id: editingId, event_id: eventId, name: editName.trim(), table_id: editTable || null }); toast('Guest updated'); setEditingId(null) } catch (err) { toast(err instanceof Error ? err.message : 'Failed to update guest', 'error') } }
   const handleDelete = async (id: string, name: string) => { const confirmed = await confirm({ title: 'Delete Guest', message: `Remove "${name}" from the guest list?`, confirmText: 'Delete' }); if (!confirmed) return; try { await deleteGuest.mutateAsync(id); toast('Guest removed') } catch (err) { toast(err instanceof Error ? err.message : 'Failed to delete guest', 'error') } }
@@ -247,77 +221,17 @@ function GuestsTab({ eventId, guests, tables, toast, confirm }: any) {
   const handleDrop = (e: React.DragEvent) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFileSelect(f) }
   const handleParsedGuestChange = (i: number, field: 'name' | 'tableName', value: string) => { const u = [...parsedGuests]; u[i][field] = value; setParsedGuests(u) }
   const handleConfirmImport = async () => { const valid = parsedGuests.filter((g) => g.name.trim()); if (valid.length === 0) return; setImporting(true); try { const guestsInput: GuestInput[] = valid.map((g) => ({ name: g.name.trim(), event_id: eventId, table_id: g.tableName.trim() ? matchTableByName(g.tableName, tables) : null })); await bulkCreateGuests.mutateAsync({ event_id: eventId, guests: guestsInput }); toast(`Imported ${valid.length} guests`); setParsedGuests([]); setImportFile(null) } catch (err) { toast(classifyError(err), 'error') } finally { setImporting(false) } }
-
   return (
     <div className="two-col">
       <div className="card">
         <div className="card-header"><h3 className="card-title">Guest List</h3><p className="card-subtitle">{guests.length} guest{guests.length !== 1 ? 's' : ''} total</p></div>
-        <div className="guest-filters">
-          <input className="input" placeholder="Search guests…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          <select className="select" value={filterTable} onChange={(e) => setFilterTable(e.target.value)}><option value="">All Tables</option>{tables.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
-        </div>
-        {/* Simplified sort toggle — replaces old Sort By dropdown */}
-        <div className="sort-toggle">
-          <button
-            className={`sort-toggle-btn ${sortBy === 'name' ? 'active' : ''}`}
-            onClick={() => handleSortClick('name')}
-          >
-            Name {sortBy === 'name' && (sortDir === 'asc' ? '↑' : '↓')}
-          </button>
-          <button
-            className={`sort-toggle-btn ${sortBy === 'table' ? 'active' : ''}`}
-            onClick={() => handleSortClick('table')}
-          >
-            Table {sortBy === 'table' && (sortDir === 'asc' ? '↑' : '↓')}
-          </button>
-        </div>
-        <div className="guest-list">
-          {filtered.length === 0 ? (
-            <div className="empty-state" style={{ padding: 'var(--space-7)' }}><p>{search || filterTable ? 'No guests match your filters' : 'No guests yet. Add some from the panel on the right.'}</p></div>
-          ) : (
-            filtered.map((g: any) => (
-              <div key={g.id} className="guest-row">
-                {editingId === g.id ? (
-                  <div className="guest-row-edit">
-                    <input className="input" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Name" autoFocus />
-                    <select className="select" value={editTable} onChange={(e) => setEditTable(e.target.value)}><option value="">No Table</option>{tables.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
-                    <button className="btn btn-primary btn-sm" onClick={handleSaveEdit}>Save</button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setEditingId(null)}>Cancel</button>
-                  </div>
-                ) : (
-                  <>
-                    <span className="guest-name">{g.name}</span>
-                    <span className="guest-table">{g.table_id ? tableMap.get(g.table_id)?.name ?? 'Unknown' : 'No table'}</span>
-                    <div className="guest-row-actions">
-                      <button className="btn btn-ghost btn-sm" onClick={() => handleEdit(g)}>Edit</button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(g.id, g.name)}>Delete</button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))
-          )}
-        </div>
+        <div className="guest-filters"><input className="input" placeholder="Search guests…" value={search} onChange={(e) => setSearch(e.target.value)} /><select className="select" value={filterTable} onChange={(e) => setFilterTable(e.target.value)}><option value="">All Tables</option>{tables.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
+        <div className="sort-toggle"><button className={`sort-toggle-btn ${sortBy === 'name' ? 'active' : ''}`} onClick={() => handleSortClick('name')}>Name {sortBy === 'name' && (sortDir === 'asc' ? '↑' : '↓')}</button><button className={`sort-toggle-btn ${sortBy === 'table' ? 'active' : ''}`} onClick={() => handleSortClick('table')}>Table {sortBy === 'table' && (sortDir === 'asc' ? '↑' : '↓')}</button></div>
+        <div className="guest-list">{filtered.length === 0 ? <div className="empty-state" style={{ padding: 'var(--space-7)' }}><p>{search || filterTable ? 'No guests match your filters' : 'No guests yet. Add some from the panel on the right.'}</p></div> : filtered.map((g: any) => <div key={g.id} className="guest-row">{editingId === g.id ? <div className="guest-row-edit"><input className="input" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Name" autoFocus /><select className="select" value={editTable} onChange={(e) => setEditTable(e.target.value)}><option value="">No Table</option>{tables.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}</select><button className="btn btn-primary btn-sm" onClick={handleSaveEdit}>Save</button><button className="btn btn-ghost btn-sm" onClick={() => setEditingId(null)}>Cancel</button></div> : <><span className="guest-name">{g.name}</span><span className="guest-table">{g.table_id ? tableMap.get(g.table_id)?.name ?? 'Unknown' : 'No table'}</span><div className="guest-row-actions"><button className="btn btn-ghost btn-sm" onClick={() => handleEdit(g)}>Edit</button><button className="btn btn-ghost btn-sm" onClick={() => handleDelete(g.id, g.name)}>Delete</button></div></>}</div>)}</div>
       </div>
       <div className="guest-mgmt-panel">
-        <div className="card card-sm section">
-          <div className="card-header"><h3 className="card-title">Manual Bulk Add</h3><p className="card-subtitle">One guest per line. Paste from Excel or type manually.</p></div>
-          <textarea className="textarea bulk-textarea" placeholder={'John Tan\nSarah Lee\nAhmad Bin Ali\nLim Wei Jie\nNur Aisyah'} value={bulkText} onChange={(e) => setBulkText(e.target.value)} rows={10} />
-          <div className="form-group" style={{ marginTop: 'var(--space-3)' }}><label className="form-label">Assign to Table (optional)</label><select className="select" value={bulkTable} onChange={(e) => setBulkTable(e.target.value)}><option value="">No Table</option>{tables.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
-          <div className="manual-actions" style={{ marginTop: 'var(--space-4)' }}><span className="form-hint">{bulkText.split(/\r?\n/).filter((l) => l.trim()).length} guests</span><button className="btn btn-primary btn-sm" onClick={handleBulkAdd} disabled={bulkCreateGuests.isPending}>{bulkCreateGuests.isPending ? 'Adding…' : 'Add Guests'}</button></div>
-        </div>
-        <div className="card card-sm section">
-          <div className="card-header"><h3 className="card-title">Import Guest List</h3><p className="card-subtitle">CSV, Excel, or PDF</p></div>
-          {!parsedGuests.length ? (
-            <div className={`dropzone ${dragOver ? 'dropzone-active' : ''}`} onDragOver={(e) => { e.preventDefault(); setDragOver(true) }} onDragLeave={() => setDragOver(false)} onDrop={handleDrop} onClick={() => fileInputRef.current?.click()}><p className="dropzone-text">{importing ? 'Parsing…' : 'Drop file here or click to browse'}</p><p className="dropzone-hint">Supports CSV, XLSX, XLS, PDF</p><input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls,.pdf" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])} /></div>
-          ) : (
-            <div className="import-review">
-              <div className="import-review-header"><span>{parsedGuests.length} guests found in {importFile?.name}</span><button className="btn btn-ghost btn-sm" onClick={() => { setParsedGuests([]); setImportFile(null) }}>Cancel</button></div>
-              <div className="import-review-list">{parsedGuests.map((g, i) => <div key={i} className="import-review-row"><input className="input" value={g.name} onChange={(e) => handleParsedGuestChange(i, 'name', e.target.value)} /><input className="input" placeholder="Table" value={g.tableName} onChange={(e) => handleParsedGuestChange(i, 'tableName', e.target.value)} /><button className="btn btn-ghost btn-sm" onClick={() => setParsedGuests(parsedGuests.filter((_, idx) => idx !== i))}>Remove</button></div>)}</div>
-              <button className="btn btn-primary btn-block" onClick={handleConfirmImport} disabled={importing}>{importing ? 'Importing…' : `Confirm Import (${parsedGuests.filter((g) => g.name.trim()).length})`}</button>
-            </div>
-          )}
-        </div>
+        <div className="card card-sm section"><div className="card-header"><h3 className="card-title">Manual Bulk Add</h3><p className="card-subtitle">One guest per line. Paste from Excel or type manually.</p></div><textarea className="textarea bulk-textarea" placeholder={'John Tan\nSarah Lee\nAhmad Bin Ali\nLim Wei Jie\nNur Aisyah'} value={bulkText} onChange={(e) => setBulkText(e.target.value)} rows={10} /><div className="form-group" style={{ marginTop: 'var(--space-3)' }}><label className="form-label">Assign to Table (optional)</label><select className="select" value={bulkTable} onChange={(e) => setBulkTable(e.target.value)}><option value="">No Table</option>{tables.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="manual-actions" style={{ marginTop: 'var(--space-4)' }}><span className="form-hint">{bulkText.split(/\r?\n/).filter((l) => l.trim()).length} guests</span><button className="btn btn-primary btn-sm" onClick={handleBulkAdd} disabled={bulkCreateGuests.isPending}>{bulkCreateGuests.isPending ? 'Adding…' : 'Add Guests'}</button></div></div>
+        <div className="card card-sm section"><div className="card-header"><h3 className="card-title">Import Guest List</h3><p className="card-subtitle">CSV, Excel, or PDF</p></div>{!parsedGuests.length ? <div className={`dropzone ${dragOver ? 'dropzone-active' : ''}`} onDragOver={(e) => { e.preventDefault(); setDragOver(true) }} onDragLeave={() => setDragOver(false)} onDrop={handleDrop} onClick={() => fileInputRef.current?.click()}><p className="dropzone-text">{importing ? 'Parsing…' : 'Drop file here or click to browse'}</p><p className="dropzone-hint">Supports CSV, XLSX, XLS, PDF</p><input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls,.pdf" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])} /></div> : <div className="import-review"><div className="import-review-header"><span>{parsedGuests.length} guests found in {importFile?.name}</span><button className="btn btn-ghost btn-sm" onClick={() => { setParsedGuests([]); setImportFile(null) }}>Cancel</button></div><div className="import-review-list">{parsedGuests.map((g, i) => <div key={i} className="import-review-row"><input className="input" value={g.name} onChange={(e) => handleParsedGuestChange(i, 'name', e.target.value)} /><input className="input" placeholder="Table" value={g.tableName} onChange={(e) => handleParsedGuestChange(i, 'tableName', e.target.value)} /><button className="btn btn-ghost btn-sm" onClick={() => setParsedGuests(parsedGuests.filter((_, idx) => idx !== i))}>Remove</button></div>)}</div><button className="btn btn-primary btn-block" onClick={handleConfirmImport} disabled={importing}>{importing ? 'Importing…' : `Confirm Import (${parsedGuests.filter((g) => g.name.trim()).length})`}</button></div>}</div>
       </div>
     </div>
   )
