@@ -15,12 +15,12 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   if (!open) return null;
   return (
-    <div className="confirm-dialog-overlay" onClick={onCancel}>
-      <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-        <h3 className="confirm-dialog__title">{title}</h3>
-        <p className="confirm-dialog__message">{message}</p>
-        <div className="confirm-dialog__actions">
-          <button className="btn btn--ghost" onClick={onCancel}>{cancelLabel}</button>
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2 className="modal__title">{title}</h2>
+        <p className="modal__message">{message}</p>
+        <div className="modal__actions">
+          <button className="btn btn--secondary" onClick={onCancel}>{cancelLabel}</button>
           <button className="btn btn--danger" onClick={onConfirm}>{confirmLabel}</button>
         </div>
       </div>

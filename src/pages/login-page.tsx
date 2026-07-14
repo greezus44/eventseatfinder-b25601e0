@@ -15,114 +15,118 @@ export function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim()) {
-      toast('Please enter both email and password.', 'error');
+    if (!email || !password) {
+      toast('Please enter your email and password.', 'error');
       return;
     }
     setLoading(true);
     try {
       if (mode === 'signin') {
-        await signIn(email.trim(), password);
-        toast('Welcome back to Seatly!', 'success');
+        await signIn(email, password);
+        toast('Welcome back to Seatly.', 'success');
       } else {
-        await signUp(email.trim(), password);
-        toast('Account created. Welcome to Seatly!', 'success');
+        await signUp(email, password);
+        toast('Account created. You are signed in.', 'success');
       }
       navigate('/');
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
       toast(message, 'error');
     } finally {
       setLoading(false);
     }
   };
 
+  const switchMode = (next: 'signin' | 'signup') => {
+    setMode(next);
+    setEmail('');
+    setPassword('');
+  };
+
   return (
     <div className="login-page">
       <div className="login-card">
-        <div className="login-logo" aria-label="Seatly logo">
-          <span className="login-logo-mark">S</span>
-          <span className="login-logo-text">Seatly</span>
+        <div className="login-logo">
+          <div className="login-logo__mark">S</div>
         </div>
-
-        <div className="login-tabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'signin'}
-            className={`login-tab ${mode === 'signin' ? 'login-tab--active' : ''}`}
-            onClick={() => setMode('signin')}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'signup'}
-            className={`login-tab ${mode === 'signup' ? 'login-tab--active' : ''}`}
-            onClick={() => setMode('signup')}
-          >
-            Sign Up
-          </button>
-        </div>
+        <h1 className="login-title">
+          {mode === 'signin' ? 'Welcome back' : 'Create your account'}
+        </h1>
+        <p className="login-subtitle">
+          {mode === 'signin'
+            ? 'Sign in to manage your events and seating.'
+            : 'Start planning your event seating in minutes.'}
+        </p>
 
         <form className="login-form" onSubmit={handleSubmit}>
-          <label className="login-field">
-            <span className="login-label">Email</span>
+          <div className="login-field">
+            <label className="login-label" htmlFor="login-email">Email</label>
             <input
-              type="email"
+              id="login-email"
               className="login-input"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              autoComplete="email"
-              required
               disabled={loading}
             />
-          </label>
+          </div>
 
-          <label className="login-field">
-            <span className="login-label">Password</span>
+          <div className="login-field">
+            <label className="login-label" htmlFor="login-password">Password</label>
             <input
-              type="password"
+              id="login-password"
               className="login-input"
+              type="password"
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+              placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-              required
               disabled={loading}
             />
-          </label>
+          </div>
 
           <button
-            type="submit"
             className="login-submit"
+            type="submit"
             disabled={loading}
           >
             {loading ? (
               <span className="login-spinner" aria-hidden="true" />
-            ) : mode === 'signin' ? (
-              'Sign In'
             ) : (
-              'Create Account'
+              <span>{mode === 'signin' ? 'Sign In' : 'Sign Up'}</span>
             )}
           </button>
         </form>
 
-        <p className="login-hint">
-          {mode === 'signin'
-            ? "Don't have an account? "
-            : 'Already have an account? '}
-          <button
-            type="button"
-            className="login-switch"
-            onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
-          >
-            {mode === 'signin' ? 'Sign up' : 'Sign in'}
-          </button>
-        </p>
+        <div className="login-toggle">
+          {mode === 'signin' ? (
+            <>
+              <span className="login-toggle__text">Don't have an account?</span>
+              <button
+                className="login-toggle__btn"
+                type="button"
+                onClick={() => switchMode('signup')}
+                disabled={loading}
+              >
+                Sign up
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="login-toggle__text">Already have an account?</span>
+              <button
+                className="login-toggle__btn"
+                type="button"
+                onClick={() => switchMode('signin')}
+                disabled={loading}
+              >
+                Sign in
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
