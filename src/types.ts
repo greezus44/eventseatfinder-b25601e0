@@ -47,7 +47,7 @@ export interface TableInput {
   event_id?: string; name?: string; number?: number; capacity?: number;
   position_x?: number | null; position_y?: number | null;
 }
-export interface GuestInput { event_id?: string; name?: string; table_id?: string | null; }
+export interface GuestInput { event_id?: string; name?: string; table_id?: string | null }
 export interface GuestPageSettingsInput {
   event_id?: string; logo_url?: string | null; logo_size?: number | null;
   logo_position?: string | null; logo_rounded?: boolean | null;

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { useGuestPageSettingsBySlug } from '@/hooks/use-guest-page-settings'
 import { supabase } from '@/lib/supabase'
@@ -6,6 +6,7 @@ import { loadGoogleFonts, getFontCss, formatTime12 } from '@/lib/fonts'
 import { normalizeName, searchGuests, type GuestSearchResult } from '@/lib/search'
 
 type GuestTab = 'find' | 'layout'
+type FindView = 'select' | 'table'
 
 interface GuestWithTable {
   id: string
@@ -19,14 +20,20 @@ export function InvitationPage() {
   const { data, isLoading } = useGuestPageSettingsBySlug(slug ?? '')
 
   const [activeTab, setActiveTab] = useState<GuestTab>('find')
-  const [search, setSearch] = useState('')
-  const [suggestions, setSuggestions] = useState<GuestSearchResult[]>([])
-  const [selectedResult, setSelectedResult] = useState<GuestSearchResult | null>(null)
-  const [searched, setSearched] = useState(false)
-  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [findView, setFindView] = useState<FindView>('select')
+  const [selectedGuest, setSelectedGuest] = useState<GuestSearchResult | null>(null)
+
+  // Dropdown state
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [filterText, setFilterText] = useState('')
+  const [highlightIndex, setHighlightIndex] = useState(-1)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const filterInputRef = useRef<HTMLInputElement>(null)
+
   const [loadingGuests, setLoadingGuests] = useState(false)
   const [guestsData, setGuestsData] = useState<GuestWithTable[]>([])
 
+  // Zoom/pan for layout
   const [zoom, setZoom] = useState(1)
   const [panX, setPanX] = useState(0)
   const [panY, setPanY] = useState(0)
@@ -44,6 +51,7 @@ export function InvitationPage() {
 
   useEffect(() => { loadGoogleFonts([titleFont, subtitleFont, datetimeFont, venueFont, welcomeFont]) }, [titleFont, subtitleFont, datetimeFont, venueFont, welcomeFont])
 
+  // Fetch all guests once
   useEffect(() => {
     if (!data?.event_id) return
     let cancelled = false
@@ -57,32 +65,68 @@ export function InvitationPage() {
     return () => { cancelled = true }
   }, [data?.event_id])
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Filtered results for dropdown
+  const filteredResults = useMemo(() => {
+    if (!filterText.trim()) return searchGuests(guestsData, '', 200)
+    return searchGuests(guestsData, filterText, 200)
+  }, [guestsData, filterText])
 
-  const updateSuggestions = useCallback((query: string) => {
-    if (!query.trim()) { setSuggestions([]); return }
-    setSuggestions(searchGuests(guestsData, query, 10))
-  }, [guestsData])
+  // Reset highlight when filter changes
+  useEffect(() => { setHighlightIndex(-1) }, [filterText])
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setSearch(value); setSelectedResult(null); setSearched(false); setShowSuggestions(true)
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => updateSuggestions(value), 200)
+  const handleOpenDropdown = () => {
+    setDropdownOpen(true)
+    setTimeout(() => filterInputRef.current?.focus(), 50)
   }
 
-  const handleSearchSubmit = () => {
-    if (!search.trim()) return
-    setShowSuggestions(false); setSearched(true)
-    const results = searchGuests(guestsData, search, 10)
-    setSelectedResult(results.length > 0 ? results[0] : null)
+  const handleCloseDropdown = () => {
+    setDropdownOpen(false)
+    setFilterText('')
+    setHighlightIndex(-1)
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); handleSearchSubmit() } }
-  const handleSuggestionClick = (result: GuestSearchResult) => { setSearch(result.name); setSelectedResult(result); setShowSuggestions(false); setSearched(true) }
-  const handleBlur = () => { setTimeout(() => setShowSuggestions(false), 150) }
-  const handleFocus = () => { if (search.trim()) { setShowSuggestions(true); updateSuggestions(search) } }
+  const handleSelectGuest = (result: GuestSearchResult) => {
+    setSelectedGuest(result)
+    setFindView('table')
+    handleCloseDropdown()
+  }
 
+  const handleBackToSelect = () => {
+    setFindView('select')
+    setSelectedGuest(null)
+  }
+
+  // Keyboard navigation
+  const handleFilterKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setHighlightIndex((prev) => Math.min(prev + 1, filteredResults.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setHighlightIndex((prev) => Math.max(prev - 1, 0))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (highlightIndex >= 0 && highlightIndex < filteredResults.length) {
+        handleSelectGuest(filteredResults[highlightIndex])
+      }
+    } else if (e.key === 'Escape') {
+      handleCloseDropdown()
+    }
+  }
+
+  // Click outside to close
+  useEffect(() => {
+    if (!dropdownOpen) return
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        handleCloseDropdown()
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [dropdownOpen])
+
+  // Zoom/pan
   const handleZoomIn = () => setZoom((z) => Math.min(z + 0.25, 4))
   const handleZoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.5))
   const handleZoomReset = () => { setZoom(1); setPanX(0); setPanY(0) }
@@ -100,7 +144,6 @@ export function InvitationPage() {
   const radius = `${settings.border_radius ?? 16}px`
   const logoSize = settings.logo_size ?? 80
   const logoRounded = settings.logo_rounded ?? false
-  const welcomeMessage = settings.welcome_message ?? 'Welcome to our event! We look forward to celebrating with you.'
 
   const formatDate = () => { if (!event.date) return ''; return new Date(event.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }
 
@@ -118,64 +161,91 @@ export function InvitationPage() {
         {event.time && <p className="gp-datetime" style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${settings.font_datetime_size ?? 14}px`, color: settings.font_datetime_color ?? text }}>{formatTime12(event.time)}</p>}
         {event.venue && <p className="gp-venue" style={{ fontFamily: getFontCss(venueFont), fontSize: `${settings.font_venue_size ?? 14}px`, color: settings.font_venue_color ?? text }}>{event.venue}</p>}
 
-        {/* Segmented control — one connected component, equal widths, rounded outer corners */}
+        {/* Segmented control */}
         <div className="gp-segmented" style={{ borderRadius: radius, border: `1px solid ${primary}` }}>
-          <button
-            className={`gp-segment ${activeTab === 'find' ? 'active' : ''}`}
-            onClick={() => setActiveTab('find')}
-            style={activeTab === 'find'
-              ? { background: primary, color: '#fff' }
-              : { background: bg, color: primary }
-            }
-          >
-            Find Seat
-          </button>
-          <button
-            className={`gp-segment ${activeTab === 'layout' ? 'active' : ''}`}
-            onClick={() => setActiveTab('layout')}
-            style={activeTab === 'layout'
-              ? { background: primary, color: '#fff' }
-              : { background: bg, color: primary }
-            }
-          >
-            Venue Layout
-          </button>
+          <button className={`gp-segment ${activeTab === 'find' ? 'active' : ''}`} onClick={() => setActiveTab('find')} style={activeTab === 'find' ? { background: primary, color: '#fff' } : { background: bg, color: primary }}>Find Seat</button>
+          <button className={`gp-segment ${activeTab === 'layout' ? 'active' : ''}`} onClick={() => setActiveTab('layout')} style={activeTab === 'layout' ? { background: primary, color: '#fff' } : { background: bg, color: primary }}>Venue Layout</button>
         </div>
 
         {activeTab === 'find' && (
           <div className="gp-find-seat">
-            <div className="gp-search-wrapper">
-              <div className="gp-search-box">
-                <input type="text" className="gp-search-input" placeholder="Search your name…" value={search} onChange={handleSearchChange} onKeyDown={handleKeyDown} onFocus={handleFocus} onBlur={handleBlur} autoFocus autoComplete="off" style={{ background: bg, borderColor: primary, color: text, borderRadius: radius }} />
-                <button className="gp-search-btn" onClick={handleSearchSubmit} style={{ background: primary, color: '#fff', borderRadius: radius }}>Search</button>
-              </div>
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="gp-suggestions" style={{ background: bg, borderColor: primary, borderRadius: radius }}>
-                  {suggestions.map((s) => (
-                    <button key={s.id} className="gp-suggestion" onClick={() => handleSuggestionClick(s)} style={{ borderRadius: radius }}>
-                      <span className="gp-suggestion-name" style={{ color: text }}>{s.name}</span>
-                      <span className="gp-suggestion-table" style={{ color: primary }}>{s.table_name}</span>
-                    </button>
-                  ))}
+            {findView === 'select' && (
+              <div className="gp-select-section">
+                <p className="gp-select-prompt" style={{ color: text }}>Select Your Name</p>
+                <div className="gp-select-wrapper" ref={dropdownRef}>
+                  <button
+                    className="gp-select-box"
+                    onClick={dropdownOpen ? handleCloseDropdown : handleOpenDropdown}
+                    style={{ background: bg, borderColor: primary, color: text, borderRadius: radius }}
+                  >
+                    <span className="gp-select-text">{selectedGuest ? selectedGuest.name : 'Click to select your name'}</span>
+                    <span className="gp-select-chevron" style={{ color: primary }}>{dropdownOpen ? '▲' : '▼'}</span>
+                  </button>
+
+                  {dropdownOpen && (
+                    <div className="gp-dropdown" style={{ background: bg, borderColor: primary, borderRadius: radius }}>
+                      <div className="gp-dropdown-search">
+                        <input
+                          ref={filterInputRef}
+                          type="text"
+                          className="gp-dropdown-input"
+                          placeholder="Type to search…"
+                          value={filterText}
+                          onChange={(e) => setFilterText(e.target.value)}
+                          onKeyDown={handleFilterKeyDown}
+                          style={{ background: bg, borderColor: primary, color: text, borderRadius: radius }}
+                          autoComplete="off"
+                        />
+                      </div>
+                      <div className="gp-dropdown-list">
+                        {loadingGuests ? (
+                          <div className="gp-dropdown-empty">Loading guests…</div>
+                        ) : filteredResults.length === 0 ? (
+                          <div className="gp-dropdown-empty">No matching guests found</div>
+                        ) : (
+                          filteredResults.map((g, i) => (
+                            <button
+                              key={g.id}
+                              className={`gp-dropdown-item ${i === highlightIndex ? 'highlighted' : ''}`}
+                              onClick={() => handleSelectGuest(g)}
+                              style={{
+                                background: i === highlightIndex ? `${primary}15` : 'transparent',
+                                borderRadius: radius,
+                              }}
+                            >
+                              <span className="gp-dropdown-name" style={{ color: text }}>{g.name}</span>
+                              <span className="gp-table-badge" style={{
+                                background: bg,
+                                borderColor: primary,
+                                color: primary,
+                                borderRadius: '10px',
+                              }}>
+                                {g.table_name}
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            {searched && (
-              <div className="gp-results">
-                {loadingGuests ? (
-                  <div className="gp-no-results"><p>Loading guests…</p></div>
-                ) : selectedResult ? (
-                  <div className="gp-result-card" style={{ background: cardBg, borderColor: primary, borderRadius: radius }}>
-                    <div className="gp-result-left">
-                      <p className="gp-result-name" style={{ color: text }}>{selectedResult.name}</p>
-                    </div>
-                    <div className="gp-result-right">
-                      <span className="gp-result-badge" style={{ background: primary, color: '#fff', borderRadius: radius }}>{selectedResult.table_name}</span>
-                    </div>
+              </div>
+            )}
+
+            {findView === 'table' && selectedGuest && (
+              <div className="gp-table-info">
+                <h2 className="gp-table-info-title" style={{ color: text }}>This Is Your Table</h2>
+                <div className="gp-table-info-card" style={{ background: cardBg, borderColor: primary, borderRadius: radius }}>
+                  <div className="gp-table-info-left">
+                    <p className="gp-table-info-name" style={{ color: text }}>{selectedGuest.name}</p>
                   </div>
-                ) : (
-                  <div className="gp-no-results" style={{ color: text }}><p>No matching guest found. Please check the spelling of your name.</p></div>
-                )}
+                  <div className="gp-table-info-right">
+                    <span className="gp-table-info-badge" style={{ background: primary, color: '#fff', borderRadius: radius }}>
+                      {selectedGuest.table_name}
+                    </span>
+                  </div>
+                </div>
+                <button className="btn btn-ghost gp-back-btn" onClick={handleBackToSelect} style={{ borderColor: primary, color: primary, borderRadius: radius }}>← Select a different name</button>
               </div>
             )}
           </div>

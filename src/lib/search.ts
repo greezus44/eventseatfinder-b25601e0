@@ -13,7 +13,7 @@ export function nameMatches(search: string, guestName: string): boolean {
 }
 export interface GuestSearchResult { id: string; name: string; table_name: string; table_number: number }
 interface GuestWithTableLike { id: string; name: string; table_id: string | null; tables?: { name: string; number: number } | { name: string; number: number }[] | null }
-export function searchGuests(guests: GuestWithTableLike[], query: string, limit = 10): GuestSearchResult[] {
+export function searchGuests(guests: GuestWithTableLike[], query: string, limit = 50): GuestSearchResult[] {
   const results: GuestSearchResult[] = []
   for (const g of guests) {
     if (nameMatches(query, g.name)) {

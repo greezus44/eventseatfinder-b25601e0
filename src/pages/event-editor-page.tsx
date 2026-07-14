@@ -40,39 +40,42 @@ function FontDropdown({ value, onChange }: { value: string; onChange: (v: string
   return (
     <select className="select font-dropdown" value={value} onChange={(e) => onChange(e.target.value)}>
       {FONTS.map((f) => (
-        <option key={f.name} value={f.name} style={{ fontFamily: `'${f.cssName}', sans-serif` }}>
-          {f.name}
-        </option>
+        <option key={f.name} value={f.name} style={{ fontFamily: `'${f.cssName}', sans-serif` }}>{f.name}</option>
       ))}
     </select>
   )
 }
 
-/** Compact typography row: label + font dropdown + size slider + colour picker */
-function TypoRow({
+/** Compact typography card: font dropdown + size slider + colour picker + live preview */
+function TypoCard({
   label, font, size, color, onFont, onSize, onColor, previewText, previewStyle,
 }: {
   label: string
-  font: string; size: number; color: string | null
+  font: string; size: number; color: string
   onFont: (v: string) => void; onSize: (v: number) => void; onColor: (v: string) => void
   previewText: string; previewStyle: React.CSSProperties
 }) {
   return (
-    <div className="typo-compact-row">
-      <div className="typo-compact-label">{label}</div>
-      <div className="typo-compact-controls">
-        <div className="typo-compact-field">
+    <div className="typo-card">
+      <div className="typo-card-header">{label}</div>
+      <div className="typo-card-controls">
+        <div className="typo-card-field">
+          <span className="typo-card-label">Font</span>
           <FontDropdown value={font} onChange={onFont} />
         </div>
-        <div className="typo-compact-field typo-size-field">
-          <input type="range" className="range" min={10} max={72} value={size} onChange={(e) => onSize(Number(e.target.value))} />
-          <span className="typo-size-value">{size}px</span>
+        <div className="typo-card-field">
+          <span className="typo-card-label">Size</span>
+          <div className="typo-size-control">
+            <input type="range" className="range" min={10} max={72} value={size} onChange={(e) => onSize(Number(e.target.value))} />
+            <span className="typo-size-value">{size}px</span>
+          </div>
         </div>
-        <div className="typo-compact-field typo-color-field">
-          <input type="color" className="color-picker-sm" value={color ?? '#0f172a'} onChange={(e) => onColor(e.target.value)} />
+        <div className="typo-card-field">
+          <span className="typo-card-label">Colour</span>
+          <input type="color" className="color-picker-sm" value={color} onChange={(e) => onColor(e.target.value)} />
         </div>
       </div>
-      <div className="typo-compact-preview" style={previewStyle}>{previewText}</div>
+      <div className="typo-card-preview" style={previewStyle}>{previewText}</div>
     </div>
   )
 }
@@ -120,35 +123,57 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
   const [venue, setVenue] = useState(event.venue ?? '')
   const [detailsDirty, setDetailsDirty] = useState(false)
 
-  // Typography state — compact, with per-element colour
-  const [titleFont, setTitleFont] = useState(settings?.font_title_family ?? 'Inter')
-  const [titleSize, setTitleSize] = useState(settings?.font_title_size ?? 32)
-  const [titleColor, setTitleColor] = useState(settings?.font_title_color ?? '#0f172a')
-  const [subtitleFont, setSubtitleFont] = useState(settings?.font_subtitle_family ?? 'Inter')
-  const [subtitleSize, setSubtitleSize] = useState(settings?.font_subtitle_size ?? 16)
-  const [subtitleColor, setSubtitleColor] = useState(settings?.font_subtitle_color ?? '#64748b')
-  const [datetimeFont, setDatetimeFont] = useState(settings?.font_datetime_family ?? 'Inter')
-  const [datetimeSize, setDatetimeSize] = useState(settings?.font_datetime_size ?? 14)
-  const [datetimeColor, setDatetimeColor] = useState(settings?.font_datetime_color ?? '#64748b')
-  const [venueFont, setVenueFont] = useState(settings?.font_venue_family ?? 'Inter')
-  const [venueSize, setVenueSize] = useState(settings?.font_venue_size ?? 14)
-  const [venueColor, setVenueColor] = useState(settings?.font_venue_color ?? '#64748b')
+  // Typography state — initialized from settings, synced when settings load
+  const [titleFont, setTitleFont] = useState('Inter')
+  const [titleSize, setTitleSize] = useState(32)
+  const [titleColor, setTitleColor] = useState('#0f172a')
+  const [subtitleFont, setSubtitleFont] = useState('Inter')
+  const [subtitleSize, setSubtitleSize] = useState(16)
+  const [subtitleColor, setSubtitleColor] = useState('#64748b')
+  const [datetimeFont, setDatetimeFont] = useState('Inter')
+  const [datetimeSize, setDatetimeSize] = useState(14)
+  const [datetimeColor, setDatetimeColor] = useState('#64748b')
+  const [venueFont, setVenueFont] = useState('Inter')
+  const [venueSize, setVenueSize] = useState(14)
+  const [venueColor, setVenueColor] = useState('#64748b')
   const [typoDirty, setTypoDirty] = useState(false)
+
+  // FIX: Sync typography state when settings data arrives from the server.
+  // Previously, state was initialized from `settings?.foo` at first render,
+  // but settings is null on the first render (still loading from Supabase).
+  // This meant all typography controls showed defaults and never updated
+  // when the real data arrived, making it impossible to edit existing values.
+  useEffect(() => {
+    if (!settings) return
+    setTitleFont(settings.font_title_family ?? 'Inter')
+    setTitleSize(settings.font_title_size ?? 32)
+    setTitleColor(settings.font_title_color ?? '#0f172a')
+    setSubtitleFont(settings.font_subtitle_family ?? 'Inter')
+    setSubtitleSize(settings.font_subtitle_size ?? 16)
+    setSubtitleColor(settings.font_subtitle_color ?? '#64748b')
+    setDatetimeFont(settings.font_datetime_family ?? 'Inter')
+    setDatetimeSize(settings.font_datetime_size ?? 14)
+    setDatetimeColor(settings.font_datetime_color ?? '#64748b')
+    setVenueFont(settings.font_venue_family ?? 'Inter')
+    setVenueSize(settings.font_venue_size ?? 14)
+    setVenueColor(settings.font_venue_color ?? '#64748b')
+  }, [settings])
 
   useEffect(() => { setDetailsDirty(name !== event.name || date !== (event.date ?? '') || time !== (event.time ?? '09:00') || venue !== (event.venue ?? '')) }, [name, date, time, venue, event])
 
   const allFonts = [titleFont, subtitleFont, datetimeFont, venueFont]
   useEffect(() => { loadGoogleFonts(allFonts) }, allFonts)
 
-  const checkTypoDirty = () => {
+  // Track typography dirty state
+  useEffect(() => {
+    if (!settings) { setTypoDirty(false); return }
     setTypoDirty(
-      titleFont !== (settings?.font_title_family ?? 'Inter') || titleSize !== (settings?.font_title_size ?? 32) || titleColor !== (settings?.font_title_color ?? '#0f172a') ||
-      subtitleFont !== (settings?.font_subtitle_family ?? 'Inter') || subtitleSize !== (settings?.font_subtitle_size ?? 16) || subtitleColor !== (settings?.font_subtitle_color ?? '#64748b') ||
-      datetimeFont !== (settings?.font_datetime_family ?? 'Inter') || datetimeSize !== (settings?.font_datetime_size ?? 14) || datetimeColor !== (settings?.font_datetime_color ?? '#64748b') ||
-      venueFont !== (settings?.font_venue_family ?? 'Inter') || venueSize !== (settings?.font_venue_size ?? 14) || venueColor !== (settings?.font_venue_color ?? '#64748b')
+      titleFont !== (settings.font_title_family ?? 'Inter') || titleSize !== (settings.font_title_size ?? 32) || titleColor !== (settings.font_title_color ?? '#0f172a') ||
+      subtitleFont !== (settings.font_subtitle_family ?? 'Inter') || subtitleSize !== (settings.font_subtitle_size ?? 16) || subtitleColor !== (settings.font_subtitle_color ?? '#64748b') ||
+      datetimeFont !== (settings.font_datetime_family ?? 'Inter') || datetimeSize !== (settings.font_datetime_size ?? 14) || datetimeColor !== (settings.font_datetime_color ?? '#64748b') ||
+      venueFont !== (settings.font_venue_family ?? 'Inter') || venueSize !== (settings.font_venue_size ?? 14) || venueColor !== (settings.font_venue_color ?? '#64748b')
     )
-  }
-  useEffect(() => { checkTypoDirty() }, [titleFont, titleSize, titleColor, subtitleFont, subtitleSize, subtitleColor, datetimeFont, datetimeSize, datetimeColor, venueFont, venueSize, venueColor])
+  }, [titleFont, titleSize, titleColor, subtitleFont, subtitleSize, subtitleColor, datetimeFont, datetimeSize, datetimeColor, venueFont, venueSize, venueColor, settings])
 
   const handleSaveDetails = async () => {
     try { await updateEvent.mutateAsync({ id: eventId, name, slug: event.slug, date: date || null, time: time || null, venue: venue || null }); toast('Event details saved'); setDetailsDirty(false) }
@@ -183,23 +208,23 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
         <div style={{ marginTop: 'var(--space-5)' }}><button className="btn btn-primary" onClick={handleSaveDetails} disabled={!detailsDirty || updateEvent.isPending}>{updateEvent.isPending ? 'Saving…' : 'Save Changes'}</button></div>
       </div>
 
-      {/* Compact Typography Section */}
+      {/* Compact Typography Panel */}
       <div className="card section">
         <div className="card-header"><h3 className="card-title">Typography</h3><p className="card-subtitle">Fonts, sizes, and colours for each text element. Preview updates live.</p></div>
-        <div className="typo-compact">
-          <TypoRow label="Event Title" font={titleFont} size={titleSize} color={titleColor}
+        <div className="typo-cards">
+          <TypoCard label="Event Title" font={titleFont} size={titleSize} color={titleColor}
             onFont={setTitleFont} onSize={setTitleSize} onColor={setTitleColor}
             previewText={name || 'Event Name'}
             previewStyle={{ fontFamily: getFontCss(titleFont), fontSize: `${titleSize}px`, color: titleColor }} />
-          <TypoRow label="Event Subtitle" font={subtitleFont} size={subtitleSize} color={subtitleColor}
+          <TypoCard label="Event Subtitle" font={subtitleFont} size={subtitleSize} color={subtitleColor}
             onFont={setSubtitleFont} onSize={setSubtitleSize} onColor={setSubtitleColor}
             previewText={settings?.event_subtitle || 'Event Subtitle'}
             previewStyle={{ fontFamily: getFontCss(subtitleFont), fontSize: `${subtitleSize}px`, color: subtitleColor }} />
-          <TypoRow label="Date & Time" font={datetimeFont} size={datetimeSize} color={datetimeColor}
+          <TypoCard label="Date & Time" font={datetimeFont} size={datetimeSize} color={datetimeColor}
             onFont={setDatetimeFont} onSize={setDatetimeSize} onColor={setDatetimeColor}
             previewText={date && time ? `${new Date(date).toLocaleDateString()} at ${formatTime12(time)}` : 'Date & Time'}
             previewStyle={{ fontFamily: getFontCss(datetimeFont), fontSize: `${datetimeSize}px`, color: datetimeColor }} />
-          <TypoRow label="Venue" font={venueFont} size={venueSize} color={venueColor}
+          <TypoCard label="Venue" font={venueFont} size={venueSize} color={venueColor}
             onFont={setVenueFont} onSize={setVenueSize} onColor={setVenueColor}
             previewText={venue || 'Venue Name'}
             previewStyle={{ fontFamily: getFontCss(venueFont), fontSize: `${venueSize}px`, color: venueColor }} />
