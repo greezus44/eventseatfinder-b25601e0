@@ -1,25 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { fileURLToPath, URL } from 'node:url'
+import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-    },
-  },
-  optimizeDeps: {
-    include: ['pdfjs-dist'],
-  },
-  build: {
-    chunkSizeWarningLimit: 1600,
-  rollupOptions: {
-      output: {
-        manualChunks: {
-          pdf: ['pdfjs-dist'],
-        },
-      },
-    },
-  },
+  resolve: { alias: { '@': path.resolve(__dirname, './src') } },
+  optimizeDeps: { exclude: ['pdfjs-dist'] },
 })

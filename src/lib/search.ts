@@ -1,23 +1,18 @@
-export function fuzzyMatch(query: string, name: string): boolean {
-  const q = query.toLowerCase().trim()
-  const n = name.toLowerCase().trim()
-  if (!q) return false
-  if (n.includes(q)) return true
-  const qWords = q.split(/\s+/)
-  const nWords = n.split(/\s+/)
-  return qWords.every(qw => nWords.some(nw => nw.startsWith(qw) || nw.includes(qw)))
-}
-
-export function searchGuests<T extends { id: string; name: string }>(query: string, guests: T[]): T[] {
-  if (!query.trim()) return []
-  return guests
-    .filter(g => fuzzyMatch(query, g.name))
-    .sort((a, b) => {
-      const aStarts = a.name.toLowerCase().startsWith(query.toLowerCase().trim())
-      const bStarts = b.name.toLowerCase().startsWith(query.toLowerCase().trim())
-      if (aStarts && !bStarts) return -1
-      if (!aStarts && bStarts) return 1
-      return a.name.localeCompare(b.name)
-    })
-    .slice(0, 20)
+export interface GuestSearchResult { id: string; name: string; table_id: string | null; table_name: string }
+interface GuestLike { id: string; name: string; table_id: string | null; tables: { name: string; number: number }[] | null }
+function normalize(s: string): string { return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim() }
+export function searchGuests(guests: GuestLike[], query: string, limit = 50): GuestSearchResult[] {
+  const q = normalize(query)
+  if (!q) return []
+  const scored: { result: GuestSearchResult; score: number }[] = []
+  for (const g of guests) {
+    const name = normalize(g.name); let score = 0
+    if (name === q) score = 100
+    else if (name.startsWith(q)) score = 80
+    else if (name.includes(q)) score = 60
+    else { const words = name.split(/\s+/); if (words.some((w) => w.startsWith(q))) score = 40; else if (words.some((w) => w.includes(q))) score = 20; else continue }
+    const tableRow = Array.isArray(g.tables) ? g.tables[0] : g.tables
+    scored.push({ result: { id: g.id, name: g.name, table_id: g.table_id, table_name: tableRow?.name ?? 'Unassigned' }, score })
+  }
+  return scored.sort((a, b) => b.score - a.score || a.result.name.localeCompare(b.result.name)).slice(0, limit).map((s) => s.result)
 }

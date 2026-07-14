@@ -1,25 +1,9 @@
 import { supabase } from './supabase'
-
-const BUCKET = 'event-assets'
-
-export async function uploadLogo(file: File): Promise<string> {
+export async function uploadEventImage(eventId: string, file: File, folder: string): Promise<string> {
   const ext = file.name.split('.').pop() || 'png'
-  const path = `logos/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-    contentType: file.type,
-  })
+  const fileName = `${folder}/${eventId}-${Date.now()}.${ext}`
+  const { error } = await supabase.storage.from('event-assets').upload(fileName, file, { upsert: true })
   if (error) throw error
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
-  return data.publicUrl
-}
-
-export async function uploadVenueLayout(file: File): Promise<string> {
-  const ext = file.name.split('.').pop() || 'png'
-  const path = `layouts/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-    contentType: file.type,
-  })
-  if (error) throw error
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
+  const { data } = supabase.storage.from('event-assets').getPublicUrl(fileName)
   return data.publicUrl
 }
