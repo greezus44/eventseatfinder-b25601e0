@@ -161,7 +161,6 @@ export function InvitationPage() {
           </div>
         )}
         <h1 className="gp-title" style={{ fontFamily: getFontCss(titleFont), fontSize: `${settings.font_title_size ?? 32}px`, color: settings.font_title_color ?? text }}>{event.name}</h1>
-        {/* Subtitle — only rendered if non-empty, no empty space when blank */}
         {subtitle && subtitle.trim() && (
           <p className="gp-subtitle" style={{ fontFamily: getFontCss(subtitleFont), fontSize: `${settings.font_subtitle_size ?? 16}px`, color: settings.font_subtitle_color ?? text }}>{subtitle}</p>
         )}
@@ -179,13 +178,13 @@ export function InvitationPage() {
           <div className="gp-find-seat">
             {findView === 'search' && (
               <div className="gp-search-section">
-                <p className="gp-search-prompt" style={{ color: text }}>Search Your Name</p>
+                {/* No heading above the search box — only the placeholder */}
                 <div className="gp-autocomplete-wrapper" ref={searchWrapperRef}>
                   <input
                     ref={inputRef}
                     type="text"
                     className="gp-autocomplete-input"
-                    placeholder="Search your name..."
+                    placeholder="SEARCH YOUR NAME"
                     value={searchText}
                     onChange={handleSearchChange}
                     onKeyDown={handleKeyDown}

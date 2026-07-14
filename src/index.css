@@ -207,10 +207,11 @@ body { font-family: var(--font-sans); background: var(--color-bg); color: var(--
 /* Find Seat — Autocomplete Search */
 .gp-find-seat { margin-bottom: var(--space-5); }
 .gp-search-section { max-width: 460px; margin: 0 auto; }
-.gp-search-prompt { font-size: 16px; font-weight: 600; margin-bottom: var(--space-3); }
 .gp-autocomplete-wrapper { position: relative; }
-.gp-autocomplete-input { width: 100%; padding: var(--space-3) var(--space-4); font-size: 15px; font-family: inherit; border: 2px solid; border-radius: var(--radius-md); transition: box-shadow .15s ease; }
-.gp-autocomplete-input::placeholder { color: currentColor; opacity: .45; }
+
+/* Search input — centre-aligned placeholder and typed text */
+.gp-autocomplete-input { width: 100%; padding: var(--space-3) var(--space-4); font-size: 15px; font-family: inherit; border: 2px solid; border-radius: var(--radius-md); transition: box-shadow .15s ease; text-align: center; }
+.gp-autocomplete-input::placeholder { color: currentColor; opacity: .45; text-align: center; text-transform: uppercase; letter-spacing: .05em; }
 .gp-autocomplete-input:focus { outline: none; box-shadow: 0 0 0 3px rgba(15,118,110,.12); }
 
 /* Autocomplete dropdown */
