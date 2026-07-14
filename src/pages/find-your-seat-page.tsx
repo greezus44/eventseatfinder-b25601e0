@@ -1,8 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { useEventBySlug } from '@/hooks/use-events';
-import { useGuests } from '@/hooks/use-guests';
 import { useGuestPageSettingsBySlug } from '@/hooks/use-guest-page-settings';
+import { useGuests } from '@/hooks/use-guests';
 import { DEFAULT_SETTINGS } from '@/types/guest-page-settings';
 import type { GuestPageSettings } from '@/types/guest-page-settings';
 import type { GuestWithTable } from '@/types/guest';
@@ -10,16 +9,9 @@ import type { GuestWithTable } from '@/types/guest';
 type Lang = 'en' | 'ms';
 type Tab = 'find' | 'venue';
 
-const TRANSLATIONS: Record<Lang, {
-  tabFind: string; tabVenue: string; searchPlaceholder: string;
-  noResult: string; tableLabel: string; venueNoImage: string; reset: string;
-}> = {
-  en: { tabFind: 'FIND SEAT', tabVenue: 'VENUE LAYOUT', searchPlaceholder: 'SEARCH YOUR NAME',
-    noResult: 'No guest found. Please check your name.', tableLabel: 'TABLE',
-    venueNoImage: 'No venue layout has been uploaded yet.', reset: 'Reset' },
-  ms: { tabFind: 'CARI TEMPAT', tabVenue: 'SUSUN ATUR', searchPlaceholder: 'CARI NAMA ANDA',
-    noResult: 'Tetamu tidak ditemui. Sila semak nama anda.', tableLabel: 'MEJA',
-    venueNoImage: 'Tiada imej susun atur tempat majlis.', reset: 'Reset' },
+const TRANSLATIONS: Record<Lang, { tabFind: string; tabVenue: string; searchPlaceholder: string; noResult: string; tableLabel: string; venueNoImage: string; reset: string }> = {
+  en: { tabFind: 'FIND SEAT', tabVenue: 'VENUE LAYOUT', searchPlaceholder: 'SEARCH YOUR NAME', noResult: 'No guest found. Please check your name.', tableLabel: 'TABLE', venueNoImage: 'No venue layout has been uploaded yet.', reset: 'Reset' },
+  ms: { tabFind: 'CARI TEMPAT', tabVenue: 'SUSUN ATUR', searchPlaceholder: 'CARI NAMA ANDA', noResult: 'Tetamu tidak ditemui. Sila semak nama anda.', tableLabel: 'MEJA', venueNoImage: 'Tiada imej susun atur tempat majlis.', reset: 'Reset' },
 };
 
 export function FindYourSeatPage() {
@@ -32,30 +24,15 @@ export function FindYourSeatPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState<GuestWithTable[]>([]);
   const [searched, setSearched] = useState(false);
-
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
   const t = TRANSLATIONS[lang];
-
-  // The event data comes from the joined query that includes guest_page_settings
-  // This query uses staleTime: 0 so it always fetches fresh data from the DB
-  const event = eventData ? {
-    id: eventData.id, name: eventData.name, slug: eventData.slug,
-    date: eventData.date, time: eventData.time, venue: eventData.venue,
-    logo_url: eventData.logo_url, accent_color: eventData.accent_color,
-  } : null;
-
-  const settings = eventData?.guest_page_settings ?? null;
-
-  const effectiveSettings = {
-    ...(DEFAULT_SETTINGS as GuestPageSettings),
-    ...(settings ?? {}),
-  } as GuestPageSettings;
-
-  // Apply theme from DB — these come fresh every render due to staleTime: 0
+  const event = eventData ? { id: eventData.event.id, name: eventData.event.name, slug: eventData.event.slug, date: eventData.event.date, time: eventData.event.time, venue: eventData.event.venue, logo_url: eventData.logo_url, accent_color: eventData.color_primary } : null;
+  const settings = eventData ?? null;
+  const effectiveSettings = { ...(DEFAULT_SETTINGS as GuestPageSettings), ...(settings ?? {}) } as GuestPageSettings;
   const accent = event?.accent_color ?? effectiveSettings.color_primary ?? '#1A1A1A';
   const bg = effectiveSettings.color_background ?? '#FAF3E8';
   const logoSize = effectiveSettings.logo_size ?? 64;
@@ -72,7 +49,6 @@ export function FindYourSeatPage() {
   }, [allGuests]);
 
   useEffect(() => { setZoom(1); setPan({ x: 0, y: 0 }); }, [activeTab]);
-
   const clampZoom = (z: number) => Math.min(5, Math.max(0.5, z));
   const handleWheel = useCallback((e: React.WheelEvent) => { e.preventDefault(); setZoom((z) => clampZoom(z + (e.deltaY > 0 ? -0.15 : 0.15))); }, []);
   const handleMouseDown = useCallback((e: React.MouseEvent) => { setIsDragging(true); dragStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y }; }, [pan]);
@@ -83,24 +59,11 @@ export function FindYourSeatPage() {
   const handleTouchEnd = useCallback(() => setIsDragging(false), []);
 
   const venueImageUrl = effectiveSettings.venue_image_url;
+  const formatDate = (dateStr: string) => { if (!dateStr) return ''; try { const d = new Date(dateStr + 'T00:00:00'); return d.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase(); } catch { return dateStr.toUpperCase(); } };
+  const formatTime = (timeStr: string) => { if (!timeStr) return ''; try { const [h, m] = timeStr.split(':'); const hour = parseInt(h, 10); const ampm = hour >= 12 ? 'PM' : 'AM'; const h12 = hour % 12 || 12; return `${h12}:${m} ${ampm}`; } catch { return timeStr; } };
 
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '';
-    try { const d = new Date(dateStr + 'T00:00:00'); return d.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase(); }
-    catch { return dateStr.toUpperCase(); }
-  };
-  const formatTime = (timeStr: string) => {
-    if (!timeStr) return '';
-    try { const [h, m] = timeStr.split(':'); const hour = parseInt(h, 10); const ampm = hour >= 12 ? 'PM' : 'AM'; const h12 = hour % 12 || 12; return `${h12}:${m} ${ampm}`; }
-    catch { return timeStr; }
-  };
-
-  if (eventLoading) {
-    return <div className="gp-loading-screen" style={{ background: bg }}><div className="gp-spinner" style={{ borderTopColor: accent }} /></div>;
-  }
-  if (!event) {
-    return <div className="gp-loading-screen" style={{ background: bg }}><p className="gp-not-found-text" style={{ color: accent }}>EVENT NOT FOUND</p></div>;
-  }
+  if (eventLoading) return <div className="gp-loading-screen" style={{ background: bg }}><div className="gp-spinner" style={{ borderTopColor: accent }} /></div>;
+  if (!event) return <div className="gp-loading-screen" style={{ background: bg }}><p className="gp-not-found-text" style={{ color: accent }}>EVENT NOT FOUND</p></div>;
 
   return (
     <div className="gp-root" style={{ '--accent': accent, '--bg': bg, fontFamily: bodyFont } as React.CSSProperties}>
@@ -108,19 +71,13 @@ export function FindYourSeatPage() {
         <button className={`gp-lang-btn${lang === 'en' ? ' gp-lang-btn--active' : ''}`} onClick={() => setLang('en')}>ENGLISH</button>
         <button className={`gp-lang-btn${lang === 'ms' ? ' gp-lang-btn--active' : ''}`} onClick={() => setLang('ms')}>BAHASA MELAYU</button>
       </div>
-
       <div className="gp-hero">
-        {effectiveSettings.logo_url ? (
-          <img className="gp-logo" src={effectiveSettings.logo_url} alt={event.name} style={{ width: `${logoSize}px`, height: `${logoSize}px` }} />
-        ) : (
-          <div className="gp-monogram" style={{ color: accent, width: `${logoSize}px`, height: `${logoSize}px`, fontSize: `${logoSize / 2}px` }}>{event.name.charAt(0)}</div>
-        )}
+        {effectiveSettings.logo_url ? <img className="gp-logo" src={effectiveSettings.logo_url} alt={event.name} style={{ width: `${logoSize}px`, height: `${logoSize}px` }} /> : <div className="gp-monogram" style={{ color: accent, width: `${logoSize}px`, height: `${logoSize}px`, fontSize: `${logoSize / 2}px` }}>{event.name.charAt(0)}</div>}
         <h1 className="gp-event-name" style={{ color: accent, fontFamily: headingFont }}>{event.name.toUpperCase()}</h1>
         {event.date && <p className="gp-event-date" style={{ color: accent }}>{formatDate(event.date)}</p>}
         {event.time && <p className="gp-event-time" style={{ color: accent }}>{formatTime(event.time)}</p>}
         {event.venue && <p className="gp-event-venue" style={{ color: accent }}>{event.venue.toUpperCase()}</p>}
       </div>
-
       <div className="gp-tabs-wrap">
         <div className="gp-tabs" style={{ borderColor: accent }}>
           <button className={`gp-tab${activeTab === 'find' ? ' gp-tab--active' : ''}`} style={activeTab === 'find' ? { background: accent, color: '#fff', borderColor: accent } : { color: accent, borderColor: 'transparent' }} onClick={() => setActiveTab('find')}>{t.tabFind}</button>
@@ -128,7 +85,6 @@ export function FindYourSeatPage() {
           <button className={`gp-tab${activeTab === 'venue' ? ' gp-tab--active' : ''}`} style={activeTab === 'venue' ? { background: accent, color: '#fff', borderColor: accent } : { color: accent, borderColor: 'transparent' }} onClick={() => setActiveTab('venue')}>{t.tabVenue}</button>
         </div>
       </div>
-
       <div className="gp-content">
         <div className={`gp-tab-panel${activeTab === 'find' ? ' gp-tab-panel--active' : ''}`}>
           <div className="gp-search-wrap">
@@ -139,16 +95,12 @@ export function FindYourSeatPage() {
           </div>
           {searched && (
             <div className="gp-results-wrap">
-              {results.length === 0 ? (
-                <div className="gp-no-result" style={{ color: accent }}>{t.noResult}</div>
-              ) : (
+              {results.length === 0 ? <div className="gp-no-result" style={{ color: accent }}>{t.noResult}</div> : (
                 <div className="gp-results-list" style={{ borderColor: accent }}>
                   {results.map((guest) => (
                     <div key={guest.id} className="gp-result-row" style={{ borderBottomColor: accent }}>
                       <span className="gp-result-name" style={{ color: accent }}>{guest.name.toUpperCase()}</span>
-                      <div className="gp-result-badges">
-                        {guest.table && <span className="gp-badge" style={{ borderColor: accent, color: accent }}>{`${t.tableLabel} ${guest.table.number}${guest.table.name !== String(guest.table.number) ? ` — ${guest.table.name}` : ''}`.toUpperCase()}</span>}
-                      </div>
+                      <div className="gp-result-badges">{guest.table && <span className="gp-badge" style={{ borderColor: accent, color: accent }}>{`${t.tableLabel} ${guest.table.number}${guest.table.name !== String(guest.table.number) ? ` — ${guest.table.name}` : ''}`.toUpperCase()}</span>}</div>
                     </div>
                   ))}
                 </div>
@@ -156,13 +108,10 @@ export function FindYourSeatPage() {
             </div>
           )}
         </div>
-
         <div className={`gp-tab-panel${activeTab === 'venue' ? ' gp-tab-panel--active' : ''}`}>
           {venueImageUrl ? (
             <div className="gp-venue-wrap">
-              <div className={`gp-venue-viewport${isDragging ? ' gp-venue-viewport--dragging' : ''}`} style={{ borderColor: accent }}
-                onWheel={handleWheel} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
-                onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+              <div className={`gp-venue-viewport${isDragging ? ' gp-venue-viewport--dragging' : ''}`} style={{ borderColor: accent }} onWheel={handleWheel} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
                 <img src={venueImageUrl} alt="Venue Layout" className="gp-venue-image" draggable={false} style={{ transform: `translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px)) scale(${zoom})` }} />
               </div>
               <div className="gp-venue-controls">
@@ -174,9 +123,7 @@ export function FindYourSeatPage() {
             </div>
           ) : (
             <div className="gp-venue-empty">
-              <div className="gp-venue-empty-icon" style={{ borderColor: accent, color: accent }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" width="40" height="40"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 21V9" /></svg>
-              </div>
+              <div className="gp-venue-empty-icon" style={{ borderColor: accent, color: accent }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" width="40" height="40"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 21V9" /></svg></div>
               <p style={{ color: accent }}>{t.venueNoImage}</p>
             </div>
           )}

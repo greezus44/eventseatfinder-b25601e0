@@ -1,27 +1,29 @@
-import { createContext, useCallback, useContext, useState } from 'react';
-import type { ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useState,
+  type ReactNode,
+} from 'react';
 
-type ToastType = 'success' | 'error' | 'info';
-
-interface ToastItem {
-  id: number;
+export interface Toast {
+  id: string;
   message: string;
-  type: ToastType;
+  type: 'success' | 'error' | 'info';
 }
 
 interface ToastContextValue {
-  toast: (message: string, type?: ToastType) => void;
+  toast: (message: string, type?: Toast['type']) => void;
+  toasts: Toast[];
 }
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
-let toastId = 0;
-
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const toast = useCallback((message: string, type: ToastType = 'info') => {
-    const id = ++toastId;
+  const toast = useCallback((message: string, type: Toast['type'] = 'info') => {
+    const id = Math.random().toString(36).slice(2);
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -29,22 +31,39 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <ToastContext.Provider value={{ toast }}>
+    <ToastContext.Provider value={{ toast, toasts }}>
       {children}
-      <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          zIndex: 9999,
+          pointerEvents: 'none',
+        }}
+      >
         {toasts.map((t) => (
           <div
             key={t.id}
             style={{
-              padding: '12px 20px',
-              borderRadius: 8,
-              background: t.type === 'error' ? '#1A1A1A' : t.type === 'success' ? '#4A4A4A' : '#1A1A1A',
+              background: '#1A1A1A',
               color: '#FFFFFF',
-              fontSize: 14,
-              fontFamily: 'Inter, sans-serif',
+              padding: '12px 20px',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontFamily:
+                'system-ui, -apple-system, sans-serif',
               boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              maxWidth: 360,
-              border: t.type === 'success' ? '1px solid #4A4A4A' : '1px solid #1A1A1A',
+              borderLeft:
+                t.type === 'success'
+                  ? '4px solid #FFFFFF'
+                  : t.type === 'error'
+                  ? '4px solid #DADADA'
+                  : '4px solid #4A4A4A',
+              maxWidth: '360px',
             }}
           >
             {t.message}

@@ -3,163 +3,280 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/providers/auth-provider';
 import { useToast } from '@/providers/toast-provider';
 
-const LOGIN_CSS = `
-.login-root { min-height: 100vh; background: #F8F8F8; font-family: 'Inter', sans-serif; display: flex; align-items: center; justify-content: center; padding: 24px; }
-.login-card { background: #FFFFFF; border: 1px solid #EFEFEF; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); padding: 40px; width: 100%; max-width: 400px; }
-.login-logo { display: flex; align-items: center; justify-content: center; margin-bottom: 24px; }
-.login-logo-mark { width: 56px; height: 56px; border-radius: 14px; background: #1A1A1A; display: flex; align-items: center; justify-content: center; }
-.login-logo-mark span { font-size: 28px; font-weight: 700; color: #FFFFFF; letter-spacing: -0.02em; }
-.login-brand { text-align: center; font-size: 20px; font-weight: 700; color: #1A1A1A; margin-bottom: 4px; letter-spacing: -0.01em; }
-.login-brand-sub { text-align: center; font-size: 13px; color: #B0B0B0; margin-bottom: 28px; }
-
-.login-toggle { display: flex; gap: 4px; background: #F8F8F8; border: 1px solid #EFEFEF; border-radius: 12px; padding: 4px; margin-bottom: 24px; }
-.login-toggle-btn { flex: 1; height: 40px; border: none; border-radius: 8px; background: transparent; font-size: 14px; font-weight: 500; color: #4A4A4A; cursor: pointer; transition: all 200ms ease; }
-.login-toggle-btn--active { background: #FFFFFF; color: #1A1A1A; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-
-.login-field { margin-bottom: 16px; }
-.login-label { display: block; font-size: 13px; font-weight: 600; color: #4A4A4A; margin-bottom: 6px; }
-.login-input { width: 100%; height: 44px; padding: 10px 14px; border: 1px solid #DADADA; border-radius: 12px; background: #FFFFFF; font-size: 14px; color: #1A1A1A; outline: none; transition: border-color 200ms ease, box-shadow 200ms ease; box-sizing: border-box; }
-.login-input:focus { border-color: #1A1A1A; box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
-.login-input::placeholder { color: #B0B0B0; }
-
-.login-submit { width: 100%; height: 44px; border: none; border-radius: 12px; background: #1A1A1A; color: #FFFFFF; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 200ms ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; }
-.login-submit:hover { background: #333333; }
-.login-submit:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.login-error { background: #FDF2F1; border: 1px solid #E5A29B; border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #C0392B; margin-bottom: 16px; }
-
-.login-spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #FFFFFF; border-radius: 50%; animation: login-spin 0.6s linear infinite; display: inline-block; }
-@keyframes login-spin { to { transform: rotate(360deg); } }
-
-.login-hint { text-align: center; font-size: 12px; color: #B0B0B0; margin-top: 20px; line-height: 1.6; }
-`;
-
 export function LoginPage() {
   const navigate = useNavigate();
-  const { signIn, signUp } = useAuth();
+  const auth = useAuth();
   const toast = useToast();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
 
-    if (!email.trim()) {
-      setError('Please enter your email.');
-      return;
-    }
-    if (!password.trim()) {
-      setError('Please enter your password.');
-      return;
-    }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    if (!email.trim() || !password) {
+      toast('Please enter your email and password', 'error');
       return;
     }
 
-    setLoading(true);
+    setSubmitting(true);
     try {
-      if (mode === 'signin') {
-        const { error: signInError } = await signIn(email.trim(), password);
-        if (signInError) {
-          setError(signInError);
-          return;
-        }
-        toast('Welcome back!', 'success');
-        navigate('/');
+      const result =
+        mode === 'signin'
+          ? await auth.signIn(email.trim(), password)
+          : await auth.signUp(email.trim(), password);
+
+      if (result.error) {
+        toast(result.error, 'error');
       } else {
-        const { error: signUpError } = await signUp(email.trim(), password);
-        if (signUpError) {
-          setError(signUpError);
-          return;
+        if (mode === 'signup') {
+          toast('Account created! Please sign in.', 'success');
+          setMode('signin');
+          setPassword('');
+        } else {
+          toast('Welcome back!', 'success');
+          navigate('/');
         }
-        toast('Account created. Please check your email to confirm.', 'success');
-        setMode('signin');
       }
     } catch {
-      setError('An unexpected error occurred. Please try again.');
+      toast('Something went wrong. Please try again.', 'error');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="login-root">
-      <style>{LOGIN_CSS}</style>
-      <div className="login-card">
-        <div className="login-logo">
-          <div className="login-logo-mark">
-            <span>S</span>
+    <>
+      <style>{`
+        .login-page {
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #F8F8F8;
+          padding: 24px;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+          color: #1A1A1A;
+        }
+        .login-card {
+          background: #FFFFFF;
+          border: 1px solid #EFEFEF;
+          border-radius: 20px;
+          padding: 48px 40px;
+          width: 100%;
+          max-width: 400px;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.04);
+        }
+        .login-logo {
+          width: 64px;
+          height: 64px;
+          margin: 0 auto 24px;
+          background: #1A1A1A;
+          border-radius: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .login-logo-text {
+          font-size: 32px;
+          font-weight: 800;
+          color: #FFFFFF;
+          letter-spacing: -2px;
+          line-height: 1;
+        }
+        .login-title {
+          font-size: 24px;
+          font-weight: 700;
+          text-align: center;
+          margin: 0 0 4px 0;
+          letter-spacing: -0.5px;
+        }
+        .login-subtitle {
+          font-size: 14px;
+          color: #4A4A4A;
+          text-align: center;
+          margin: 0 0 32px 0;
+        }
+        .login-toggle {
+          display: flex;
+          background: #F8F8F8;
+          border-radius: 12px;
+          padding: 4px;
+          margin-bottom: 24px;
+        }
+        .login-toggle-btn {
+          flex: 1;
+          padding: 10px;
+          border: none;
+          background: transparent;
+          color: #4A4A4A;
+          font-size: 13px;
+          font-weight: 600;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .login-toggle-btn.active {
+          background: #FFFFFF;
+          color: #1A1A1A;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .login-form {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        .login-field {
+          display: flex;
+          flex-direction: column;
+        }
+        .login-label {
+          font-size: 13px;
+          font-weight: 600;
+          color: #1A1A1A;
+          margin-bottom: 6px;
+        }
+        .login-input {
+          width: 100%;
+          height: 44px;
+          padding: 10px 14px;
+          border: 1px solid #DADADA;
+          border-radius: 12px;
+          background: #FFFFFF;
+          font-size: 14px;
+          color: #1A1A1A;
+          outline: none;
+          transition: border-color 0.15s, box-shadow 0.15s;
+          box-sizing: border-box;
+          font-family: inherit;
+        }
+        .login-input:focus {
+          border-color: #1A1A1A;
+          box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
+        }
+        .login-input::placeholder {
+          color: #DADADA;
+        }
+        .login-submit {
+          width: 100%;
+          height: 44px;
+          background: #1A1A1A;
+          color: #FFFFFF;
+          border: none;
+          border-radius: 12px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: opacity 0.15s;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          margin-top: 8px;
+        }
+        .login-submit:hover {
+          opacity: 0.85;
+        }
+        .login-submit:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .login-spinner {
+          display: inline-block;
+          width: 16px;
+          height: 16px;
+          border: 2px solid rgba(255,255,255,0.3);
+          border-top-color: #FFFFFF;
+          border-radius: 50%;
+          animation: login-spin 0.6s linear infinite;
+        }
+        @keyframes login-spin {
+          to { transform: rotate(360deg); }
+        }
+        .login-footer {
+          text-align: center;
+          margin-top: 24px;
+          font-size: 12px;
+          color: #DADADA;
+        }
+      `}</style>
+
+      <div className="login-page">
+        <div className="login-card">
+          <div className="login-logo">
+            <span className="login-logo-text">S</span>
           </div>
-        </div>
-        <div className="login-brand">Seatly</div>
-        <div className="login-brand-sub">Event seating, simplified.</div>
+          <h1 className="login-title">Seatly</h1>
+          <p className="login-subtitle">
+            {mode === 'signin' ? 'Sign in to your account' : 'Create your account'}
+          </p>
 
-        <div className="login-toggle">
-          <button
-            className={`login-toggle-btn${mode === 'signin' ? ' login-toggle-btn--active' : ''}`}
-            onClick={() => { setMode('signin'); setError(null); }}
-          >
-            Sign In
-          </button>
-          <button
-            className={`login-toggle-btn${mode === 'signup' ? ' login-toggle-btn--active' : ''}`}
-            onClick={() => { setMode('signup'); setError(null); }}
-          >
-            Sign Up
-          </button>
-        </div>
-
-        {error && <div className="login-error">{error}</div>}
-
-        <form onSubmit={handleSubmit}>
-          <div className="login-field">
-            <label className="login-label" htmlFor="login-email">Email</label>
-            <input
-              id="login-email"
-              className="login-input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              autoComplete="email"
-            />
+          <div className="login-toggle">
+            <button
+              className={`login-toggle-btn ${mode === 'signin' ? 'active' : ''}`}
+              onClick={() => setMode('signin')}
+              type="button"
+            >
+              Sign In
+            </button>
+            <button
+              className={`login-toggle-btn ${mode === 'signup' ? 'active' : ''}`}
+              onClick={() => setMode('signup')}
+              type="button"
+            >
+              Sign Up
+            </button>
           </div>
-          <div className="login-field">
-            <label className="login-label" htmlFor="login-password">Password</label>
-            <input
-              id="login-password"
-              className="login-input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-            />
-          </div>
-          <button className="login-submit" type="submit" disabled={loading}>
-            {loading ? (
-              <>
-                <span className="login-spinner" />
-                {mode === 'signin' ? 'Signing in...' : 'Creating account...'}
-              </>
-            ) : (
-              mode === 'signin' ? 'Sign In' : 'Create Account'
-            )}
-          </button>
-        </form>
 
-        <div className="login-hint">
-          {mode === 'signin'
-            ? 'Don\'t have an account? Click Sign Up above.'
-            : 'Already have an account? Click Sign In above.'}
+          <form className="login-form" onSubmit={handleSubmit}>
+            <div className="login-field">
+              <label className="login-label">Email</label>
+              <input
+                className="login-input"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                autoFocus
+              />
+            </div>
+            <div className="login-field">
+              <label className="login-label">Password</label>
+              <input
+                className="login-input"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+              />
+            </div>
+            <button
+              className="login-submit"
+              type="submit"
+              disabled={submitting}
+            >
+              {submitting ? (
+                <>
+                  <span className="login-spinner" />
+                  {mode === 'signin' ? 'Signing in...' : 'Creating account...'}
+                </>
+              ) : (
+                mode === 'signin' ? 'Sign In' : 'Create Account'
+              )}
+            </button>
+          </form>
+
+          <p className="login-footer">
+            {mode === 'signin'
+              ? 'Don\'t have an account? Click Sign Up above.'
+              : 'Already have an account? Click Sign In above.'}
+          </p>
         </div>
       </div>
-    </div>
+    </>
   );
 }
