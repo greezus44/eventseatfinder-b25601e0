@@ -27,7 +27,6 @@ export function InvitationPage() {
   const [loadingGuests, setLoadingGuests] = useState(false)
   const [guestsData, setGuestsData] = useState<GuestWithTable[]>([])
 
-  // Venue layout zoom/pan
   const [zoom, setZoom] = useState(1)
   const [panX, setPanX] = useState(0)
   const [panY, setPanY] = useState(0)
@@ -45,74 +44,45 @@ export function InvitationPage() {
 
   useEffect(() => { loadGoogleFonts([titleFont, subtitleFont, datetimeFont, venueFont, welcomeFont]) }, [titleFont, subtitleFont, datetimeFont, venueFont, welcomeFont])
 
-  // Fetch all guests for this event once (when settings load and we have event_id)
   useEffect(() => {
     if (!data?.event_id) return
     let cancelled = false
     setLoadingGuests(true)
-    supabase
-      .from('guests')
-      .select('id, name, table_id, tables(name, number)')
-      .eq('event_id', data.event_id)
-      .order('name', { ascending: true })
-      .then(({ data: guests, error }) => {
-        if (cancelled) return
-        if (error) { console.error('Failed to load guests:', error); setGuestsData([]) }
-        else setGuestsData((guests ?? []) as unknown as GuestWithTable[])
-        setLoadingGuests(false)
-      })
+    supabase.from('guests').select('id, name, table_id, tables(name, number)').eq('event_id', data.event_id).order('name', { ascending: true }).then(({ data: guests, error }) => {
+      if (cancelled) return
+      if (error) { console.error('Failed to load guests:', error); setGuestsData([]) }
+      else setGuestsData((guests ?? []) as unknown as GuestWithTable[])
+      setLoadingGuests(false)
+    })
     return () => { cancelled = true }
   }, [data?.event_id])
 
-  // Debounced live suggestions
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const updateSuggestions = useCallback((query: string) => {
     if (!query.trim()) { setSuggestions([]); return }
-    const results = searchGuests(guestsData, query, 10)
-    setSuggestions(results)
+    setSuggestions(searchGuests(guestsData, query, 10))
   }, [guestsData])
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
-    setSearch(value)
-    setSelectedResult(null)
-    setSearched(false)
-    setShowSuggestions(true)
-
+    setSearch(value); setSelectedResult(null); setSearched(false); setShowSuggestions(true)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => updateSuggestions(value), 200)
   }
 
   const handleSearchSubmit = () => {
     if (!search.trim()) return
-    setShowSuggestions(false)
-    setSearched(true)
+    setShowSuggestions(false); setSearched(true)
     const results = searchGuests(guestsData, search, 10)
-    if (results.length > 0) setSelectedResult(results[0])
-    else setSelectedResult(null)
+    setSelectedResult(results.length > 0 ? results[0] : null)
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') { e.preventDefault(); handleSearchSubmit() }
-  }
+  const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); handleSearchSubmit() } }
+  const handleSuggestionClick = (result: GuestSearchResult) => { setSearch(result.name); setSelectedResult(result); setShowSuggestions(false); setSearched(true) }
+  const handleBlur = () => { setTimeout(() => setShowSuggestions(false), 150) }
+  const handleFocus = () => { if (search.trim()) { setShowSuggestions(true); updateSuggestions(search) } }
 
-  const handleSuggestionClick = (result: GuestSearchResult) => {
-    setSearch(result.name)
-    setSelectedResult(result)
-    setShowSuggestions(false)
-    setSearched(true)
-  }
-
-  const handleBlur = () => {
-    setTimeout(() => setShowSuggestions(false), 150)
-  }
-
-  const handleFocus = () => {
-    if (search.trim()) { setShowSuggestions(true); updateSuggestions(search) }
-  }
-
-  // Zoom/pan
   const handleZoomIn = () => setZoom((z) => Math.min(z + 0.25, 4))
   const handleZoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.5))
   const handleZoomReset = () => { setZoom(1); setPanX(0); setPanY(0) }
@@ -137,48 +107,48 @@ export function InvitationPage() {
   return (
     <div className="gp-page" style={{ background: bg, color: text }}>
       <div className="gp-container">
-        {/* 1. Event Logo */}
         {settings.logo_url && (
           <div className="gp-logo-wrapper">
             <img src={settings.logo_url} alt="Event logo" className="gp-logo" style={{ width: `${Math.min(logoSize, 500)}px`, height: 'auto', borderRadius: logoRounded ? '50%' : '0' }} />
           </div>
         )}
-        {/* 2. Event Title */}
         <h1 className="gp-title" style={{ fontFamily: getFontCss(titleFont), fontSize: `${settings.font_title_size ?? 32}px`, color: settings.font_title_color ?? text }}>{event.name}</h1>
-        {/* 3. Event Subtitle */}
         {settings.event_subtitle && <p className="gp-subtitle" style={{ fontFamily: getFontCss(subtitleFont), fontSize: `${settings.font_subtitle_size ?? 16}px`, color: settings.font_subtitle_color ?? text }}>{settings.event_subtitle}</p>}
-        {/* 4. Event Date & Time */}
         {event.date && <p className="gp-datetime" style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${settings.font_datetime_size ?? 14}px`, color: settings.font_datetime_color ?? text }}>{formatDate()}</p>}
         {event.time && <p className="gp-datetime" style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${settings.font_datetime_size ?? 14}px`, color: settings.font_datetime_color ?? text }}>{formatTime12(event.time)}</p>}
-        {/* 5. Venue */}
         {event.venue && <p className="gp-venue" style={{ fontFamily: getFontCss(venueFont), fontSize: `${settings.font_venue_size ?? 14}px`, color: settings.font_venue_color ?? text }}>{event.venue}</p>}
-        {/* 6. Find Seat / Venue Layout tabs */}
-        <div className="gp-tabs">
-          <button className={`gp-tab ${activeTab === 'find' ? 'active' : ''}`} onClick={() => setActiveTab('find')} style={activeTab === 'find' ? { background: primary, color: '#fff', borderColor: primary } : { borderColor: primary, color: text }}>Find Seat</button>
-          <button className={`gp-tab ${activeTab === 'layout' ? 'active' : ''}`} onClick={() => setActiveTab('layout')} style={activeTab === 'layout' ? { background: primary, color: '#fff', borderColor: primary } : { borderColor: primary, color: text }}>Venue Layout</button>
+
+        {/* Segmented control — one connected component, equal widths, rounded outer corners */}
+        <div className="gp-segmented" style={{ borderRadius: radius, border: `1px solid ${primary}` }}>
+          <button
+            className={`gp-segment ${activeTab === 'find' ? 'active' : ''}`}
+            onClick={() => setActiveTab('find')}
+            style={activeTab === 'find'
+              ? { background: primary, color: '#fff' }
+              : { background: bg, color: primary }
+            }
+          >
+            Find Seat
+          </button>
+          <button
+            className={`gp-segment ${activeTab === 'layout' ? 'active' : ''}`}
+            onClick={() => setActiveTab('layout')}
+            style={activeTab === 'layout'
+              ? { background: primary, color: '#fff' }
+              : { background: bg, color: primary }
+            }
+          >
+            Venue Layout
+          </button>
         </div>
 
-        {/* 7. Search Your Name + 8. Search Results */}
         {activeTab === 'find' && (
           <div className="gp-find-seat">
             <div className="gp-search-wrapper">
               <div className="gp-search-box">
-                <input
-                  type="text"
-                  className="gp-search-input"
-                  placeholder="Search your name…"
-                  value={search}
-                  onChange={handleSearchChange}
-                  onKeyDown={handleKeyDown}
-                  onFocus={handleFocus}
-                  onBlur={handleBlur}
-                  autoFocus
-                  autoComplete="off"
-                  style={{ background: bg, borderColor: primary, color: text, borderRadius: radius }}
-                />
+                <input type="text" className="gp-search-input" placeholder="Search your name…" value={search} onChange={handleSearchChange} onKeyDown={handleKeyDown} onFocus={handleFocus} onBlur={handleBlur} autoFocus autoComplete="off" style={{ background: bg, borderColor: primary, color: text, borderRadius: radius }} />
                 <button className="gp-search-btn" onClick={handleSearchSubmit} style={{ background: primary, color: '#fff', borderRadius: radius }}>Search</button>
               </div>
-              {/* Live suggestions dropdown */}
               {showSuggestions && suggestions.length > 0 && (
                 <div className="gp-suggestions" style={{ background: bg, borderColor: primary, borderRadius: radius }}>
                   {suggestions.map((s) => (
@@ -190,8 +160,6 @@ export function InvitationPage() {
                 </div>
               )}
             </div>
-
-            {/* Search Results */}
             {searched && (
               <div className="gp-results">
                 {loadingGuests ? (
@@ -202,15 +170,11 @@ export function InvitationPage() {
                       <p className="gp-result-name" style={{ color: text }}>{selectedResult.name}</p>
                     </div>
                     <div className="gp-result-right">
-                      <span className="gp-result-badge" style={{ background: primary, color: '#fff', borderRadius: radius }}>
-                        {selectedResult.table_name}
-                      </span>
+                      <span className="gp-result-badge" style={{ background: primary, color: '#fff', borderRadius: radius }}>{selectedResult.table_name}</span>
                     </div>
                   </div>
                 ) : (
-                  <div className="gp-no-results" style={{ color: text }}>
-                    <p>No matching guest found. Please check the spelling of your name.</p>
-                  </div>
+                  <div className="gp-no-results" style={{ color: text }}><p>No matching guest found. Please check the spelling of your name.</p></div>
                 )}
               </div>
             )}
