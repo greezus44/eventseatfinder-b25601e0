@@ -1,6 +1,8 @@
+// Font helpers for the guest page designer.
+
 export interface FontOption {
-  name: string;
-  cssName: string;
+  name: string
+  cssName: string
 }
 
 export const FONTS: FontOption[] = [
@@ -18,56 +20,58 @@ export const FONTS: FontOption[] = [
   { name: 'DM Serif Display', cssName: 'DM Serif Display' },
 ]
 
-export function getFontCss(name: string | null | undefined): string {
-  if (!name) return 'Inter, sans-serif'
+/**
+ * Returns a CSS `font-family` value for a font name, falling back to Inter
+ * (and a generic sans-serif) when the font is unknown or empty.
+ */
+export function getFontCss(name: string): string {
   const font = FONTS.find((f) => f.name === name)
-  if (!font) return `${name}, sans-serif`
-  const fallback = font.cssName.toLowerCase().includes('serif') ? 'serif' : 'sans-serif'
-  return `'${font.cssName}', ${fallback}`
+  const cssName = font?.cssName ?? 'Inter'
+  return `'${cssName}', sans-serif`
 }
 
+/**
+ * Injects <link> tags for the requested Google Fonts, de-duplicating against
+ * already-loaded links so repeated calls are cheap and idempotent.
+ */
 export function loadGoogleFonts(fontNames: string[]): void {
-  const unique = Array.from(new Set(fontNames.filter(Boolean)))
-  if (unique.length === 0) return
+  const wanted = Array.from(new Set(fontNames.filter(Boolean)))
+  if (wanted.length === 0) return
 
-  const families = unique
-    .map((name) => {
-      const encoded = name.trim().replace(/ /g, '+')
-      return `family=${encoded}:wght@300;400;500;600;700;800`
-    })
-    .join('&')
+  const head = document.head
+  const existing = new Set<string>()
+  head.querySelectorAll<HTMLLinkElement>('link[data-google-font]').forEach((link) => {
+    const family = link.getAttribute('data-google-font')
+    if (family) existing.add(family)
+  })
 
-  const href = `https://fonts.googleapis.com/css2?${families}&display=swap`
-
-  // Avoid duplicates
-  const existing = document.querySelector(`link[href="${href}"]`)
-  if (existing) return
-
-  const link = document.createElement('link')
-  link.rel = 'stylesheet'
-  link.href = href
-  document.head.appendChild(link)
+  for (const name of wanted) {
+    if (existing.has(name)) continue
+    const cssName = FONTS.find((f) => f.name === name)?.cssName ?? name
+    const href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(
+      cssName,
+    ).replace(/%20/g, '+')}:wght@400;500;600;700&display=swap`
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = href
+    link.setAttribute('data-google-font', name)
+    head.appendChild(link)
+    existing.add(name)
+  }
 }
 
+/**
+ * Converts a 24-hour "HH:MM" time string to a 12-hour "h:mm AM/PM" label.
+ * Returns an empty string for null/undefined/blank input.
+ */
 export function formatTime12(time: string | null | undefined): string {
   if (!time) return ''
-  const match = time.match(/^(\d{2}):(\d{2})/)
-  if (!match) return time
-  let hours = parseInt(match[1], 10)
-  const minutes = match[2]
-  const period = hours >= 12 ? 'PM' : 'AM'
-  hours = hours % 12
-  if (hours === 0) hours = 12
-  return `${hours}:${minutes} ${period}`
-}
-
-export function timeTo24(time12: string): string {
-  const match = time12.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
-  if (!match) return time12
-  let hours = parseInt(match[1], 10)
-  const minutes = match[2]
-  const period = match[3].toUpperCase()
-  if (period === 'PM' && hours !== 12) hours += 12
-  if (period === 'AM' && hours === 12) hours = 0
-  return `${String(hours).padStart(2, '0')}:${minutes}`
+  const match = /^(\d{2}):(\d{2})/.exec(time)
+  if (!match) return ''
+  let hour = parseInt(match[1], 10)
+  const minute = match[2]
+  const period = hour >= 12 ? 'PM' : 'AM'
+  hour = hour % 12
+  if (hour === 0) hour = 12
+  return `${hour}:${minute} ${period}`
 }

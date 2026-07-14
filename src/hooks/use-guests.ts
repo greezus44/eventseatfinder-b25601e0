@@ -2,70 +2,95 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Guest, GuestInput } from '@/types'
 
-export function useGuests(eventId: string) {
-  return useQuery({
-    queryKey: ['guests', eventId],
+const GUESTS_KEY = 'guests'
+
+export function useGuests(eventId: string | undefined) {
+  return useQuery<Guest[]>({
+    queryKey: [GUESTS_KEY, eventId],
+    enabled: !!eventId,
     queryFn: async () => {
-      const { data, error } = await supabase.from('guests').select('*').eq('event_id', eventId).order('created_at', { ascending: true })
+      const { data, error } = await supabase
+        .from('guests')
+        .select('*')
+        .eq('event_id', eventId!)
+        .order('created_at', { ascending: true })
       if (error) throw error
       return data as Guest[]
     },
-    enabled: !!eventId,
   })
 }
 
 export function useCreateGuest() {
-  const qc = useQueryClient()
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: GuestInput) => {
-      const { data, error } = await supabase.from('guests').insert(input).select().single()
+      const { data, error } = await supabase
+        .from('guests')
+        .insert(input)
+        .select()
+        .single()
       if (error) throw error
       return data as Guest
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['guests'] }),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: [GUESTS_KEY, created.event_id] })
+    },
   })
 }
 
 export function useUpdateGuest() {
-  const qc = useQueryClient()
+  const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, eventId, ...input }: { id: string; eventId?: string } & GuestInput) => {
-      const { data, error } = await supabase.from('guests').update(input).eq('id', id).select().single()
+    mutationFn: async ({ id, ...input }: { id: string } & GuestInput) => {
+      const { data, error } = await supabase
+        .from('guests')
+        .update(input)
+        .eq('id', id)
+        .select()
+        .single()
       if (error) throw error
       return data as Guest
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['guests'] }),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: [GUESTS_KEY, updated.event_id] })
+    },
   })
 }
 
 export function useDeleteGuest() {
-  const qc = useQueryClient()
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('guests').delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['guests'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [GUESTS_KEY] })
+    },
   })
 }
 
 export function useBulkCreateGuests() {
-  const qc = useQueryClient()
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ event_id, guests }: { event_id: string; guests: GuestInput[] }) => {
-      console.log(`[BulkCreate] Starting insert of ${guests.length} guests for event ${event_id}`)
-      const batchSize = 500
-      let inserted = 0
-      for (let i = 0; i < guests.length; i += batchSize) {
-        const batch = guests.slice(i, i + batchSize)
-        const { error } = await supabase.from('guests').insert(batch)
-        if (error) { console.error(`[BulkCreate] Error at batch ${Math.floor(i / batchSize) + 1}:`, error); throw error }
-        inserted += batch.length
-        console.log(`[BulkCreate] Inserted ${inserted}/${guests.length}`)
+      const BATCH_SIZE = 500
+      const rows = guests.map((g) => ({
+        event_id,
+        name: g.name,
+        table_id: g.table_id ?? null,
+      }))
+      const inserted: Guest[] = []
+      for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+        const batch = rows.slice(i, i + BATCH_SIZE)
+        const { data, error } = await supabase.from('guests').insert(batch).select()
+        if (error) throw error
+        if (data) inserted.push(...(data as Guest[]))
       }
-      console.log(`[BulkCreate] Complete: ${inserted} guests inserted`)
       return inserted
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['guests'] }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: [GUESTS_KEY, variables.event_id] })
+    },
   })
 }

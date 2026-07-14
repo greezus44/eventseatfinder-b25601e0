@@ -1,3 +1,5 @@
+// Guest list import: parse CSV / XLSX / PDF into { name, tableName } rows.
+
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 
@@ -19,75 +21,60 @@ export class ImportError extends Error {
   }
 }
 
+/**
+ * Maps an arbitrary thrown value to a short, human-readable error code.
+ */
 export function classifyError(error: unknown): string {
-  if (error instanceof ImportError) return error.message
-  if (error instanceof Error) {
-    const msg = error.message.toLowerCase()
-    if (msg.includes('network') || msg.includes('fetch')) return 'Network error. Check your connection and try again.'
-    if (msg.includes('permission') || msg.includes('rls') || msg.includes('policy')) return 'Permission denied. You may not have access to this event.'
-    if (msg.includes('duplicate')) return 'Some guests already exist in this event.'
-    if (msg.includes('parse') || msg.includes('invalid')) return 'Could not parse the file. Check the format and try again.'
-    return error.message
-  }
-  return 'An unexpected error occurred. Please try again.'
+  if (error instanceof ImportError) return 'import'
+  if (error instanceof DOMException && error.name === 'NotFoundError') return 'not_found'
+  if (error instanceof TypeError) return 'type'
+  if (error instanceof RangeError) return 'range'
+  if (error instanceof SyntaxError) return 'syntax'
+  if (error instanceof Error) return 'unknown'
+  if (typeof error === 'string') return 'string'
+  return 'unknown'
 }
 
-function extractGuestsFromRows(rows: Record<string, string>[]): ParsedGuest[] {
-  const guests: ParsedGuest[] = []
-  for (const row of rows) {
-    const keys = Object.keys(row).map((k) => k.toLowerCase().trim())
-    const nameKey = keys.find((k) => k === 'name' || k === 'guest' || k === 'guest name' || k.includes('name'))
-    const tableKey = keys.find((k) => k === 'table' || k === 'table name' || k.includes('table'))
-    const originalKeys = Object.keys(row)
-    const name = nameKey ? (row[originalKeys.find((k) => k.toLowerCase().trim() === nameKey)!] ?? '') : ''
-    const tableName = tableKey ? (row[originalKeys.find((k) => k.toLowerCase().trim() === tableKey)!] ?? '') : ''
-    if (name && name.trim()) {
-      guests.push({ name: name.trim(), tableName: tableName.trim() })
-    }
-  }
-  return guests
+function normalizeCell(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  return String(value).trim()
 }
 
-function extractNamesFromText(text: string): ParsedGuest[] {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0)
-  const guests: ParsedGuest[] = []
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    const separators = ['\t', ',', ' - ', ' | ', ';']
-    let parsed = false
-    for (const sep of separators) {
-      if (trimmed.includes(sep)) {
-        const parts = trimmed.split(sep).map((p) => p.trim()).filter(Boolean)
-        if (parts.length >= 2) {
-          const name = parts[0]
-          const tablePart = parts.slice(1).join(' ')
-          if (name.length > 0 && name.length < 200) {
-            guests.push({ name, tableName: tablePart })
-            parsed = true
-            break
-          }
-        }
-      }
-    }
-    if (!parsed && trimmed.length > 0 && trimmed.length < 200) {
-      guests.push({ name: trimmed, tableName: '' })
-    }
+/**
+ * Parses a guest list file. CSV via PapaParse (header:true), XLSX/XLS via
+ * SheetJS, and PDF via a basic latin1 text extraction that scans for BT/ET
+ * text blocks. Returns the parsed guests plus the detected format.
+ */
+export async function parseFile(file: File): Promise<ImportResult> {
+  const lowerName = file.name.toLowerCase()
+  const isCsv = lowerName.endsWith('.csv') || file.type === 'text/csv'
+  const isXlsx = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')
+
+  if (isCsv) {
+    return parseCsv(file)
   }
-  return guests
+  if (isXlsx) {
+    return parseXlsx(file)
+  }
+  if (lowerName.endsWith('.pdf') || file.type === 'application/pdf') {
+    return parsePdf(file)
+  }
+  throw new ImportError(`Unsupported file type: ${file.name}`)
 }
 
-async function parseCsv(file: File): Promise<ImportResult> {
+function parseCsv(file: File): Promise<ImportResult> {
   return new Promise((resolve, reject) => {
-    Papa.parse(file, {
+    Papa.parse<Record<string, unknown>>(file, {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        const rows = results.data as Record<string, string>[]
-        if (rows.length === 0) { reject(new ImportError('No guests found in the CSV file.')); return }
-        const guests = extractGuestsFromRows(rows)
-        if (guests.length === 0) { reject(new ImportError('No valid guest data found. Ensure columns include name and table.')); return }
-        resolve({ guests, totalFound: guests.length, format: 'CSV' })
+        const guests: ParsedGuest[] = []
+        for (const row of results.data) {
+          const name = pickField(row, ['name', 'guest', 'guest name', 'fullname', 'full name'])
+          const tableName = pickField(row, ['table', 'table name', 'tablename'])
+          if (name) guests.push({ name, tableName: tableName || '' })
+        }
+        resolve({ guests, totalFound: guests.length, format: 'csv' })
       },
       error: (err) => reject(new ImportError(err.message)),
     })
@@ -95,117 +82,78 @@ async function parseCsv(file: File): Promise<ImportResult> {
 }
 
 async function parseXlsx(file: File): Promise<ImportResult> {
-  try {
-    const buffer = await file.arrayBuffer()
-    const workbook = XLSX.read(buffer, { type: 'array' })
-    const sheetName = workbook.SheetNames[0]
-    if (!sheetName) throw new ImportError('The spreadsheet has no sheets.')
-    const sheet = workbook.Sheets[sheetName]
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
-    if (rows.length === 0) throw new ImportError('No guests found in the spreadsheet.')
-    const normalized = rows.map((r) => {
-      const obj: Record<string, string> = {}
-      for (const k of Object.keys(r)) obj[k] = String(r[k] ?? '')
-      return obj
-    })
-    const guests = extractGuestsFromRows(normalized)
-    if (guests.length === 0) throw new ImportError('No valid guest data found. Ensure columns include name and table.')
-    return { guests, totalFound: guests.length, format: 'XLSX' }
-  } catch (e) {
-    if (e instanceof ImportError) throw e
-    throw new ImportError('Could not read the Excel file. Make sure it is a valid .xlsx or .xls file.')
+  const buffer = await file.arrayBuffer()
+  const workbook = XLSX.read(buffer, { type: 'array' })
+  const sheet = workbook.Sheets[workbook.SheetNames[0]]
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
+  const guests: ParsedGuest[] = []
+  for (const row of rows) {
+    const name = pickField(row, ['name', 'guest', 'guest name', 'fullname', 'full name'])
+    const tableName = pickField(row, ['table', 'table name', 'tablename'])
+    if (name) guests.push({ name, tableName: tableName || '' })
   }
+  return { guests, totalFound: guests.length, format: 'xlsx' }
 }
 
 async function parsePdf(file: File): Promise<ImportResult> {
-  try {
-    const buf = await file.arrayBuffer()
-    const bytes = new Uint8Array(buf)
-    const decoder = new TextDecoder('latin1')
-    const raw = decoder.decode(bytes)
+  const buffer = await file.arrayBuffer()
+  const bytes = new Uint8Array(buffer)
+  let raw = ''
+  for (let i = 0; i < bytes.length; i++) raw += String.fromCharCode(bytes[i])
+  // latin1 decode preserves byte values for the regex scan below.
+  const text = decodeLatin1(raw)
 
-    const regex = /\(([^)]*)\)\s*Tj/g
-    let match: RegExpExecArray | null
-    const lines: string[] = []
-    let currentLine = ''
-
-    while ((match = regex.exec(raw)) !== null) {
-      const fragment = match[1]
-      if (fragment.includes(')') && !fragment.startsWith('\\')) {
-        currentLine += fragment
-        lines.push(currentLine)
-        currentLine = ''
-      } else {
-        currentLine += fragment + ' '
-      }
+  const guests: ParsedGuest[] = []
+  const blockRegex = /BT([\s\S]*?)ET/g
+  let match: RegExpExecArray | null
+  while ((match = blockRegex.exec(text)) !== null) {
+    const block = match[1]
+    const textParts: string[] = []
+    const textRegex = /\(([^)]*)\)\s*Tj/g
+    let tm: RegExpExecArray | null
+    while ((tm = textRegex.exec(block)) !== null) {
+      textParts.push(tm[1])
     }
-    if (currentLine) lines.push(currentLine)
-
-    let text = lines.join('\n')
-
-    if (!text.trim()) {
-      const simpleRegex = /\(([^)]+)\)/g
-      const allText: string[] = []
-      while ((match = simpleRegex.exec(raw)) !== null) {
-        const t = match[1]
-        if (t.length > 1 && !/^[0-9]+$/.test(t) && !t.startsWith('/')) {
-          allText.push(t)
-        }
-      }
-      text = allText.join('\n')
-    }
-
-    if (!text.trim()) {
-      throw new ImportError('Could not extract text from PDF. Try converting to CSV or Excel.')
-    }
-
-    const guests = extractNamesFromText(text)
-    if (guests.length === 0) {
-      throw new ImportError('No guest names found in the PDF.')
-    }
-
-    return { guests, totalFound: guests.length, format: 'PDF' }
-  } catch (e) {
-    if (e instanceof ImportError) throw e
-    throw new ImportError('Could not read the PDF file. Try converting to CSV or Excel for better results.')
+    const line = textParts.join('').trim()
+    if (!line) continue
+    const [name, tableName = ''] = line.split(/[\t,;]/).map((s) => s.trim())
+    if (name) guests.push({ name, tableName })
   }
+  return { guests, totalFound: guests.length, format: 'pdf' }
 }
 
-export async function parseFile(file: File): Promise<ImportResult> {
-  const name = file.name.toLowerCase()
-  if (name.endsWith('.csv')) return parseCsv(file)
-  if (name.endsWith('.xlsx') || name.endsWith('.xls')) return parseXlsx(file)
-  if (name.endsWith('.pdf')) return parsePdf(file)
-  return parseCsv(file)
+function decodeLatin1(raw: string): string {
+  // raw was built with fromCharCode on each byte, so it already represents
+  // latin1 code points; this is a no-op pass that keeps the string intact.
+  return raw
 }
 
+function pickField(row: Record<string, unknown>, keys: string[]): string {
+  const lowerRow: Record<string, unknown> = {}
+  for (const key of Object.keys(row)) lowerRow[key.toLowerCase()] = row[key]
+  for (const key of keys) {
+    const value = lowerRow[key.toLowerCase()]
+    if (value !== undefined && value !== null) {
+      const normalized = normalizeCell(value)
+      if (normalized) return normalized
+    }
+  }
+  return ''
+}
+
+/**
+ * Finds a table id whose name matches the given tableName (case-insensitive,
+ * trimmed). Returns the matching table's id, or null when no match is found.
+ */
 export function matchTableByName(
   tableName: string,
-  tables: { id: string; name: string; number: number }[]
+  tables: { id: string; name: string; number: number }[],
 ): string | null {
-  if (!tableName || !tableName.trim()) return null
-  const normalized = tableName.trim().toLowerCase()
-
-  const exact = tables.find((t) => t.name.trim().toLowerCase() === normalized)
-  if (exact) return exact.id
-
-  const tableNumMatch = normalized.match(/table\s*(\d+)/)
-  if (tableNumMatch) {
-    const num = parseInt(tableNumMatch[1], 10)
-    const byNum = tables.find((t) => t.number === num)
-    if (byNum) return byNum.id
-  }
-
-  const num = parseInt(normalized, 10)
-  if (!isNaN(num)) {
-    const byNum = tables.find((t) => t.number === num)
-    if (byNum) return byNum.id
-  }
-
-  const partial = tables.find(
-    (t) => t.name.trim().toLowerCase().includes(normalized) || normalized.includes(t.name.trim().toLowerCase())
-  )
-  if (partial) return partial.id
-
+  const target = tableName.trim().toLowerCase()
+  if (!target) return null
+  const byName = tables.find((t) => t.name.trim().toLowerCase() === target)
+  if (byName) return byName.id
+  const byNumber = tables.find((t) => String(t.number) === target)
+  if (byNumber) return byNumber.id
   return null
 }

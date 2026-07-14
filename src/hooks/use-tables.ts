@@ -2,61 +2,91 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Table, TableInput } from '@/types'
 
-export function useTables(eventId: string) {
-  return useQuery({
-    queryKey: ['tables', eventId],
+const TABLES_KEY = 'tables'
+
+export function useTables(eventId: string | undefined) {
+  return useQuery<Table[]>({
+    queryKey: [TABLES_KEY, eventId],
+    enabled: !!eventId,
     queryFn: async () => {
-      const { data, error } = await supabase.from('tables').select('*').eq('event_id', eventId).order('number', { ascending: true })
+      const { data, error } = await supabase
+        .from('tables')
+        .select('*')
+        .eq('event_id', eventId!)
+        .order('number', { ascending: true })
       if (error) throw error
       return data as Table[]
     },
-    enabled: !!eventId,
   })
 }
 
 export function useCreateTable() {
-  const qc = useQueryClient()
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: TableInput) => {
-      const { data, error } = await supabase.from('tables').insert(input).select().single()
+      const { data, error } = await supabase
+        .from('tables')
+        .insert(input)
+        .select()
+        .single()
       if (error) throw error
       return data as Table
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tables'] }),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: [TABLES_KEY, created.event_id] })
+    },
   })
 }
 
 export function useUpdateTable() {
-  const qc = useQueryClient()
+  const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, ...input }: { id: string } & Partial<TableInput>) => {
-      const { data, error } = await supabase.from('tables').update(input).eq('id', id).select().single()
+    mutationFn: async ({ id, ...input }: { id: string } & TableInput) => {
+      const { data, error } = await supabase
+        .from('tables')
+        .update(input)
+        .eq('id', id)
+        .select()
+        .single()
       if (error) throw error
       return data as Table
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tables'] }),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: [TABLES_KEY, updated.event_id] })
+    },
   })
 }
 
 export function useDeleteTable() {
-  const qc = useQueryClient()
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('tables').delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tables'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [TABLES_KEY] })
+    },
   })
 }
 
 export function useBulkCreateTables() {
-  const qc = useQueryClient()
+  const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ event_id, tables }: { event_id: string; tables: TableInput[] }) => {
-      const { data, error } = await supabase.from('tables').insert(tables)
+    mutationFn: async ({
+      event_id,
+      tables,
+    }: {
+      event_id: string
+      tables: Array<Omit<TableInput, 'event_id'>>
+    }) => {
+      const rows = tables.map((t) => ({ ...t, event_id }))
+      const { data, error } = await supabase.from('tables').insert(rows).select()
       if (error) throw error
-      return data
+      return data as Table[]
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tables'] }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: [TABLES_KEY, variables.event_id] })
+    },
   })
 }

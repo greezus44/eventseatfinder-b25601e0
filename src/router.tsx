@@ -1,5 +1,5 @@
 import { createBrowserRouter, Navigate, useParams } from 'react-router-dom'
-import { LoginPage } from '@/pages/login-page'
+import LoginPage from '@/pages/login-page'
 import { DashboardPage } from '@/pages/dashboard-page'
 import { EventEditorPage } from '@/pages/event-editor-page'
 import { InvitationPage } from '@/pages/invitation-page'

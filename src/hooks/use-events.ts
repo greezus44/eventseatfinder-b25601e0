@@ -2,28 +2,34 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Event, EventInput } from '@/types'
 
-const queryKey = ['events']
+const EVENTS_KEY = ['events'] as const
 
 export function useEvents() {
   return useQuery<Event[]>({
-    queryKey,
+    queryKey: EVENTS_KEY,
     queryFn: async () => {
-      const { data, error } = await supabase.from('events').select('*').order('created_at', { ascending: false })
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .order('created_at', { ascending: false })
       if (error) throw error
-      return data
+      return data as Event[]
     },
   })
 }
 
 export function useEvent(eventId: string | undefined) {
-  return useQuery<Event | null>({
-    queryKey: ['events', eventId],
+  return useQuery<Event>({
+    queryKey: [...EVENTS_KEY, eventId],
     enabled: !!eventId,
     queryFn: async () => {
-      if (!eventId) return null
-      const { data, error } = await supabase.from('events').select('*').eq('id', eventId).single()
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .eq('id', eventId!)
+        .single()
       if (error) throw error
-      return data
+      return data as Event
     },
   })
 }
@@ -32,12 +38,16 @@ export function useCreateEvent() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: EventInput) => {
-      const { data, error } = await supabase.from('events').insert(input).select().single()
+      const { data, error } = await supabase
+        .from('events')
+        .insert(input)
+        .select()
+        .single()
       if (error) throw error
-      return data
+      return data as Event
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey })
+      queryClient.invalidateQueries({ queryKey: EVENTS_KEY })
     },
   })
 }
@@ -46,13 +56,18 @@ export function useUpdateEvent() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, ...input }: { id: string } & EventInput) => {
-      const { data, error } = await supabase.from('events').update(input).eq('id', id).select().single()
+      const { data, error } = await supabase
+        .from('events')
+        .update(input)
+        .eq('id', id)
+        .select()
+        .single()
       if (error) throw error
       return data as Event
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey })
-      queryClient.invalidateQueries({ queryKey: ['events', data.id] })
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: EVENTS_KEY })
+      queryClient.invalidateQueries({ queryKey: [...EVENTS_KEY, updated.id] })
     },
   })
 }
@@ -65,19 +80,21 @@ export function useDeleteEvent() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey })
+      queryClient.invalidateQueries({ queryKey: EVENTS_KEY })
     },
   })
 }
 
-export function useCheckSlugAvailability() {
-  return useMutation({
-    mutationFn: async ({ slug, eventId }: { slug: string; eventId?: string }) => {
-      const { data, error } = await supabase.from('events').select('id').eq('slug', slug).maybeSingle()
+export function useCheckSlugAvailability({ slug, eventId }: { slug: string; eventId?: string }) {
+  return useQuery<{ available: boolean }>({
+    queryKey: ['event-slug', slug, eventId],
+    enabled: !!slug,
+    queryFn: async () => {
+      let query = supabase.from('events').select('id').eq('slug', slug)
+      if (eventId) query = query.neq('id', eventId)
+      const { data, error } = await query
       if (error) throw error
-      if (!data) return true
-      if (eventId && data.id === eventId) return true
-      return false
+      return { available: !data || data.length === 0 }
     },
   })
 }
