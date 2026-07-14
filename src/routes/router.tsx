@@ -2,6 +2,8 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/app-layout';
 import { ProtectedLayout } from '@/components/layout/protected-layout';
 import { DashboardPage } from '@/pages/dashboard-page';
+import { EventSettingsPage } from '@/pages/event-settings-page';
+import { GuestManagementPage } from '@/pages/guest-management-page';
 import { LoginPage } from '@/pages/login-page';
 import { FindYourSeatPage } from '@/pages/find-your-seat-page';
 
@@ -24,6 +26,14 @@ export const routes: RouteObject[] = [
             index: true,
             path: '/',
             element: <DashboardPage />,
+          },
+          {
+            path: '/events/:eventId',
+            element: <EventSettingsPage />,
+          },
+          {
+            path: '/events/:eventId/guests',
+            element: <GuestManagementPage />,
           },
         ],
       },
