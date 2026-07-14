@@ -11,45 +11,24 @@ interface ConfirmDialogProps {
 }
 
 export function ConfirmDialog({
-  open,
-  title,
-  message,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
-  onConfirm,
-  onCancel,
+  open, title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', onConfirm, onCancel,
 }: ConfirmDialogProps) {
   if (!open) return null;
-
   return (
     <div className="confirm-dialog-overlay" onClick={onCancel}>
       <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
         <h3 className="confirm-dialog__title">{title}</h3>
         <p className="confirm-dialog__message">{message}</p>
         <div className="confirm-dialog__actions">
-          <button className="btn btn--ghost" onClick={onCancel}>
-            {cancelLabel}
-          </button>
-          <button className="btn btn--danger" onClick={onConfirm}>
-            {confirmLabel}
-          </button>
+          <button className="btn btn--ghost" onClick={onCancel}>{cancelLabel}</button>
+          <button className="btn btn--danger" onClick={onConfirm}>{confirmLabel}</button>
         </div>
       </div>
     </div>
   );
 }
 
-export function Modal({
-  open,
-  onClose,
-  children,
-  title,
-}: {
-  open: boolean;
-  onClose: () => void;
-  children: ReactNode;
-  title?: string;
-}) {
+export function Modal({ open, onClose, children, title }: { open: boolean; onClose: () => void; children: ReactNode; title?: string }) {
   if (!open) return null;
   return (
     <div className="modal-overlay" onClick={onClose}>

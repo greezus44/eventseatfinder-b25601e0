@@ -16,9 +16,3 @@ export interface TableInput {
   position_x?: number | null;
   position_y?: number | null;
 }
-
-export interface TableWithGuests extends Table {
-  guests: Guest[];
-}
-
-import type { Guest } from './guest';

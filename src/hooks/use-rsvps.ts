@@ -6,11 +6,7 @@ export function useRSVPs(eventId: string) {
   return useQuery({
     queryKey: ['rsvps', eventId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('rsvps')
-        .select('*')
-        .eq('event_id', eventId)
-        .order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('rsvps').select('*').eq('event_id', eventId).order('created_at', { ascending: false });
       if (error) throw error;
       return data as RSVP[];
     },
@@ -22,12 +18,7 @@ export function useRSVPByGuest(eventId: string, guestId: string) {
   return useQuery({
     queryKey: ['rsvp', eventId, guestId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('rsvps')
-        .select('*')
-        .eq('event_id', eventId)
-        .eq('guest_id', guestId)
-        .maybeSingle();
+      const { data, error } = await supabase.from('rsvps').select('*').eq('event_id', eventId).eq('guest_id', guestId).maybeSingle();
       if (error) throw error;
       return data as RSVP | null;
     },
@@ -39,16 +30,10 @@ export function useUpsertRSVP(eventId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: RSVPInput) => {
-      const { data, error } = await supabase
-        .from('rsvps')
-        .upsert({ ...input, event_id: eventId })
-        .select()
-        .single();
+      const { data, error } = await supabase.from('rsvps').upsert({ ...input, event_id: eventId }).select().single();
       if (error) throw error;
       return data as RSVP;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['rsvps', eventId] });
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['rsvps', eventId] }); },
   });
 }

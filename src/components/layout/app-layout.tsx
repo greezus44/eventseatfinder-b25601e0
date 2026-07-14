@@ -22,9 +22,7 @@ export function AppLayout() {
             {user && (
               <div className="app-header__user">
                 <span className="app-header__user-email">{user.email}</span>
-                <button className="btn btn--ghost btn--sm" onClick={handleSignOut}>
-                  Sign Out
-                </button>
+                <button className="btn btn--ghost btn--sm" onClick={handleSignOut}>Sign Out</button>
               </div>
             )}
           </div>

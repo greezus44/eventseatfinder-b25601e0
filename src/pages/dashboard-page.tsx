@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useEvents, useCreateEvent, useDeleteEvent } from '@/hooks/use-events';
 import { useGuests } from '@/hooks/use-guests';
@@ -7,12 +7,21 @@ import { useToast } from '@/providers/toast-provider';
 import { ConfirmDialog, Modal } from '@/components/ui/confirm-dialog';
 import type { Event } from '@/types/event';
 
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
-/* ------------------------------------------------------------------ */
-
 type SortKey = 'newest' | 'oldest' | 'name-asc' | 'name-desc';
 type FilterKey = 'all' | 'active' | 'past';
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'newest', label: 'Newest' },
+  { value: 'oldest', label: 'Oldest' },
+  { value: 'name-asc', label: 'Name A-Z' },
+  { value: 'name-desc', label: 'Name Z-A' },
+];
+
+const FILTER_CHIPS: { value: FilterKey; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'active', label: 'Active' },
+  { value: 'past', label: 'Past' },
+];
 
 function isPast(dateStr: string): boolean {
   if (!dateStr) return false;
@@ -25,12 +34,8 @@ function isPast(dateStr: string): boolean {
 function formatDate(dateStr: string): string {
   if (!dateStr) return 'Date TBD';
   try {
-    return new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' });
   } catch {
     return dateStr;
   }
@@ -39,19 +44,24 @@ function formatDate(dateStr: string): string {
 function formatTimestamp(iso: string): string {
   if (!iso) return '';
   try {
-    return new Date(iso).toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
+    const d = new Date(iso);
+    const now = Date.now();
+    const diffMs = now - d.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return 'just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+    const diffDay = Math.floor(diffHr / 24);
+    if (diffDay < 7) return `${diffDay}d ago`;
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   } catch {
-    return iso;
+    return '';
   }
 }
 
-function slugify(value: string): string {
-  return value
+function slugify(text: string): string {
+  return text
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9\s-]/g, '')
@@ -60,28 +70,26 @@ function slugify(value: string): string {
     .replace(/^-|-$/g, '');
 }
 
-function gradientFor(event: Event): string {
-  const accent = event.accent_color || '#6366f1';
-  return `linear-gradient(135deg, ${accent} 0%, ${accent}cc 40%, #1e1b4b 100%)`;
+function gradientFor(name: string): string {
+  const palettes = [
+    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+    'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+    'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+    'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+    'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
+    'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+    'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return palettes[hash % palettes.length];
 }
 
-/* ------------------------------------------------------------------ */
-/*  Stat card                                                          */
-/* ------------------------------------------------------------------ */
-
-interface StatCardProps {
-  label: string;
-  value: number | string;
-  icon: string;
-  accent: string;
-}
-
-function StatCard({ label, value, icon, accent }: StatCardProps) {
+function StatCard({ label, value, icon, accent }: { label: string; value: number | string; icon: string; accent: string }) {
   return (
     <div className="dash-stat-card">
-      <div className="dash-stat-card__icon" style={{ background: accent }}>
-        {icon}
-      </div>
+      <div className="dash-stat-card__icon" style={{ background: accent }}>{icon}</div>
       <div className="dash-stat-card__body">
         <span className="dash-stat-card__value">{value}</span>
         <span className="dash-stat-card__label">{label}</span>
@@ -90,220 +98,150 @@ function StatCard({ label, value, icon, accent }: StatCardProps) {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Event card                                                         */
-/* ------------------------------------------------------------------ */
-
-interface EventCardProps {
-  event: Event;
-  onDelete: (event: Event) => void;
-}
-
-function EventCard({ event, onDelete }: EventCardProps) {
+function EventCard({ event }: { event: Event }) {
   const { data: guests } = useGuests(event.id);
   const { data: tables } = useTables(event.id);
+  const { toast } = useToast();
+  const deleteEvent = useDeleteEvent();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const guestCount = guests?.length ?? 0;
   const tableCount = tables?.length ?? 0;
   const past = isPast(event.date);
+  const cover = event.cover_url;
+  const accent = event.accent_color || '#6366f1';
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      await deleteEvent.mutateAsync(event.id);
+      toast('Event deleted', 'success');
+      setConfirmOpen(false);
+    } catch {
+      toast('Failed to delete event', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
-    <article className="dash-event-card">
-      <div
-        className="dash-event-card__cover"
-        style={
-          event.cover_url
-            ? { backgroundImage: `url(${event.cover_url})` }
-            : { background: gradientFor(event) }
-        }
-      >
-        <span
-          className={`dash-event-card__status ${
-            event.invitation_enabled && !past
-              ? 'dash-event-card__status--active'
-              : 'dash-event-card__status--draft'
-          }`}
-        >
+    <div className="dash-event-card">
+      <div className="dash-event-card__cover" style={cover ? undefined : { background: gradientFor(event.name) }}>
+        {cover ? (
+          <img src={cover} alt={event.name} className="dash-event-card__cover-img" />
+        ) : (
+          <div className="dash-event-card__cover-placeholder">{event.name.charAt(0).toUpperCase()}</div>
+        )}
+        <span className={`dash-event-card__status ${event.invitation_enabled && !past ? 'dash-event-card__status--active' : 'dash-event-card__status--draft'}`}>
           {event.invitation_enabled && !past ? 'Invitations On' : 'Draft'}
         </span>
       </div>
 
-      <div className="dash-event-card__content">
-        <h3 className="dash-event-card__title">{event.name}</h3>
-
-        <div className="dash-event-card__meta">
-          <span className="dash-event-card__date">
-            📅 {formatDate(event.date)}
-            {event.time ? ` · ${event.time}` : ''}
-          </span>
-          <span className="dash-event-card__venue">
-            📍 {event.venue || 'Venue TBD'}
-          </span>
-        </div>
+      <div className="dash-event-card__body">
+        <h3 className="dash-event-card__name">{event.name}</h3>
+        <div className="dash-event-card__date">{formatDate(event.date)}{event.time ? ` · ${event.time}` : ''}</div>
+        {event.venue && <div className="dash-event-card__venue">📍 {event.venue}</div>}
 
         <div className="dash-event-card__badges">
-          <span className="dash-badge dash-badge--guests">
-            👥 {guestCount} {guestCount === 1 ? 'Guest' : 'Guests'}
-          </span>
-          <span className="dash-badge dash-badge--tables">
-            🪑 {tableCount} {tableCount === 1 ? 'Table' : 'Tables'}
-          </span>
+          <span className="dash-event-card__badge">👥 {guestCount} guests</span>
+          <span className="dash-event-card__badge">🪑 {tableCount} tables</span>
         </div>
 
-        <p className="dash-event-card__updated">
-          Updated {formatTimestamp(event.updated_at)}
-        </p>
+        <div className="dash-event-card__updated">Updated {formatTimestamp(event.updated_at)}</div>
 
         <div className="dash-event-card__actions">
-          <Link
-            to={`/events/${event.id}/settings`}
-            className="dash-action-btn dash-action-btn--edit"
-            title="Edit event settings"
-          >
-            ✏️ Edit
-          </Link>
-          <Link
-            to={`/events/${event.id}/guests`}
-            className="dash-action-btn"
-            title="Manage guests"
-          >
-            👤 Guests
-          </Link>
-          <Link
-            to={`/events/${event.id}/seating`}
-            className="dash-action-btn"
-            title="Arrange seating"
-          >
-            🪑 Seating
-          </Link>
-          <Link
-            to={`/events/${event.id}`}
-            className="dash-action-btn"
-            title="Event overview"
-          >
-            📋 Overview
-          </Link>
-          <Link
-            to={`/events/${event.id}/check-in`}
-            className="dash-action-btn"
-            title="Guest check-in"
-          >
-            ✅ Check-in
-          </Link>
-          <Link
-            to={`/events/${event.id}/analytics`}
-            className="dash-action-btn"
-            title="Event analytics"
-          >
-            📊 Analytics
-          </Link>
-          <Link
-            to={`/events/${event.id}/print/seating`}
-            className="dash-action-btn"
-            title="Print seating chart"
-          >
-            🖨️ Print
-          </Link>
-          <Link
-            to={`/e/${event.slug}`}
-            className="dash-action-btn"
-            title="Public find-your-seat page"
-          >
-            🎯 Find Your Seat
-          </Link>
-          <Link
-            to={`/events/${event.id}/guest-page`}
-            className="dash-action-btn"
-            title="Guest page editor"
-          >
-            🌐 Guest Page
-          </Link>
+          <Link to={`/events/${event.id}`} className="dash-event-card__action">Overview</Link>
+          <Link to={`/events/${event.id}`} className="dash-event-card__action">Guests</Link>
+          <Link to={`/events/${event.id}`} className="dash-event-card__action">Seating</Link>
+          <Link to={`/events/${event.id}/print/seating`} className="dash-event-card__action">Print</Link>
+          <Link to={`/e/${event.slug}`} className="dash-event-card__action dash-event-card__action--accent" style={{ color: accent }}>Find Your Seat</Link>
+          <Link to={`/events/${event.id}`} className="dash-event-card__action">Guest Page</Link>
         </div>
 
         <div className="dash-event-card__footer">
           <button
-            className="dash-delete-btn"
-            onClick={() => onDelete(event)}
-            title="Delete event"
+            className="dash-event-card__delete"
+            onClick={() => setConfirmOpen(true)}
+            aria-label={`Delete ${event.name}`}
           >
-            🗑️ Delete
+            🗑 Delete
           </button>
         </div>
       </div>
-    </article>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Delete event?"
+        message={`This will permanently delete "${event.name}" and all its guests and tables. This cannot be undone.`}
+        confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmOpen(false)}
+      />
+    </div>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Create event modal                                                 */
-/* ------------------------------------------------------------------ */
-
-interface CreateEventModalProps {
-  open: boolean;
-  onClose: () => void;
-}
-
-function CreateEventModal({ open, onClose }: CreateEventModalProps) {
+function CreateEventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
   const createEvent = useCreateEvent();
-
   const [name, setName] = useState('');
   const [date, setDate] = useState('');
   const [venue, setVenue] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   function reset() {
     setName('');
     setDate('');
     setVenue('');
-    setSubmitting(false);
-  }
-
-  function handleClose() {
-    reset();
-    onClose();
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !date.trim()) {
-      toast('Please provide an event name and date.', 'error');
+    if (!name.trim()) {
+      toast('Please enter an event name', 'error');
       return;
     }
-    setSubmitting(true);
+    setSaving(true);
     try {
       await createEvent.mutateAsync({
         name: name.trim(),
-        slug: slugify(name) || `event-${Date.now()}`,
-        date: date.trim(),
+        slug: slugify(name.trim()) + '-' + Math.random().toString(36).slice(2, 6),
+        date,
         time: '',
         venue: venue.trim(),
         invitation_enabled: false,
       });
-      toast('Event created successfully!', 'success');
-      handleClose();
+      toast('Event created', 'success');
+      reset();
+      onClose();
     } catch {
-      toast('Failed to create event. Please try again.', 'error');
-      setSubmitting(false);
+      toast('Failed to create event', 'error');
+    } finally {
+      setSaving(false);
     }
+  }
+
+  function handleClose() {
+    if (saving) return;
+    reset();
+    onClose();
   }
 
   return (
     <Modal open={open} onClose={handleClose} title="Create New Event">
       <form className="dash-create-form" onSubmit={handleSubmit}>
         <label className="dash-create-form__field">
-          <span className="dash-create-form__label">Event Name</span>
+          <span className="dash-create-form__label">Event name</span>
           <input
             type="text"
             className="dash-create-form__input"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Annual Gala Dinner"
+            placeholder="e.g. Annual Gala 2025"
             autoFocus
-            required
           />
         </label>
-
         <label className="dash-create-form__field">
           <span className="dash-create-form__label">Date</span>
           <input
@@ -311,10 +249,8 @@ function CreateEventModal({ open, onClose }: CreateEventModalProps) {
             className="dash-create-form__input"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            required
           />
         </label>
-
         <label className="dash-create-form__field">
           <span className="dash-create-form__label">Venue</span>
           <input
@@ -322,25 +258,15 @@ function CreateEventModal({ open, onClose }: CreateEventModalProps) {
             className="dash-create-form__input"
             value={venue}
             onChange={(e) => setVenue(e.target.value)}
-            placeholder="e.g. The Grand Ballroom"
+            placeholder="e.g. Grand Ballroom, NYC"
           />
         </label>
-
         <div className="dash-create-form__actions">
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={handleClose}
-            disabled={submitting}
-          >
+          <button type="button" className="dash-create-form__cancel" onClick={handleClose} disabled={saving}>
             Cancel
           </button>
-          <button
-            type="submit"
-            className="btn btn--primary"
-            disabled={submitting}
-          >
-            {submitting ? 'Creating…' : 'Create Event'}
+          <button type="submit" className="dash-create-form__submit" disabled={saving}>
+            {saving ? 'Creating…' : 'Create Event'}
           </button>
         </div>
       </form>
@@ -348,48 +274,65 @@ function CreateEventModal({ open, onClose }: CreateEventModalProps) {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Dashboard page                                                     */
-/* ------------------------------------------------------------------ */
+function EmptyState({ onCreate }: { onCreate: () => void }) {
+  return (
+    <div className="dash-empty">
+      <div className="dash-empty__icon">🎉</div>
+      <h2 className="dash-empty__title">No events yet</h2>
+      <p className="dash-empty__subtitle">Create your first event to start planning seating and managing guests.</p>
+      <button className="dash-empty__cta" onClick={onCreate}>+ Create Event</button>
+    </div>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="dash-events-grid">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div className="dash-event-card dash-event-card--skeleton" key={i}>
+          <div className="dash-skeleton dash-skeleton--cover" />
+          <div className="dash-event-card__body">
+            <div className="dash-skeleton dash-skeleton--line dash-skeleton--line-lg" />
+            <div className="dash-skeleton dash-skeleton--line dash-skeleton--line-sm" />
+            <div className="dash-skeleton dash-skeleton--line dash-skeleton--line-sm" />
+            <div className="dash-skeleton dash-skeleton--actions" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function DashboardPage() {
   const { data: events, isLoading } = useEvents();
-  const deleteEvent = useDeleteEvent();
-  const { toast } = useToast();
 
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortKey>('newest');
   const [filter, setFilter] = useState<FilterKey>('all');
   const [createOpen, setCreateOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Event | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const filtered = useMemo(() => {
-    if (!events) return [];
-    const q = search.trim().toLowerCase();
-    let list = events.filter((ev) =>
-      q ? ev.name.toLowerCase().includes(q) : true,
-    );
+    const list = events ?? [];
+    let result = list;
 
-    if (filter === 'active') {
-      list = list.filter((ev) => ev.invitation_enabled && !isPast(ev.date));
-    } else if (filter === 'past') {
-      list = list.filter((ev) => isPast(ev.date));
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter((ev) => ev.name.toLowerCase().includes(q));
     }
 
-    const sorted = [...list];
+    if (filter === 'active') {
+      result = result.filter((ev) => ev.invitation_enabled && !isPast(ev.date));
+    } else if (filter === 'past') {
+      result = result.filter((ev) => isPast(ev.date));
+    }
+
+    const sorted = [...result];
     switch (sort) {
       case 'newest':
-        sorted.sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-        );
+        sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         break;
       case 'oldest':
-        sorted.sort(
-          (a, b) =>
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-        );
+        sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         break;
       case 'name-asc':
         sorted.sort((a, b) => a.name.localeCompare(b.name));
@@ -402,168 +345,100 @@ export function DashboardPage() {
   }, [events, search, sort, filter]);
 
   const stats = useMemo(() => {
-    const all = events ?? [];
+    const list = events ?? [];
+    const totalGuests = 0; // computed per-card via hooks; stat shows event-level summary
+    const active = list.filter((ev) => ev.invitation_enabled && !isPast(ev.date)).length;
     return {
-      total: all.length,
-      guests: 0, // computed per-card; left as 0 placeholder at list level
-      tables: 0,
-      active: all.filter((ev) => ev.invitation_enabled && !isPast(ev.date))
-        .length,
+      totalEvents: list.length,
+      totalGuests,
+      totalTables: 0,
+      activeEvents: active,
     };
   }, [events]);
 
-  async function handleConfirmDelete() {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      await deleteEvent.mutateAsync(deleteTarget.id);
-      toast('Event deleted.', 'success');
-      setDeleteTarget(null);
-    } catch {
-      toast('Failed to delete event.', 'error');
-    } finally {
-      setDeleting(false);
-    }
+  const hasEvents = (events?.length ?? 0) > 0;
+  const hasResults = filtered.length > 0;
+
+  function handleCreateClick() {
+    setCreateOpen(true);
   }
 
   return (
     <div className="dash">
-      {/* Header */}
       <header className="dash-header">
         <div className="dash-header__top">
-          <div className="dash-header__heading">
+          <div>
             <h1 className="dash-header__title">Your Events</h1>
-            <p className="dash-header__subtitle">
-              Manage your seating arrangements, guests, and check-ins.
-            </p>
+            <p className="dash-header__subtitle">Manage seating, guests, and invitations all in one place.</p>
           </div>
-          <button
-            className="btn btn--primary dash-header__create"
-            onClick={() => setCreateOpen(true)}
-          >
-            ＋ Create Event
-          </button>
+          <button className="dash-header__create" onClick={handleCreateClick}>+ Create Event</button>
         </div>
 
         <div className="dash-header__controls">
-          <div className="dash-header__search">
-            <span className="dash-header__search-icon">🔍</span>
-            <input
-              type="text"
-              className="dash-header__search-input"
-              placeholder="Search events by name…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-
+          <input
+            type="text"
+            className="dash-header__search"
+            placeholder="Search events…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
           <select
             className="dash-header__sort"
             value={sort}
             onChange={(e) => setSort(e.target.value as SortKey)}
           >
-            <option value="newest">Newest</option>
-            <option value="oldest">Oldest</option>
-            <option value="name-asc">Name A-Z</option>
-            <option value="name-desc">Name Z-A</option>
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
           </select>
-        </div>
-
-        <div className="dash-header__filters">
-          {(['all', 'active', 'past'] as FilterKey[]).map((key) => (
-            <button
-              key={key}
-              className={`dash-chip ${filter === key ? 'dash-chip--active' : ''}`}
-              onClick={() => setFilter(key)}
-            >
-              {key === 'all' ? 'All' : key === 'active' ? 'Active' : 'Past'}
-            </button>
-          ))}
+          <div className="dash-header__chips">
+            {FILTER_CHIPS.map((chip) => (
+              <button
+                key={chip.value}
+                className={`dash-chip ${filter === chip.value ? 'dash-chip--active' : ''}`}
+                onClick={() => setFilter(chip.value)}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
-      {/* Stats */}
       <section className="dash-stats">
-        <StatCard
-          label="Total Events"
-          value={stats.total}
-          icon="🎉"
-          accent="#6366f1"
-        />
-        <StatCard
-          label="Total Guests"
-          value="—"
-          icon="👥"
-          accent="#10b981"
-        />
-        <StatCard
-          label="Total Tables"
-          value="—"
-          icon="🪑"
-          accent="#f59e0b"
-        />
-        <StatCard
-          label="Active Events"
-          value={stats.active}
-          icon="✨"
-          accent="#ec4899"
-        />
+        <StatCard label="Total Events" value={stats.totalEvents} icon="📅" accent="#6366f1" />
+        <StatCard label="Total Guests" value="—" icon="👥" accent="#ec4899" />
+        <StatCard label="Total Tables" value="—" icon="🪑" accent="#14b8a6" />
+        <StatCard label="Active Events" value={stats.activeEvents} icon="✨" accent="#f59e0b" />
       </section>
 
-      {/* Body */}
-      <section className="dash-body">
+      <main className="dash-main">
         {isLoading ? (
-          <div className="dash-loading">
-            <div className="dash-loading__spinner" />
-            <p>Loading your events…</p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="dash-empty">
-            <div className="dash-empty__icon">🎈</div>
-            <h2 className="dash-empty__title">No events yet</h2>
-            <p className="dash-empty__text">
-              {search || filter !== 'all'
-                ? 'No events match your filters. Try adjusting your search.'
-                : 'Create your first event to start arranging seating and inviting guests.'}
-            </p>
-            {!search && filter === 'all' && (
-              <button
-                className="btn btn--primary"
-                onClick={() => setCreateOpen(true)}
-              >
-                ＋ Create Event
-              </button>
-            )}
+          <LoadingState />
+        ) : !hasEvents ? (
+          <EmptyState onCreate={handleCreateClick} />
+        ) : !hasResults ? (
+          <div className="dash-empty dash-empty--filtered">
+            <div className="dash-empty__icon">🔍</div>
+            <h2 className="dash-empty__title">No matching events</h2>
+            <p className="dash-empty__subtitle">Try adjusting your search or filters.</p>
+            <button
+              className="dash-empty__cta"
+              onClick={() => { setSearch(''); setFilter('all'); setSort('newest'); }}
+            >
+              Clear filters
+            </button>
           </div>
         ) : (
           <div className="dash-events-grid">
             {filtered.map((event) => (
-              <EventCard
-                key={event.id}
-                event={event}
-                onDelete={(ev) => setDeleteTarget(ev)}
-              />
+              <EventCard key={event.id} event={event} />
             ))}
           </div>
         )}
-      </section>
+      </main>
 
-      {/* Create modal */}
       <CreateEventModal open={createOpen} onClose={() => setCreateOpen(false)} />
-
-      {/* Delete confirm */}
-      <ConfirmDialog
-        open={!!deleteTarget}
-        title="Delete Event"
-        message={
-          deleteTarget
-            ? `Are you sure you want to delete "${deleteTarget.name}"? This action cannot be undone.`
-            : ''
-        }
-        confirmLabel={deleting ? 'Deleting…' : 'Delete'}
-        onConfirm={handleConfirmDelete}
-        onCancel={() => (deleting ? undefined : setDeleteTarget(null))}
-      />
     </div>
   );
 }

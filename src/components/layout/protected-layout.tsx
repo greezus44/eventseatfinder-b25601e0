@@ -4,14 +4,7 @@ import { useAuth } from '@/providers/auth-provider';
 
 export function ProtectedLayout({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth();
-
-  if (loading) {
-    return <div className="loading-screen">Loading...</div>;
-  }
-
-  if (!session) {
-    return <Navigate to="/login" replace />;
-  }
-
+  if (loading) return <div className="loading-screen">Loading...</div>;
+  if (!session) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
