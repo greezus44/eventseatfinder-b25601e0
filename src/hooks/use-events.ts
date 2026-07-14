@@ -1,6 +1,10 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { Event, EventInput } from '@/types';
+import { Event, EventInput } from '@/types';
 
 export function useEvents() {
   return useQuery({
@@ -20,14 +24,14 @@ export function useEvent(id: string | undefined) {
   return useQuery({
     queryKey: ['event', id],
     queryFn: async () => {
-      if (!id) throw new Error('Event ID is required');
+      if (!id) return null;
       const { data, error } = await supabase
         .from('events')
         .select('*')
         .eq('id', id)
-        .single();
+        .maybeSingle();
       if (error) throw error;
-      return data as Event;
+      return data as Event | null;
     },
     enabled: !!id,
   });
@@ -36,7 +40,7 @@ export function useEvent(id: string | undefined) {
 export function useCreateEvent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: EventInput & { user_id?: string }) => {
+    mutationFn: async (input: EventInput & { user_id: string }) => {
       const { data, error } = await supabase
         .from('events')
         .insert(input)
@@ -54,7 +58,8 @@ export function useCreateEvent() {
 export function useUpdateEvent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...input }: { id: string } & EventInput) => {
+    mutationFn: async (params: { id: string } & EventInput) => {
+      const { id, ...input } = params;
       const { data, error } = await supabase
         .from('events')
         .update(input)
@@ -86,17 +91,17 @@ export function useDeleteEvent() {
 
 export function useCheckSlugAvailability(slug: string, currentEventId?: string) {
   return useQuery({
-    queryKey: ['slug-availability', slug],
+    queryKey: ['slug-availability', slug, currentEventId],
     queryFn: async () => {
-      if (!slug || slug.length < 2) return { available: false, reason: 'Slug must be at least 2 characters' };
-      let query = supabase.from('events').select('id, slug').eq('slug', slug);
+      if (!slug) return { available: false };
+      let query = supabase.from('events').select('id').eq('slug', slug);
       if (currentEventId) {
         query = query.neq('id', currentEventId);
       }
-      const { data, error } = await query;
+      const { data, error } = await query.maybeSingle();
       if (error) throw error;
-      return { available: data.length === 0, reason: data.length > 0 ? 'Slug is already taken' : null };
+      return { available: !data };
     },
-    enabled: !!slug && slug.length >= 2,
+    enabled: !!slug,
   });
 }

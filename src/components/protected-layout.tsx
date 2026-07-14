@@ -7,8 +7,9 @@ export function ProtectedLayout({ children }: { children: ReactNode }) {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-        <p style={{ color: '#4A4A4A', fontSize: '14px' }}>Loading...</p>
+      <div className="loading-screen">
+        <div className="loading-spinner" />
+        <p>Loading...</p>
       </div>
     );
   }

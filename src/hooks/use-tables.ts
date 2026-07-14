@@ -1,12 +1,16 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { Table, TableInput } from '@/types';
+import { Table, TableInput } from '@/types';
 
 export function useTables(eventId: string | undefined) {
   return useQuery({
     queryKey: ['tables', eventId],
     queryFn: async () => {
-      if (!eventId) throw new Error('Event ID is required');
+      if (!eventId) return [];
       const { data, error } = await supabase
         .from('tables')
         .select('*')
@@ -22,7 +26,8 @@ export function useTables(eventId: string | undefined) {
 export function useCreateTable() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ eventId, ...input }: { eventId: string } & TableInput) => {
+    mutationFn: async (params: { eventId: string } & TableInput) => {
+      const { eventId, ...input } = params;
       const { data, error } = await supabase
         .from('tables')
         .insert({ event_id: eventId, ...input })
@@ -40,7 +45,8 @@ export function useCreateTable() {
 export function useUpdateTable() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...input }: { id: string } & Partial<TableInput>) => {
+    mutationFn: async (params: { id: string } & Partial<TableInput> & { eventId?: string }) => {
+      const { id, eventId, ...input } = params;
       const { data, error } = await supabase
         .from('tables')
         .update(input)
@@ -48,10 +54,12 @@ export function useUpdateTable() {
         .select()
         .single();
       if (error) throw error;
-      return data as Table;
+      return { data: data as Table, eventId };
     },
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ['tables', data.event_id] });
+    onSuccess: (_data, variables) => {
+      if (variables.eventId) {
+        qc.invalidateQueries({ queryKey: ['tables', variables.eventId] });
+      }
     },
   });
 }
@@ -59,13 +67,15 @@ export function useUpdateTable() {
 export function useDeleteTable() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, eventId }: { id: string; eventId: string }) => {
-      const { error } = await supabase.from('tables').delete().eq('id', id);
+    mutationFn: async (params: { id: string; eventId: string }) => {
+      const { error } = await supabase
+        .from('tables')
+        .delete()
+        .eq('id', params.id);
       if (error) throw error;
-      return { eventId };
     },
-    onSuccess: ({ eventId }) => {
-      qc.invalidateQueries({ queryKey: ['tables', eventId] });
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['tables', variables.eventId] });
     },
   });
 }
@@ -73,14 +83,14 @@ export function useDeleteTable() {
 export function useBulkCreateTables() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      event_id,
-      tables,
-    }: {
+    mutationFn: async (params: {
       event_id: string;
       tables: TableInput[];
     }) => {
-      const payload = tables.map((t) => ({ event_id, ...t }));
+      const payload = params.tables.map((t) => ({
+        event_id: params.event_id,
+        ...t,
+      }));
       const { data, error } = await supabase
         .from('tables')
         .insert(payload)
@@ -88,7 +98,7 @@ export function useBulkCreateTables() {
       if (error) throw error;
       return data as Table[];
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['tables', variables.event_id] });
     },
   });

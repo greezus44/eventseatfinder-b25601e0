@@ -1,148 +1,118 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useEvents, useCreateEvent, useDeleteEvent } from '@/hooks/use-events';
+import { useAuth } from '@/providers/auth-provider';
 import { useToast } from '@/providers/toast-provider';
 import { useConfirmDialog } from '@/components/confirm-dialog';
-import type { EventInput } from '@/types';
+import {
+  useEvents,
+  useCreateEvent,
+  useDeleteEvent,
+} from '@/hooks/use-events';
+import { Event } from '@/types';
 
 export function DashboardPage() {
-  const { data: events, isLoading } = useEvents();
-  const createEvent = useCreateEvent();
-  const deleteEvent = useDeleteEvent();
+  const { user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirmDialog();
+  const { data: events, isLoading } = useEvents();
+  const createEvent = useCreateEvent();
+  const deleteEvent = useDeleteEvent();
+
   const [showCreate, setShowCreate] = useState(false);
-  const [newEvent, setNewEvent] = useState<EventInput>({ name: '', slug: '' });
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
 
   const handleCreate = async () => {
-    if (!newEvent.name || !newEvent.slug) {
-      toast('Please fill in all fields', 'error');
-      return;
-    }
-    const slug = newEvent.slug.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    if (!name.trim() || !slug.trim() || !user) return;
     try {
-      const event = await createEvent.mutateAsync({ name: newEvent.name, slug });
-      toast('Event created');
+      const created = await createEvent.mutateAsync({
+        name: name.trim(),
+        slug: slug.trim(),
+        user_id: user.id,
+        invitation_enabled: false,
+      });
+      toast('Event created', 'success');
       setShowCreate(false);
-      setNewEvent({ name: '', slug: '' });
-      navigate(`/events/${event.id}`);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to create event';
-      toast(msg, 'error');
+      setName('');
+      setSlug('');
+      navigate(`/events/${created.id}`);
+    } catch (err) {
+      toast(
+        err instanceof Error ? err.message : 'Failed to create event',
+        'error'
+      );
     }
   };
 
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = (event: Event) => {
     confirm({
       title: 'Delete Event',
-      message: `Are you sure you want to delete "${name}"? This cannot be undone.`,
+      message: `Are you sure you want to delete "${event.name}"? This cannot be undone.`,
       confirmLabel: 'Delete',
       onConfirm: async () => {
         try {
-          await deleteEvent.mutateAsync(id);
-          toast('Event deleted');
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Failed to delete event';
-          toast(msg, 'error');
+          await deleteEvent.mutateAsync(event.id);
+          toast('Event deleted', 'success');
+        } catch (err) {
+          toast(
+            err instanceof Error ? err.message : 'Failed to delete event',
+            'error'
+          );
         }
       },
     });
   };
 
+  const formatDate = (event: Event) => {
+    const parts: string[] = [];
+    if (event.date) parts.push(event.date);
+    if (event.time) parts.push(event.time);
+    if (event.venue) parts.push(event.venue);
+    return parts.join(' • ');
+  };
+
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#1A1A1A', letterSpacing: '-0.02em' }}>Your Events</h1>
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="page-title">Your Events</h1>
         <button
-          onClick={() => setShowCreate(true)}
-          style={{
-            padding: '10px 20px',
-            borderRadius: '12px',
-            border: 'none',
-            background: '#1A1A1A',
-            color: '#FFFFFF',
-            fontSize: '14px',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
+          className="btn btn-primary"
+          onClick={() => setShowCreate(!showCreate)}
         >
           New Event
         </button>
       </div>
 
+      {dialog()}
+
       {showCreate && (
-        <div style={{
-          background: '#FFFFFF',
-          borderRadius: '12px',
-          padding: '20px',
-          marginBottom: '24px',
-          border: '1px solid #EFEFEF',
-        }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Create New Event</h3>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        <div className="card mb-4">
+          <div className="form-group">
+            <label className="form-label">Event Name</label>
             <input
-              placeholder="Event name"
-              value={newEvent.name}
-              onChange={(e) => setNewEvent({ ...newEvent, name: e.target.value })}
-              style={{
-                flex: '1',
-                minWidth: '200px',
-                height: '44px',
-                padding: '0 16px',
-                borderRadius: '12px',
-                border: '1px solid #DADADA',
-                fontSize: '15px',
-                outline: 'none',
-              }}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="My Wedding"
             />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Slug</label>
             <input
-              placeholder="URL slug (e.g. my-wedding)"
-              value={newEvent.slug}
-              onChange={(e) => setNewEvent({ ...newEvent, slug: e.target.value })}
-              style={{
-                flex: '1',
-                minWidth: '200px',
-                height: '44px',
-                padding: '0 16px',
-                borderRadius: '12px',
-                border: '1px solid #DADADA',
-                fontSize: '15px',
-                outline: 'none',
-              }}
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder="my-wedding"
             />
+          </div>
+          <div className="flex gap-2">
             <button
+              className="btn btn-primary"
               onClick={handleCreate}
               disabled={createEvent.isPending}
-              style={{
-                padding: '0 24px',
-                height: '44px',
-                borderRadius: '12px',
-                border: 'none',
-                background: '#1A1A1A',
-                color: '#FFFFFF',
-                fontSize: '14px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                opacity: createEvent.isPending ? 0.5 : 1,
-              }}
             >
               Create
             </button>
-            <button
-              onClick={() => setShowCreate(false)}
-              style={{
-                padding: '0 24px',
-                height: '44px',
-                borderRadius: '12px',
-                border: '1px solid #DADADA',
-                background: 'transparent',
-                color: '#4A4A4A',
-                fontSize: '14px',
-                fontWeight: 500,
-                cursor: 'pointer',
-              }}
-            >
+            <button className="btn btn-secondary" onClick={() => setShowCreate(false)}>
               Cancel
             </button>
           </div>
@@ -150,57 +120,40 @@ export function DashboardPage() {
       )}
 
       {isLoading ? (
-        <p style={{ color: '#4A4A4A', fontSize: '14px' }}>Loading...</p>
+        <div className="empty-state">Loading events...</div>
       ) : !events || events.length === 0 ? (
-        <p style={{ color: '#4A4A4A', fontSize: '14px' }}>No events yet. Create one to get started.</p>
+        <div className="empty-state">
+          No events yet. Click "New Event" to get started.
+        </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="event-list">
           {events.map((event) => (
-            <div
-              key={event.id}
-              style={{
-                background: '#FFFFFF',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid #EFEFEF',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                cursor: 'pointer',
-                transition: 'border-color 0.2s',
-              }}
-              onClick={() => navigate(`/events/${event.id}`)}
-            >
-              <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#1A1A1A', marginBottom: '4px' }}>{event.name}</h3>
-                <p style={{ fontSize: '13px', color: '#4A4A4A' }}>
-                  {event.date ? new Date(event.date).toLocaleDateString() : 'No date set'}
-                  {event.venue ? ` • ${event.venue}` : ''}
-                </p>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(event.id, event.name);
-                }}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #DADADA',
-                  background: 'transparent',
-                  color: '#4A4A4A',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                }}
+            <div key={event.id} className="event-card">
+              <div
+                onClick={() => navigate(`/events/${event.id}`)}
+                style={{ cursor: 'pointer', flex: 1 }}
               >
-                Delete
-              </button>
+                <div className="event-card-name">{event.name}</div>
+                <div className="event-card-meta">{formatDate(event)}</div>
+              </div>
+              <div className="event-card-actions">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => navigate(`/events/${event.id}`)}
+                >
+                  Edit
+                </button>
+                <button
+                  className="btn btn-danger"
+                  onClick={() => handleDelete(event)}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>
       )}
-      {dialog()}
     </div>
   );
 }

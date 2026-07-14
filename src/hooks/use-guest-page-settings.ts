@@ -1,12 +1,31 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { GuestPageSettings, GuestPageSettingsInput } from '@/types';
+import { GuestPageSettings, GuestPageSettingsInput, Event } from '@/types';
+
+export type GuestPageSettingsWithEvent = GuestPageSettings & {
+  event: Pick<
+    Event,
+    | 'id'
+    | 'name'
+    | 'slug'
+    | 'date'
+    | 'time'
+    | 'venue'
+    | 'logo_url'
+    | 'cover_url'
+    | 'accent_color'
+  >;
+};
 
 export function useGuestPageSettings(eventId: string | undefined) {
   return useQuery({
     queryKey: ['guest-page-settings', eventId],
     queryFn: async () => {
-      if (!eventId) throw new Error('Event ID is required');
+      if (!eventId) return null;
       const { data, error } = await supabase
         .from('guest_page_settings')
         .select('*')
@@ -23,7 +42,7 @@ export function useGuestPageSettingsBySlug(slug: string | undefined) {
   return useQuery({
     queryKey: ['guest-page-settings-by-slug', slug],
     queryFn: async () => {
-      if (!slug) throw new Error('Slug is required');
+      if (!slug) return null;
       const { data, error } = await supabase
         .from('guest_page_settings')
         .select(
@@ -32,19 +51,7 @@ export function useGuestPageSettingsBySlug(slug: string | undefined) {
         .eq('event.slug', slug)
         .maybeSingle();
       if (error) throw error;
-      return data as (GuestPageSettings & {
-        event: {
-          id: string;
-          name: string;
-          slug: string;
-          date: string | null;
-          time: string | null;
-          venue: string | null;
-          logo_url: string | null;
-          cover_url: string | null;
-          accent_color: string | null;
-        };
-      }) | null;
+      return data as GuestPageSettingsWithEvent | null;
     },
     enabled: !!slug,
   });
@@ -53,10 +60,9 @@ export function useGuestPageSettingsBySlug(slug: string | undefined) {
 export function useUpsertGuestPageSettings() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      eventId,
-      ...input
-    }: { eventId: string } & GuestPageSettingsInput) => {
+    mutationFn: async (params: { eventId: string } & GuestPageSettingsInput) => {
+      const { eventId, ...input } = params;
+
       const { data: existing } = await supabase
         .from('guest_page_settings')
         .select('id')
@@ -82,9 +88,10 @@ export function useUpsertGuestPageSettings() {
         return data as GuestPageSettings;
       }
     },
-    onSuccess: (_, variables) => {
-      qc.invalidateQueries({ queryKey: ['guest-page-settings', variables.eventId] });
-      qc.invalidateQueries({ queryKey: ['guest-page-settings-by-slug'] });
+    onSuccess: (data) => {
+      qc.invalidateQueries({
+        queryKey: ['guest-page-settings', data.event_id],
+      });
     },
   });
 }

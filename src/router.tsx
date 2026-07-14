@@ -1,15 +1,18 @@
-import { createBrowserRouter } from 'react-router-dom';
-import { AppLayout } from '@/components/app-layout';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { QueryProvider } from '@/providers/query-provider';
+import { AuthProvider } from '@/providers/auth-provider';
+import { ToastProvider } from '@/providers/toast-provider';
 import { ProtectedLayout } from '@/components/protected-layout';
-import { DashboardPage } from '@/pages/dashboard-page';
+import { AppLayout } from '@/components/app-layout';
 import { LoginPage } from '@/pages/login-page';
+import { DashboardPage } from '@/pages/dashboard-page';
 import { EventEditorPage } from '@/pages/event-editor-page';
-import { FindYourSeatPage } from '@/pages/find-your-seat-page';
-import { InvitationPage } from '@/pages/invitation-page';
 import { PrintSeatingChartPage } from '@/pages/print-seating-chart-page';
 import { PrintGuestListPage } from '@/pages/print-guest-list-page';
+import { FindYourSeatPage } from '@/pages/find-your-seat-page';
+import { InvitationPage } from '@/pages/invitation-page';
 
-export const router = createBrowserRouter([
+const router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />,
@@ -51,3 +54,15 @@ export const router = createBrowserRouter([
     element: <InvitationPage />,
   },
 ]);
+
+export function Router() {
+  return (
+    <QueryProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <RouterProvider router={router} />
+        </ToastProvider>
+      </AuthProvider>
+    </QueryProvider>
+  );
+}
