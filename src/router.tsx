@@ -1,13 +1,10 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
-import { ProtectedLayout } from '@/components/protected-layout';
-import { AppLayout } from '@/components/app-layout';
-import { LoginPage } from '@/pages/login-page';
-import { DashboardPage } from '@/pages/dashboard-page';
-import { EventEditorPage } from '@/pages/event-editor-page';
-import { PrintSeatingChartPage } from '@/pages/print-seating-chart-page';
-import { PrintGuestListPage } from '@/pages/print-guest-list-page';
-import { InvitationPage } from '@/pages/invitation-page';
-import { FindYourSeatPage } from '@/pages/find-your-seat-page';
+import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { LoginPage } from '@/pages/login-page'
+import { DashboardPage } from '@/pages/dashboard-page'
+import { EventEditorPage } from '@/pages/event-editor-page'
+import { InvitationPage } from '@/pages/invitation-page'
+import { FindYourSeatPage } from '@/pages/find-your-seat-page'
+import { ProtectedRoute } from '@/components/protected-route'
 
 export const router = createBrowserRouter([
   {
@@ -17,30 +14,18 @@ export const router = createBrowserRouter([
   {
     path: '/dashboard',
     element: (
-      <ProtectedLayout>
-        <AppLayout>
-          <DashboardPage />
-        </AppLayout>
-      </ProtectedLayout>
+      <ProtectedRoute>
+        <DashboardPage />
+      </ProtectedRoute>
     ),
   },
   {
     path: '/events/:eventId',
     element: (
-      <ProtectedLayout>
-        <AppLayout>
-          <EventEditorPage />
-        </AppLayout>
-      </ProtectedLayout>
+      <ProtectedRoute>
+        <EventEditorPage />
+      </ProtectedRoute>
     ),
-  },
-  {
-    path: '/events/:eventId/print/seating-chart',
-    element: <PrintSeatingChartPage />,
-  },
-  {
-    path: '/events/:eventId/print/guest-list',
-    element: <PrintGuestListPage />,
   },
   {
     path: '/e/:slug',
@@ -54,4 +39,4 @@ export const router = createBrowserRouter([
     path: '/',
     element: <Navigate to="/login" replace />,
   },
-]);
+])

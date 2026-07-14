@@ -1,100 +1,86 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-import type { Guest, GuestInput } from '@/types';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { supabase } from '@/lib/supabase'
+import type { Guest, GuestInput } from '@/types'
 
-export function useGuests(eventId: string | undefined) {
-  return useQuery<Guest[]>({
+export function useGuests(eventId: string) {
+  return useQuery({
     queryKey: ['guests', eventId],
-    enabled: !!eventId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('guests')
         .select('*')
         .eq('event_id', eventId)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      return data as Guest[];
+        .order('created_at', { ascending: true })
+      if (error) throw error
+      return data as Guest[]
     },
-  });
+    enabled: !!eventId,
+  })
 }
 
 export function useCreateGuest() {
-  const qc = useQueryClient();
+  const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ eventId, ...input }: { eventId: string } & GuestInput) => {
-      const { data, error } = await supabase
-        .from('guests')
-        .insert({ event_id: eventId, ...input })
-        .select()
-        .maybeSingle();
-      if (error) throw error;
-      return data as Guest;
+    mutationFn: async (input: GuestInput) => {
+      const { data, error } = await supabase.from('guests').insert(input).select().single()
+      if (error) throw error
+      return data as Guest
     },
-    onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ['guests', variables.eventId] });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['guests'] })
     },
-  });
-}
-
-export function useDeleteGuest() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, eventId }: { id: string; eventId: string }) => {
-      const { error } = await supabase.from('guests').delete().eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ['guests', variables.eventId] });
-    },
-  });
+  })
 }
 
 export function useUpdateGuest() {
-  const qc = useQueryClient();
+  const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, eventId, ...input }: { id: string; eventId: string } & GuestInput) => {
-      const { data, error } = await supabase
-        .from('guests')
-        .update(input)
-        .eq('id', id)
-        .select()
-        .maybeSingle();
-      if (error) throw error;
-      return data as Guest;
+    mutationFn: async ({ id, eventId, ...input }: { id: string; eventId?: string } & GuestInput) => {
+      const { data, error } = await supabase.from('guests').update(input).eq('id', id).select().single()
+      if (error) throw error
+      return data as Guest
     },
-    onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ['guests', variables.eventId] });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['guests'] })
     },
-  });
+  })
+}
+
+export function useDeleteGuest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('guests').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['guests'] })
+    },
+  })
 }
 
 export function useBulkCreateGuests() {
-  const qc = useQueryClient();
+  const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ eventId, guests }: { eventId: string; guests: GuestInput[] }) => {
-      const allRows = guests.map((g) => ({ event_id: eventId, ...g }));
-      const BATCH_SIZE = 500;
-      const results: Guest[] = [];
-
-      for (let i = 0; i < allRows.length; i += BATCH_SIZE) {
-        const batch = allRows.slice(i, i + BATCH_SIZE);
-        console.log(`Inserting guests batch ${i / BATCH_SIZE + 1} (${batch.length} rows)`);
-        const { data, error } = await supabase
-          .from('guests')
-          .insert(batch)
-          .select();
+    mutationFn: async ({ event_id, guests }: { event_id: string; guests: GuestInput[] }) => {
+      console.log(`[BulkCreate] Starting insert of ${guests.length} guests for event ${event_id}`)
+      const batchSize = 500
+      let inserted = 0
+      for (let i = 0; i < guests.length; i += batchSize) {
+        const batch = guests.slice(i, i + batchSize)
+        const { data, error } = await supabase.from('guests').insert(batch)
         if (error) {
-          console.error('Batch insert error:', error);
-          throw error;
+          console.error(`[BulkCreate] Error at batch ${Math.floor(i / batchSize) + 1}:`, error)
+          throw error
         }
-        if (data) results.push(...(data as Guest[]));
+        inserted += batch.length
+        console.log(`[BulkCreate] Inserted ${inserted}/${guests.length}`)
       }
-
-      console.log(`Total guests inserted: ${results.length}`);
-      return results;
+      console.log(`[BulkCreate] Complete: ${inserted} guests inserted`)
+      return inserted
     },
-    onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ['guests', variables.eventId] });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['guests'] })
     },
-  });
+  })
 }

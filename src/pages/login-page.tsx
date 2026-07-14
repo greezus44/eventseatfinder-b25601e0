@@ -1,93 +1,81 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/providers/auth-provider';
-import { useToast } from '@/providers/toast-provider';
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuthContext } from '@/providers/auth-provider'
 
 export function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const { signIn, signUp } = useAuth();
-  const toast = useToast();
-  const navigate = useNavigate();
+  const { signIn, signUp } = useAuthContext()
+  const navigate = useNavigate()
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim() || !password.trim()) {
-      toast('Please enter your email and password.', 'error');
-      return;
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      if (mode === 'signin') {
+        await signIn(email, password)
+      } else {
+        await signUp(email, password)
+      }
+      navigate('/dashboard')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Authentication failed')
+    } finally {
+      setLoading(false)
     }
-    setLoading(true);
-    const result = isSignUp ? await signUp(email, password) : await signIn(email, password);
-    setLoading(false);
+  }
 
-    if (result.error) {
-      toast(result.error, 'error');
-      return;
-    }
+  return (
+    <div className="auth-page">
+      <div className="auth-card">
+        <div className="auth-logo">Seatly</div>
+        <p className="auth-tagline">Event seating made simple</p>
 
-    toast(isSignUp ? 'Account created successfully!' : 'Signed in successfully!', 'success');
-    navigate('/dashboard');
-  };
+        <form onSubmit={handleSubmit} className="auth-form">
+          <div className="form-group">
+            <label className="form-label">Email</label>
+            <input
+              type="email"
+              className="input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              autoComplete="email"
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Password</label>
+            <input
+              type="password"
+              className="input"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+            />
+          </div>
+          {error && <div className="auth-error">{error}</div>}
+          <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={loading}>
+            {loading ? 'Please wait…' : mode === 'signin' ? 'Sign In' : 'Create Account'}
+          </button>
+        </form>
 
-  return React.createElement(
-    'div',
-    { className: 'loading-screen' },
-    React.createElement(
-      'div',
-      { className: 'card', style: { width: '100%', maxWidth: '400px', padding: '32px' } },
-      React.createElement('h1', { style: { fontSize: '28px', fontWeight: 700, marginBottom: '4px' } }, 'Seatly'),
-      React.createElement('p', { className: 'text-muted text-sm', style: { marginBottom: '24px' } }, 'Event seating made simple'),
-      React.createElement(
-        'form',
-        { onSubmit: handleSubmit, className: 'flex-col gap-4' },
-        React.createElement(
-          'div',
-          null,
-          React.createElement('label', null, 'Email'),
-          React.createElement('input', {
-            type: 'email',
-            value: email,
-            onChange: (e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value),
-            placeholder: 'you@example.com',
-            autoComplete: 'email',
-          }),
-        ),
-        React.createElement(
-          'div',
-          null,
-          React.createElement('label', null, 'Password'),
-          React.createElement('input', {
-            type: 'password',
-            value: password,
-            onChange: (e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value),
-            placeholder: '••••••••',
-            autoComplete: isSignUp ? 'new-password' : 'current-password',
-          }),
-        ),
-        React.createElement(
-          'button',
-          { type: 'submit', className: 'btn btn-primary w-full', disabled: loading },
-          loading ? 'Please wait...' : isSignUp ? 'Sign Up' : 'Sign In',
-        ),
-        React.createElement(
-          'div',
-          { className: 'text-center text-sm text-muted' },
-          isSignUp ? 'Already have an account? ' : "Don't have an account? ",
-          React.createElement(
-            'button',
-            {
-              type: 'button',
-              className: 'btn btn-secondary ee-btn-sm',
-              style: { display: 'inline-flex', padding: '4px 10px', height: 'auto' },
-              onClick: () => setIsSignUp(!isSignUp),
-            },
-            isSignUp ? 'Sign In' : 'Sign Up',
-          ),
-        ),
-      ),
-    ),
-  );
+        <button
+          className="auth-toggle"
+          onClick={() => {
+            setMode(mode === 'signin' ? 'signup' : 'signin')
+            setError('')
+          }}
+        >
+          {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+        </button>
+      </div>
+    </div>
+  )
 }

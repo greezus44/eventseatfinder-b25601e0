@@ -1,210 +1,221 @@
-import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
-import type { GuestInput, Table } from '@/types';
+import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
 
 export interface ParsedGuest {
-  name: string;
-  table: string;
-  [key: string]: unknown;
+  name: string
+  tableName: string
 }
 
-export interface GuestWithTable extends GuestInput {
-  table_name: string;
-  raw_table: string;
+export interface ImportResult {
+  guests: ParsedGuest[]
+  totalFound: number
+  format: string
 }
 
-export interface ImportSummary {
-  total: number;
-  matched: number;
-  unmatched: number;
-  guests: GuestWithTable[];
-  unmatchedTables: string[];
-  errors: string[];
+export class ImportError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ImportError'
+  }
 }
 
-export async function parseFile(file: File): Promise<ParsedGuest[]> {
-  const ext = file.name.split('.').pop()?.toLowerCase();
+export function classifyError(error: unknown): string {
+  if (error instanceof ImportError) return error.message
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase()
+    if (msg.includes('network') || msg.includes('fetch')) return 'Network error. Check your connection and try again.'
+    if (msg.includes('permission') || msg.includes('rls') || msg.includes('policy')) return 'Permission denied. You may not have access to this event.'
+    if (msg.includes('duplicate')) return 'Some guests already exist in this event.'
+    if (msg.includes('parse') || msg.includes('invalid')) return 'Could not parse the file. Check the format and try again.'
+    return error.message
+  }
+  return 'An unexpected error occurred. Please try again.'
+}
+
+function extractNamesFromText(text: string): ParsedGuest[] {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0)
+  const guests: ParsedGuest[] = []
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    // Try to detect "Name - Table N" or "Name, Table N" or "Name\tTable N" patterns
+    const separators = ['\t', ',', ' - ', ' | ', ';']
+    let parsed = false
+
+    for (const sep of separators) {
+      if (trimmed.includes(sep)) {
+        const parts = trimmed.split(sep).map((p) => p.trim()).filter(Boolean)
+        if (parts.length >= 2) {
+          const name = parts[0]
+          const tablePart = parts.slice(1).join(' ')
+          if (name.length > 0 && name.length < 200) {
+            guests.push({ name, tableName: tablePart })
+            parsed = true
+            break
+          }
+        }
+      }
+    }
+
+    if (!parsed && trimmed.length > 0 && trimmed.length < 200) {
+      guests.push({ name: trimmed, tableName: '' })
+    }
+  }
+
+  return guests
+}
+
+export async function parseFile(file: File): Promise<ImportResult> {
+  const ext = file.name.toLowerCase().split('.').pop() ?? ''
 
   if (ext === 'csv') {
-    return new Promise<ParsedGuest[]>((resolve, reject) => {
-      Papa.parse<Record<string, unknown>>(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          const rows = results.data.map((row: Record<string, unknown>) => {
-            const obj = row as Record<string, string>;
-            const name = String(obj.name || obj.Name || obj.guest || obj.Guest || obj['Guest Name'] || obj['Full Name'] || '').trim();
-            const table = String(obj.table || obj.Table || obj['Table Number'] || obj.table_number || obj['Table Name'] || obj['Assigned Table'] || '').trim();
-            return { name, table, ...obj } as ParsedGuest;
-          });
-          resolve(rows.filter((r) => r.name));
-        },
-        error: (err: Error) => reject(err),
-      });
-    });
+    return parseCSV(file)
   }
-
   if (ext === 'xlsx' || ext === 'xls') {
-    const arrayBuffer = await file.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer);
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
-
-    return json.map((row) => {
-      const obj = row as Record<string, string>;
-      const name = String(obj.name || obj.Name || obj.guest || obj.Guest || obj['Guest Name'] || obj['Full Name'] || '').trim();
-      const table = String(obj.table || obj.Table || obj['Table Number'] || obj.table_number || obj['Table Name'] || obj['Assigned Table'] || '').trim();
-      return { name, table, ...obj } as ParsedGuest;
-    }).filter((r) => r.name);
+    return parseExcel(file)
   }
-
   if (ext === 'pdf') {
-    // Best-effort PDF text extraction using browser APIs
-    // PDFs are complex; we attempt basic text extraction
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      let textContent = '';
-
-      // Simple PDF text extraction: look for text between BT and ET markers
-      const decoder = new TextDecoder('latin1');
-      const raw = decoder.decode(bytes);
-
-      // Extract text from PDF streams (basic approach)
-      const textMatches = raw.match(/\(([^)]+)\)/g);
-      if (textMatches) {
-        textContent = textMatches.map(m => m.slice(1, -1)).join('\n');
-      }
-
-      // Parse lines as potential guest entries
-      const lines = textContent.split(/[\n\r]+/).filter(l => l.trim());
-
-      // Try to detect name and table patterns
-      const guests: ParsedGuest[] = [];
-      for (const line of lines) {
-        // Look for patterns like "Name - Table 1" or "Name, Table 1" or "Name | Table 1"
-        const match = line.match(/^(.+?)\s*[-,|]\s*(?:Table\s*)?(\d+|[A-Za-z\s]+)$/i);
-        if (match) {
-          const name = match[1].trim();
-          const table = match[2].trim();
-          if (name && name.length > 1) {
-            guests.push({ name, table });
-          }
-        } else if (line.trim().length > 1 && !line.includes('%') && !line.includes('/')) {
-          // Just a name without table
-          guests.push({ name: line.trim(), table: '' });
-        }
-      }
-
-      if (guests.length === 0) {
-        throw new Error('Could not extract guest data from PDF. Please ensure the PDF contains a table with guest names and table numbers, or use CSV/XLSX format instead.');
-      }
-
-      return guests;
-    } catch (err) {
-      if (err instanceof Error && err.message.includes('Could not extract')) {
-        throw err;
-      }
-      throw new Error('Failed to read PDF file. Please try CSV or XLSX format for better results.');
-    }
+    return parsePDF(file)
   }
 
-  throw new Error('Unsupported file format. Please upload CSV, XLSX, XLS, or PDF.');
+  // Try CSV as fallback
+  return parseCSV(file)
 }
 
-export function matchGuestsToTables(parsed: ParsedGuest[], tables: Table[]): GuestWithTable[] {
-  const tableMap = new Map<string, Table>();
-  for (const t of tables) {
-    tableMap.set(t.name.toLowerCase().trim(), t);
-    tableMap.set(String(t.number).toLowerCase().trim(), t);
-    tableMap.set(`table ${t.number}`.toLowerCase().trim(), t);
-    tableMap.set(`table ${t.name}`.toLowerCase().trim(), t);
-  }
-
-  return parsed.map((guest) => {
-    const tableRef = String(guest.table || '').trim();
-    let matchedTable: Table | undefined;
-
-    if (tableRef) {
-      const normalized = tableRef.toLowerCase().trim();
-      matchedTable = tableMap.get(normalized);
-
-      if (!matchedTable) {
-        const asNum = parseInt(tableRef, 10);
-        if (!isNaN(asNum)) {
-          matchedTable = tableMap.get(String(asNum));
+async function parseCSV(file: File): Promise<ImportResult> {
+  return new Promise((resolve, reject) => {
+    Papa.parse(file, {
+      header: false,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const guests: ParsedGuest[] = []
+        for (const row of results.data) {
+          const cells = (row as string[]).map((c) => (c ?? '').trim()).filter(Boolean)
+          if (cells.length === 0) continue
+          const name = cells[0]
+          const tableName = cells.length > 1 ? cells[1] : ''
+          if (name) guests.push({ name, tableName })
         }
-      }
-
-      if (!matchedTable) {
-        const tableMatch = normalized.match(/^table\s*(\d+)$/);
-        if (tableMatch) {
-          const num = parseInt(tableMatch[1], 10);
-          matchedTable = tableMap.get(String(num));
-        }
-      }
-    }
-
-    return {
-      name: guest.name,
-      table_id: matchedTable ? matchedTable.id : null,
-      table_name: matchedTable ? matchedTable.name : '',
-      raw_table: tableRef,
-    };
-  });
+        resolve({ guests, totalFound: guests.length, format: 'CSV' })
+      },
+      error: (err) => reject(new ImportError(`CSV parse error: ${err.message}`)),
+    })
+  })
 }
 
-export function buildGuestPayload(mapped: GuestWithTable[], eventId: string) {
-  return mapped.map((g) => ({
-    event_id: eventId,
-    name: g.name,
-    table_id: g.table_id,
-  }));
+async function parseExcel(file: File): Promise<ImportResult> {
+  try {
+    const buf = await file.arrayBuffer()
+    const wb = XLSX.read(buf, { type: 'array' })
+    const sheet = wb.Sheets[wb.SheetNames[0]]
+    const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, blankrows: false })
+
+    const guests: ParsedGuest[] = []
+    for (const row of rows) {
+      const cells = (row ?? []).map((c) => String(c ?? '').trim()).filter(Boolean)
+      if (cells.length === 0) continue
+      const name = cells[0]
+      const tableName = cells.length > 1 ? cells[1] : ''
+      if (name) guests.push({ name, tableName })
+    }
+
+    return { guests, totalFound: guests.length, format: 'Excel' }
+  } catch {
+    throw new ImportError('Could not read the Excel file. Make sure it is a valid .xlsx or .xls file.')
+  }
 }
 
-export function classifyError(err: unknown): { message: string; type: string } {
-  if (!err) {
-    return { message: 'An unexpected error occurred. Please try again.', type: 'unknown' };
+async function parsePDF(file: File): Promise<ImportResult> {
+  try {
+    const buf = await file.arrayBuffer()
+    const bytes = new Uint8Array(buf)
+    let text = ''
+
+    // Basic PDF text extraction from content streams
+    const decoder = new TextDecoder('latin1')
+    const raw = decoder.decode(bytes)
+
+    // Extract text between BT and ET markers
+    const regex = /\(([^)]*)\)\s*Tj/g
+    let match: RegExpExecArray | null
+    const lines: string[] = []
+    let currentLine = ''
+
+    while ((match = regex.exec(raw)) !== null) {
+      const fragment = match[1]
+      if (fragment.includes(')') && !fragment.startsWith('\\')) {
+        currentLine += fragment
+        lines.push(currentLine)
+        currentLine = ''
+      } else {
+        currentLine += fragment + ' '
+      }
+    }
+    if (currentLine) lines.push(currentLine)
+
+    text = lines.join('\n')
+
+    if (!text.trim()) {
+      // Try alternative extraction: find all text in parentheses
+      const simpleRegex = /\(([^)]+)\)/g
+      const allText: string[] = []
+      while ((match = simpleRegex.exec(raw)) !== null) {
+        const t = match[1]
+        if (t.length > 1 && !/^[0-9]+$/.test(t) && !t.startsWith('/')) {
+          allText.push(t)
+        }
+      }
+      text = allText.join('\n')
+    }
+
+    if (!text.trim()) {
+      throw new ImportError('Could not extract text from PDF. Try converting to CSV or Excel.')
+    }
+
+    const guests = extractNamesFromText(text)
+    if (guests.length === 0) {
+      throw new ImportError('No guest names found in the PDF.')
+    }
+
+    return { guests, totalFound: guests.length, format: 'PDF' }
+  } catch (e) {
+    if (e instanceof ImportError) throw e
+    throw new ImportError('Could not read the PDF file. Try converting to CSV or Excel for better results.')
+  }
+}
+
+export function matchTableByName(
+  tableName: string,
+  tables: { id: string; name: string; number: number }[]
+): string | null {
+  if (!tableName || !tableName.trim()) return null
+
+  const normalized = tableName.trim().toLowerCase()
+
+  // Try exact name match
+  const exact = tables.find((t) => t.name.trim().toLowerCase() === normalized)
+  if (exact) return exact.id
+
+  // Try "Table N" format
+  const tableNumMatch = normalized.match(/table\s*(\d+)/)
+  if (tableNumMatch) {
+    const num = parseInt(tableNumMatch[1], 10)
+    const byNum = tables.find((t) => t.number === num)
+    if (byNum) return byNum.id
   }
 
-  if (err instanceof Error) {
-    const msg = err.message;
-
-    if (msg.includes('network') || msg.toLowerCase().includes('fetch') || msg.toLowerCase().includes('failed to fetch')) {
-      return { message: 'Network error. Please check your connection and try again.', type: 'network' };
-    }
-
-    if (msg.includes('Unsupported file format')) {
-      return { message: msg, type: 'file_format' };
-    }
-
-    if (msg.includes('Could not extract') || msg.includes('Failed to read')) {
-      return { message: msg, type: 'parse_error' };
-    }
-
-    if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('rls') || msg.toLowerCase().includes('policy')) {
-      return { message: 'Permission denied. You may not have access to this event.', type: 'permission' };
-    }
-
-    if (msg.toLowerCase().includes('duplicate')) {
-      return { message: 'Duplicate guest detected. Some guests may already exist.', type: 'duplicate' };
-    }
-
-    return { message: msg, type: 'error' };
+  // Try number match
+  const num = parseInt(normalized, 10)
+  if (!isNaN(num)) {
+    const byNum = tables.find((t) => t.number === num)
+    if (byNum) return byNum.id
   }
 
-  if (typeof err === 'object' && err !== null) {
-    const e = err as Record<string, unknown>;
-    const message = String(e.message || e.error || e.detail || '');
-    if (message) {
-      return { message, type: String(e.code || 'error') };
-    }
-  }
+  // Try partial name match
+  const partial = tables.find((t) => t.name.trim().toLowerCase().includes(normalized) || normalized.includes(t.name.trim().toLowerCase()))
+  if (partial) return partial.id
 
-  if (typeof err === 'string' && err.trim()) {
-    return { message: err, type: 'string' };
-  }
-
-  return { message: 'An unexpected error occurred. Please try again.', type: 'unknown' };
+  return null
 }

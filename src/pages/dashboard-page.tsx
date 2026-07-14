@@ -1,145 +1,177 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/providers/auth-provider';
-import { useToast } from '@/providers/toast-provider';
-import { useConfirmDialog } from '@/components/confirm-dialog';
-import { useEvents, useCreateEvent, useDeleteEvent } from '@/hooks/use-events';
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useEvents, useCreateEvent, useDeleteEvent } from '@/hooks/use-events'
+import { useToast } from '@/providers/toast-provider'
+import { useConfirmDialog } from '@/providers/confirm-dialog'
+import { AppHeader } from '@/components/app-header'
+import type { EventInput } from '@/types'
 
 export function DashboardPage() {
-  const { user } = useAuth();
-  const toast = useToast();
-  const { confirm, dialog } = useConfirmDialog();
-  const navigate = useNavigate();
+  const { data: events, isLoading } = useEvents()
+  const createEvent = useCreateEvent()
+  const deleteEvent = useDeleteEvent()
+  const toast = useToast()
+  const { confirm, dialog } = useConfirmDialog()
+  const navigate = useNavigate()
+  const [showCreate, setShowCreate] = useState(false)
+  const [name, setName] = useState('')
+  const [slug, setSlug] = useState('')
 
-  const { data: events, isLoading } = useEvents();
-  const createEvent = useCreateEvent();
-  const deleteEvent = useDeleteEvent();
-
-  const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
-
-  const generateSlug = (val: string) => {
-    return val
+  const generateSlug = (name: string) => {
+    return name
       .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '');
-  };
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 30)
+  }
 
   const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !slug.trim()) {
-      toast('Please enter an event name and slug.', 'error');
-      return;
-    }
-    if (!user) {
-      toast('You must be signed in to create an event.', 'error');
-      return;
-    }
-
+    e.preventDefault()
+    if (!name.trim()) return
+    const finalSlug = slug.trim() || generateSlug(name)
     try {
-      const created = await createEvent.mutateAsync({
-        name: name.trim(),
-        slug: slug.trim(),
-        user_id: user.id,
-        invitation_enabled: false,
-      });
-      toast('Event created successfully!', 'success');
-      setName('');
-      setSlug('');
-      navigate(`/events/${created.id}`);
-    } catch (err: any) {
-      toast(err.message || 'Failed to create event.', 'error');
+      const input: EventInput = { name: name.trim(), slug: finalSlug }
+      const event = await createEvent.mutateAsync(input)
+      toast('Event created successfully')
+      setShowCreate(false)
+      setName('')
+      setSlug('')
+      navigate(`/events/${event.id}`)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to create event', 'error')
     }
-  };
+  }
 
-  const handleDelete = async (eventId: string) => {
-    const ok = await confirm({
+  const handleDelete = async (id: string, name: string) => {
+    const confirmed = await confirm({
       title: 'Delete Event',
-      message: 'Are you sure you want to delete this event? This action cannot be undone.',
+      message: `Are you sure you want to delete "${name}"? This cannot be undone.`,
       confirmText: 'Delete',
-      cancelText: 'Cancel',
-    });
-    if (!ok) return;
-
+    })
+    if (!confirmed) return
     try {
-      await deleteEvent.mutateAsync(eventId);
-      toast('Event deleted.', 'success');
-    } catch (err: any) {
-      toast(err.message || 'Failed to delete event.', 'error');
+      await deleteEvent.mutateAsync(id)
+      toast('Event deleted')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to delete event', 'error')
     }
-  };
+  }
 
-  return React.createElement(
-    'div',
-    { className: 'ee-container' },
-    React.createElement('h1', { style: { fontSize: '28px', fontWeight: 700, marginBottom: '24px' } }, 'Your Events'),
-    React.createElement(
-      'div',
-      { className: 'card mb-6' },
-      React.createElement('h2', { className: 'ee-subsection-title', style: { marginTop: 0 } }, 'Create New Event'),
-      React.createElement(
-        'form',
-        { onSubmit: handleCreate, className: 'ee-add-form' },
-        React.createElement(
-          'div',
-          { className: 'ee-flex-input' },
-          React.createElement('label', null, 'Event Name'),
-          React.createElement('input', {
-            type: 'text',
-            value: name,
-            onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
-              setName(e.target.value);
-              setSlug(generateSlug(e.target.value));
-            },
-            placeholder: 'Wedding Reception',
-          }),
-        ),
-        React.createElement(
-          'div',
-          { className: 'ee-flex-input' },
-          React.createElement('label', null, 'Slug'),
-          React.createElement('input', {
-            type: 'text',
-            value: slug,
-            onChange: (e: React.ChangeEvent<HTMLInputElement>) => setSlug(generateSlug(e.target.value)),
-            placeholder: 'wedding-reception',
-          }),
-        ),
-        React.createElement('button', { type: 'submit', className: 'btn btn-primary', disabled: createEvent.isPending }, 'Create Event'),
-      ),
-    ),
-    isLoading
-      ? React.createElement('div', { className: 'text-center text-muted mt-6' }, 'Loading events...')
-      : events && events.length === 0
-        ? React.createElement('div', { className: 'card text-center text-muted' }, 'No events yet. Create one above to get started.')
-        : React.createElement(
-            'div',
-            { className: 'ee-list' },
-            events?.map((event) =>
-              React.createElement(
-                'div',
-                { key: event.id, className: 'ee-list-row' },
-                React.createElement(
-                  Link,
-                  { to: `/events/${event.id}`, style: { fontWeight: 500, fontSize: '15px' } },
-                  event.name,
-                ),
-                React.createElement(
-                  'div',
-                  { className: 'ee-row-gap' },
-                  React.createElement('span', { className: 'ee-muted' }, `/${event.slug}`),
-                  React.createElement(
-                    'button',
-                    { className: 'btn btn-danger ee-btn-sm', onClick: () => handleDelete(event.id) },
-                    'Delete',
-                  ),
-                ),
-              ),
-            ),
-          ),
-    dialog,
-  );
+  return (
+    <>
+      <AppHeader />
+      <div className="page">
+        <div className="page-header">
+          <h1 className="page-title">Your Events</h1>
+          <p className="page-subtitle">Create and manage your seating arrangements</p>
+        </div>
+
+        <div className="section">
+          <div className="dashboard-actions">
+            <button className="btn btn-primary" onClick={() => setShowCreate(!showCreate)}>
+              {showCreate ? 'Cancel' : 'Create New Event'}
+            </button>
+          </div>
+
+          {showCreate && (
+            <div className="card section" style={{ marginTop: 'var(--space-5)' }}>
+              <h3 className="section-title">New Event</h3>
+              <form onSubmit={handleCreate} className="dashboard-create-form">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Event Name</label>
+                    <input
+                      className="input"
+                      value={name}
+                      onChange={(e) => {
+                        setName(e.target.value)
+                        if (!slug || slug === generateSlug(name)) {
+                          setSlug(generateSlug(e.target.value))
+                        }
+                      }}
+                      placeholder="My Wedding"
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">URL Slug</label>
+                    <input
+                      className="input"
+                      value={slug}
+                      onChange={(e) => setSlug(e.target.value)}
+                      placeholder="my-wedding"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="dashboard-create-actions">
+                  <button type="submit" className="btn btn-primary" disabled={createEvent.isPending}>
+                    {createEvent.isPending ? 'Creating…' : 'Create Event'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+
+        {isLoading ? (
+          <div className="spinner-container">
+            <div className="spinner spinner-lg" />
+          </div>
+        ) : events && events.length > 0 ? (
+          <div className="grid grid-3">
+            {events.map((event) => (
+              <div key={event.id} className="card card-sm event-card" onClick={() => navigate(`/events/${event.id}`)}>
+                <div className="event-card-header">
+                  <h3 className="event-card-name">{event.name}</h3>
+                  {event.date && (
+                    <span className="badge">
+                      {new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  )}
+                </div>
+                {event.venue && <p className="event-card-venue">{event.venue}</p>}
+                <div className="event-card-actions">
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      navigate(`/events/${event.id}`)
+                    }}
+                  >
+                    Manage
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      window.open(`/e/${event.slug}`, '_blank')
+                    }}
+                  >
+                    View
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDelete(event.id, event.name)
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <h3>No events yet</h3>
+            <p>Click "Create New Event" to get started with your first seating arrangement.</p>
+          </div>
+        )}
+      </div>
+      {dialog}
+    </>
+  )
 }
