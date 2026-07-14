@@ -1,69 +1,90 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { GuestPageSettings, GuestPageSettingsInput } from '@/types/guest-page-settings';
+import type { GuestPageSettings, GuestPageSettingsInput } from '@/types';
 
-export function useGuestPageSettings(eventId: string) {
+export function useGuestPageSettings(eventId: string | undefined) {
   return useQuery({
     queryKey: ['guest-page-settings', eventId],
     queryFn: async () => {
+      if (!eventId) throw new Error('Event ID is required');
       const { data, error } = await supabase
         .from('guest_page_settings')
         .select('*')
         .eq('event_id', eventId)
-        .single();
-      if (error && error.code !== 'PGRST116') throw error;
+        .maybeSingle();
+      if (error) throw error;
       return data as GuestPageSettings | null;
     },
     enabled: !!eventId,
   });
 }
 
-export function useGuestPageSettingsBySlug(slug: string) {
+export function useGuestPageSettingsBySlug(slug: string | undefined) {
   return useQuery({
     queryKey: ['guest-page-settings-by-slug', slug],
     queryFn: async () => {
+      if (!slug) throw new Error('Slug is required');
       const { data, error } = await supabase
-        .from('events')
+        .from('guest_page_settings')
         .select(
-          'id, name, slug, date, time, venue, logo_url, cover_url, accent_color, invitation_enabled, guest_page_settings(*)',
+          '*, event:events(id, name, slug, date, time, venue, logo_url, cover_url, accent_color)'
         )
-        .eq('slug', slug)
-        .single();
+        .eq('event.slug', slug)
+        .maybeSingle();
       if (error) throw error;
-      return data as unknown as {
-        id: string;
-        name: string;
-        slug: string;
-        date: string | null;
-        time: string | null;
-        venue: string | null;
-        logo_url: string | null;
-        cover_url: string | null;
-        accent_color: string | null;
-        invitation_enabled: boolean;
-        guest_page_settings: GuestPageSettings | null;
-      };
+      return data as (GuestPageSettings & {
+        event: {
+          id: string;
+          name: string;
+          slug: string;
+          date: string | null;
+          time: string | null;
+          venue: string | null;
+          logo_url: string | null;
+          cover_url: string | null;
+          accent_color: string | null;
+        };
+      }) | null;
     },
     enabled: !!slug,
-    staleTime: 0,
   });
 }
 
 export function useUpsertGuestPageSettings() {
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: GuestPageSettingsInput) => {
-      const { data, error } = await supabase
+    mutationFn: async ({
+      eventId,
+      ...input
+    }: { eventId: string } & GuestPageSettingsInput) => {
+      const { data: existing } = await supabase
         .from('guest_page_settings')
-        .upsert(input)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as GuestPageSettings;
+        .select('id')
+        .eq('event_id', eventId)
+        .maybeSingle();
+
+      if (existing) {
+        const { data, error } = await supabase
+          .from('guest_page_settings')
+          .update(input)
+          .eq('event_id', eventId)
+          .select()
+          .single();
+        if (error) throw error;
+        return data as GuestPageSettings;
+      } else {
+        const { data, error } = await supabase
+          .from('guest_page_settings')
+          .insert({ event_id: eventId, ...input })
+          .select()
+          .single();
+        if (error) throw error;
+        return data as GuestPageSettings;
+      }
     },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['guest-page-settings', variables.event_id] });
-      queryClient.invalidateQueries({ queryKey: ['guest-page-settings-by-slug'] });
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['guest-page-settings', variables.eventId] });
+      qc.invalidateQueries({ queryKey: ['guest-page-settings-by-slug'] });
     },
   });
 }

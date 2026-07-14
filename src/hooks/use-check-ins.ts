@@ -1,54 +1,63 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { CheckIn, CheckInInput } from '@/types/check-in';
+import type { CheckIn } from '@/types';
 
-export function useCheckIns(eventId: string) {
+export function useCheckIns(eventId: string | undefined) {
   return useQuery({
     queryKey: ['check-ins', eventId],
     queryFn: async () => {
+      if (!eventId) throw new Error('Event ID is required');
       const { data, error } = await supabase
         .from('check_ins')
-        .select('*, guest:guests(id, name)')
-        .eq('event_id', eventId)
-        .order('checked_in_at', { ascending: false });
+        .select('*')
+        .eq('event_id', eventId);
       if (error) throw error;
-      return data as (CheckIn & { guest: { id: string; name: string } })[];
+      return data as CheckIn[];
     },
     enabled: !!eventId,
   });
 }
 
 export function useCreateCheckIn() {
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: CheckInInput) => {
+    mutationFn: async ({
+      eventId,
+      guestId,
+      plusOnesActual = 0,
+    }: {
+      eventId: string;
+      guestId: string;
+      plusOnesActual?: number;
+    }) => {
       const { data, error } = await supabase
         .from('check_ins')
         .insert({
-          guest_id: input.guest_id,
-          event_id: input.event_id,
-          method: input.method ?? 'manual',
+          event_id: eventId,
+          guest_id: guestId,
+          plus_ones_actual: plusOnesActual,
         })
         .select()
         .single();
       if (error) throw error;
       return data as CheckIn;
     },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['check-ins', variables.event_id] });
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['check-ins', data.event_id] });
     },
   });
 }
 
 export function useDeleteCheckIn() {
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, eventId }: { id: string; eventId: string }) => {
       const { error } = await supabase.from('check_ins').delete().eq('id', id);
       if (error) throw error;
+      return { eventId };
     },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['check-ins', variables.eventId] });
+    onSuccess: ({ eventId }) => {
+      qc.invalidateQueries({ queryKey: ['check-ins', eventId] });
     },
   });
 }

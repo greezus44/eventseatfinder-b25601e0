@@ -1,119 +1,132 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { Guest, GuestInput, GuestWithTable } from '@/types/guest';
+import type { Guest, GuestInput } from '@/types';
 
-export function useGuests(eventId: string) {
+export function useGuests(eventId: string | undefined) {
   return useQuery({
     queryKey: ['guests', eventId],
     queryFn: async () => {
+      if (!eventId) throw new Error('Event ID is required');
       const { data, error } = await supabase
         .from('guests')
-        .select('*, table:tables(id, number, name)')
+        .select('*')
         .eq('event_id', eventId)
         .order('created_at', { ascending: true });
       if (error) throw error;
-      return data as GuestWithTable[];
+      return data as Guest[];
     },
     enabled: !!eventId,
   });
 }
 
-export function useSearchGuest(eventId: string, query: string) {
-  return useQuery({
-    queryKey: ['guests', eventId, 'search', query],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('guests')
-        .select('*, table:tables(id, number, name)')
-        .eq('event_id', eventId)
-        .ilike('name', `%${query}%`)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      return data as GuestWithTable[];
-    },
-    enabled: !!eventId && !!query,
-  });
-}
-
 export function useCreateGuest() {
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: GuestInput) => {
+    mutationFn: async ({ eventId, ...input }: { eventId: string } & GuestInput) => {
       const { data, error } = await supabase
         .from('guests')
-        .insert({
-          event_id: input.event_id,
-          name: input.name,
-          email: input.email ?? null,
-          phone: input.phone ?? null,
-          table_id: input.table_id ?? null,
-          party_size: input.party_size ?? 1,
-          dietary_notes: input.dietary_notes ?? null,
-        })
+        .insert({ event_id: eventId, ...input })
         .select()
         .single();
       if (error) throw error;
       return data as Guest;
     },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['guests', variables.event_id] });
-    },
-  });
-}
-
-export function useBulkCreateGuests() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (inputs: GuestInput[]) => {
-      const { data, error } = await supabase.from('guests').insert(inputs).select();
-      if (error) throw error;
-      return data as Guest[];
-    },
-    onSuccess: (_data, variables) => {
-      const eventId = variables[0]?.event_id;
-      if (eventId) {
-        queryClient.invalidateQueries({ queryKey: ['guests', eventId] });
-      }
-    },
-  });
-}
-
-export function useUpdateGuest() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, ...input }: GuestInput & { id: string }) => {
-      const { data, error } = await supabase
-        .from('guests')
-        .update({
-          event_id: input.event_id,
-          name: input.name,
-          email: input.email ?? null,
-          phone: input.phone ?? null,
-          table_id: input.table_id ?? null,
-          party_size: input.party_size ?? 1,
-          dietary_notes: input.dietary_notes ?? null,
-        })
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Guest;
-    },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['guests', variables.event_id] });
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['guests', data.event_id] });
     },
   });
 }
 
 export function useDeleteGuest() {
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, eventId }: { id: string; eventId: string }) => {
       const { error } = await supabase.from('guests').delete().eq('id', id);
       if (error) throw error;
+      return { eventId };
     },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['guests', variables.eventId] });
+    onSuccess: ({ eventId }) => {
+      qc.invalidateQueries({ queryKey: ['guests', eventId] });
+    },
+  });
+}
+
+export function useBulkCreateGuests() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      eventId,
+      guests,
+    }: {
+      eventId: string;
+      guests: GuestInput[];
+    }) => {
+      console.log('[BulkCreateGuests] Starting insert', {
+        eventId,
+        guestCount: guests.length,
+      });
+      console.log('[BulkCreateGuests] Sample payload', guests.slice(0, 3));
+
+      const payload = guests.map((g) => ({
+        event_id: eventId,
+        name: g.name,
+        table_id: g.table_id ?? null,
+      }));
+
+      console.log('[BulkCreateGuests] Mapped payload sample', payload.slice(0, 3));
+
+      const BATCH_SIZE = 500;
+      const results: Guest[] = [];
+      const errors: { batch: number; error: string }[] = [];
+
+      for (let i = 0; i < payload.length; i += BATCH_SIZE) {
+        const batch = payload.slice(i, i + BATCH_SIZE);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+        console.log(`[BulkCreateGuests] Inserting batch ${batchNum}`, {
+          startIndex: i,
+          batchSize: batch.length,
+        });
+
+        const { data, error } = await supabase
+          .from('guests')
+          .insert(batch)
+          .select();
+
+        console.log(`[BulkCreateGuests] Batch ${batchNum} response`, {
+          insertedCount: data?.length ?? 0,
+          error: error ? { message: error.message, code: error.code, details: error.details } : null,
+        });
+
+        if (error) {
+          console.error(`[BulkCreateGuests] Batch ${batchNum} failed`, error);
+          errors.push({ batch: batchNum, error: error.message });
+        } else if (data) {
+          results.push(...(data as Guest[]));
+        }
+      }
+
+      if (errors.length > 0 && results.length === 0) {
+        throw new Error(
+          `Database insert failed: ${errors[0].error}`
+        );
+      }
+
+      if (errors.length > 0) {
+        console.warn(
+          `[BulkCreateGuests] Completed with partial errors`,
+          { inserted: results.length, errors }
+        );
+      }
+
+      console.log('[BulkCreateGuests] Insert complete', {
+        totalInserted: results.length,
+        totalErrors: errors.length,
+      });
+
+      return { inserted: results.length, errors };
+    },
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['guests', variables.eventId] });
     },
   });
 }

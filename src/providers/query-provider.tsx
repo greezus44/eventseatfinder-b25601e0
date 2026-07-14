@@ -1,16 +1,16 @@
+import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
-import { useState } from 'react';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 0,
       refetchOnWindowFocus: false,
+      retry: 1,
     },
   },
 });
 
-export function QueryProvider({ children }: { children: ReactNode }) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+export function QueryProvider({ children }: { children: React.ReactNode }) {
+  return React.createElement(QueryClientProvider, { client: queryClient }, children);
 }
