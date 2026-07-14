@@ -44,25 +44,6 @@ export interface GuestPageSettingsInput {
   schedule_items?: ScheduleItem[];
 }
 
-export const DEFAULT_SETTINGS: GuestPageSettingsInput = {
-  event_id: '',
-  venue_image_url: null,
-  cover_image: null,
-  logo_url: null,
-  logo_size: 64,
-  color_primary: '#1A1A1A',
-  color_secondary: '#4A4A4A',
-  color_background: '#FAF3E8',
-  color_button: '#1A1A1A',
-  color_button_text: '#FFFFFF',
-  color_link: '#1A1A1A',
-  color_footer: '#EFEFEF',
-  font_heading: 'Inter',
-  font_body: 'Inter',
-  radius: 12,
-  schedule_items: [],
-};
-
 export interface ThemePreset {
   name: string;
   color_primary: string;
@@ -73,6 +54,19 @@ export interface ThemePreset {
   color_link: string;
   color_footer: string;
 }
+
+export interface FontOption {
+  label: string;
+  value: string;
+}
+
+export const DEFAULT_SETTINGS: GuestPageSettingsInput = {
+  event_id: '',
+  color_primary: '#1A1A1A',
+  color_background: '#FAF3E8',
+  logo_size: 64,
+  radius: 12,
+};
 
 export const THEME_PRESETS: ThemePreset[] = [
   {
@@ -93,7 +87,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     color_button: '#FFFFFF',
     color_button_text: '#1A1A1A',
     color_link: '#FFFFFF',
-    color_footer: '#2A2A2A',
+    color_footer: '#0A0A0A',
   },
   {
     name: 'Minimal Grey',
@@ -107,28 +101,28 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     name: 'Emerald',
-    color_primary: '#065F46',
-    color_secondary: '#10B981',
-    color_background: '#F0FDF4',
-    color_button: '#065F46',
+    color_primary: '#047857',
+    color_secondary: '#065F46',
+    color_background: '#ECFDF5',
+    color_button: '#047857',
     color_button_text: '#FFFFFF',
-    color_link: '#065F46',
+    color_link: '#047857',
     color_footer: '#D1FAE5',
   },
   {
     name: 'Royal Blue',
-    color_primary: '#1E3A8A',
-    color_secondary: '#3B82F6',
+    color_primary: '#1E40AF',
+    color_secondary: '#1E3A8A',
     color_background: '#EFF6FF',
-    color_button: '#1E3A8A',
+    color_button: '#1E40AF',
     color_button_text: '#FFFFFF',
-    color_link: '#1E3A8A',
+    color_link: '#1E40AF',
     color_footer: '#DBEAFE',
   },
   {
     name: 'Romantic Blush',
     color_primary: '#9F1239',
-    color_secondary: '#F43F5E',
+    color_secondary: '#881337',
     color_background: '#FFF1F2',
     color_button: '#9F1239',
     color_button_text: '#FFFFFF',
@@ -137,28 +131,23 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
 ];
 
-export interface FontOption {
-  label: string;
-  value: string;
-}
-
 export const FONT_OPTIONS: FontOption[] = [
   { label: 'Inter', value: 'Inter' },
+  { label: 'Poppins', value: 'Poppins' },
+  { label: 'Montserrat', value: 'Montserrat' },
   { label: 'Roboto', value: 'Roboto' },
   { label: 'Open Sans', value: 'Open Sans' },
   { label: 'Lato', value: 'Lato' },
-  { label: 'Montserrat', value: 'Montserrat' },
-  { label: 'Poppins', value: 'Poppins' },
-  { label: 'Raleway', value: 'Raleway' },
-  { label: 'Nunito', value: 'Nunito' },
   { label: 'Playfair Display', value: 'Playfair Display' },
+  { label: 'Cormorant Garamond', value: 'Cormorant Garamond' },
   { label: 'Merriweather', value: 'Merriweather' },
   { label: 'Lora', value: 'Lora' },
-  { label: 'Cormorant Garamond', value: 'Cormorant Garamond' },
-  { label: 'Crimson Text', value: 'Crimson Text' },
-  { label: 'Source Sans Pro', value: 'Source Sans Pro' },
+  { label: 'Source Serif Pro', value: 'Source Serif Pro' },
+  { label: 'EB Garamond', value: 'EB Garamond' },
+  { label: 'Nunito', value: 'Nunito' },
+  { label: 'Raleway', value: 'Raleway' },
   { label: 'Work Sans', value: 'Work Sans' },
   { label: 'DM Sans', value: 'DM Sans' },
-  { label: 'Karla', value: 'Karla' },
-  { label: 'Libre Baskerville', value: 'Libre Baskerville' },
+  { label: 'Manrope', value: 'Manrope' },
+  { label: 'Josefin Sans', value: 'Josefin Sans' },
 ];

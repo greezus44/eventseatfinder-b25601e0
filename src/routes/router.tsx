@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/app-layout';
 import { ProtectedLayout } from '@/components/layout/protected-layout';
 import { LoginPage } from '@/pages/login-page';
@@ -26,9 +26,10 @@ export function AppRouter() {
         >
           <Route index element={<DashboardPage />} />
           <Route path="events/:eventId" element={<EventEditorPage />} />
+          <Route path="events/:eventId/print/seating" element={<PrintSeatingChartPage />} />
+          <Route path="events/:eventId/print/guests" element={<PrintGuestListPage />} />
         </Route>
-        <Route path="/events/:eventId/print/seating" element={<PrintSeatingChartPage />} />
-        <Route path="/events/:eventId/print/guests" element={<PrintGuestListPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

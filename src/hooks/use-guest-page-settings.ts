@@ -1,6 +1,6 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { GuestPageSettings, GuestPageSettingsInput } from '@/types/guest-page-settings';
+import type { GuestPageSettings, GuestPageSettingsInput } from '@/types/guest-page-settings';
 
 export function useGuestPageSettings(eventId: string) {
   return useQuery({
@@ -10,8 +10,8 @@ export function useGuestPageSettings(eventId: string) {
         .from('guest_page_settings')
         .select('*')
         .eq('event_id', eventId)
-        .maybeSingle();
-      if (error) throw error;
+        .single();
+      if (error && error.code !== 'PGRST116') throw error;
       return data as GuestPageSettings | null;
     },
     enabled: !!eventId,
@@ -24,7 +24,9 @@ export function useGuestPageSettingsBySlug(slug: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('events')
-        .select('id, name, slug, date, time, venue, logo_url, cover_url, accent_color, invitation_enabled, guest_page_settings(*)')
+        .select(
+          'id, name, slug, date, time, venue, logo_url, cover_url, accent_color, invitation_enabled, guest_page_settings(*)',
+        )
         .eq('slug', slug)
         .single();
       if (error) throw error;
@@ -43,6 +45,7 @@ export function useGuestPageSettingsBySlug(slug: string) {
       };
     },
     enabled: !!slug,
+    staleTime: 0,
   });
 }
 
