@@ -144,7 +144,6 @@ export function InvitationPage() {
   const primary = settings.color_primary ?? '#0f766e'
   const bg = settings.color_background ?? '#f8fafc'
   const text = settings.color_text ?? '#0f172a'
-  const cardBg = settings.color_card ?? '#ffffff'
   const radius = `${settings.border_radius ?? 16}px`
   const logoSize = settings.logo_size ?? 80
   const logoRounded = settings.logo_rounded ?? false
@@ -178,7 +177,6 @@ export function InvitationPage() {
           <div className="gp-find-seat">
             {findView === 'search' && (
               <div className="gp-search-section">
-                {/* No heading above the search box — only the placeholder */}
                 <div className="gp-autocomplete-wrapper" ref={searchWrapperRef}>
                   <input
                     ref={inputRef}
@@ -208,6 +206,7 @@ export function InvitationPage() {
                             style={{ background: i === highlightIndex ? `${primary}15` : 'transparent' }}
                           >
                             <span className="gp-autocomplete-name" style={{ color: text }}>{g.name}</span>
+                            {/* Wider rectangular badge with generous horizontal padding */}
                             <span className="gp-table-badge" style={{
                               background: bg,
                               borderColor: primary,
@@ -228,12 +227,14 @@ export function InvitationPage() {
             {findView === 'table' && selectedGuest && (
               <div className="gp-table-info">
                 <h2 className="gp-table-info-title" style={{ color: text }}>This Is Your Table</h2>
-                <div className="gp-table-info-card" style={{ background: cardBg, borderColor: primary, borderRadius: radius }}>
+                <div className="gp-table-info-card" style={{ background: bg, borderColor: primary, borderRadius: radius }}>
                   <div className="gp-table-info-left">
-                    <p className="gp-table-info-name" style={{ color: text }}>{selectedGuest.name}</p>
+                    {/* Slightly larger text (~12.5% increase from 20px to 22.5px) */}
+                    <p className="gp-table-info-name" style={{ color: text, fontSize: '22.5px' }}>{selectedGuest.name}</p>
                   </div>
                   <div className="gp-table-info-right">
-                    <span className="gp-table-info-badge" style={{ background: primary, color: '#fff', borderRadius: radius }}>
+                    {/* Same theme-aware styling, slightly larger text (~12.5% increase from 16px to 18px) */}
+                    <span className="gp-table-info-badge" style={{ background: bg, borderColor: primary, color: primary, borderRadius: radius, fontSize: '18px' }}>
                       {selectedGuest.table_name}
                     </span>
                   </div>

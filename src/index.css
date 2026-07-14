@@ -221,17 +221,21 @@ body { font-family: var(--font-sans); background: var(--color-bg); color: var(--
 .gp-autocomplete-name { font-weight: 500; flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gp-autocomplete-empty { padding: var(--space-5); text-align: center; font-size: 14px; color: var(--color-text-muted); }
 
-/* Table badge — wider, rounded, themed */
-.gp-table-badge { display: inline-flex; align-items: center; padding: 3px var(--space-4); font-size: 12px; font-weight: 600; border: 1px solid; white-space: nowrap; flex-shrink: 0; min-height: 26px; }
+/* Table badge — wider rectangular shape with generous horizontal padding */
+.gp-table-badge { display: inline-flex; align-items: center; padding: 4px var(--space-5); font-size: 12px; font-weight: 600; border: 1px solid; white-space: nowrap; flex-shrink: 0; min-height: 28px; line-height: 1; }
 
 /* This Is Your Table view */
 .gp-table-info { max-width: 460px; margin: 0 auto; }
 .gp-table-info-title { font-size: 24px; font-weight: 700; margin-bottom: var(--space-5); }
-.gp-table-info-card { display: flex; align-items: center; justify-content: space-between; padding: var(--space-6) var(--space-7); border: 1px solid; box-shadow: var(--shadow-sm); gap: var(--space-4); }
+
+/* Card uses page background colour, accent border — no hardcoded colours */
+.gp-table-info-card { display: flex; align-items: center; justify-content: space-between; padding: var(--space-6) var(--space-7); border: 1px solid; gap: var(--space-4); }
 .gp-table-info-left { text-align: left; }
-.gp-table-info-name { font-size: 20px; font-weight: 700; }
+.gp-table-info-name { font-weight: 700; }
+
+/* Badge on the table page — same theme-aware styling, accent border + text */
 .gp-table-info-right { display: flex; align-items: center; gap: var(--space-2); }
-.gp-table-info-badge { display: inline-flex; align-items: center; padding: var(--space-2) var(--space-5); font-size: 16px; font-weight: 600; }
+.gp-table-info-badge { display: inline-flex; align-items: center; padding: var(--space-2) var(--space-5); font-weight: 600; border: 1px solid; }
 .gp-back-btn { margin-top: var(--space-5); }
 
 /* Layout tab */
