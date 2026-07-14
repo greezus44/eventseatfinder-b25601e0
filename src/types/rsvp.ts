@@ -11,6 +11,10 @@ export interface RSVP {
   updated_at: string;
 }
 
+export interface RSVPWithGuest extends RSVP {
+  guest: { id: string; name: string };
+}
+
 export interface RSVPInput {
   event_id: string;
   guest_id: string;

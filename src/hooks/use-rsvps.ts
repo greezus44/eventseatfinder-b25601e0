@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { RSVP, RSVPStatus } from '@/types/rsvp';
+import type { RSVP, RSVPStatus, RSVPWithGuest } from '@/types/rsvp';
 
 const QUERY_KEY = 'rsvps';
 
@@ -16,9 +16,7 @@ export function useRSVPs(eventId: string) {
         .eq('event_id', eventId)
         .order('updated_at', { ascending: false });
       if (error) throw error;
-      return data as unknown as (RSVP & {
-        guest: { id: string; name: string };
-      })[];
+      return data as unknown as RSVPWithGuest[];
     },
     enabled: !!eventId,
   });

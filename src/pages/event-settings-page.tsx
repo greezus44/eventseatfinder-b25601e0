@@ -1,10 +1,10 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useEvent, useUpdateEvent } from '@/hooks/use-events';
-import { useRSVPs } from '@/hooks/use-rsvps';
 import { useGuests } from '@/hooks/use-guests';
+import { useRSVPs } from '@/hooks/use-rsvps';
 import { useToast } from '@/providers/toast-provider';
-import { ErrorScreen, LoadingScreen, Spinner } from '@/components/ui/feedback';
+import { Spinner, ErrorScreen, LoadingScreen } from '@/components/ui/feedback';
 
 export function EventSettingsPage() {
   const { eventId } = useParams<{ eventId: string }>();
@@ -12,241 +12,268 @@ export function EventSettingsPage() {
   const updateEvent = useUpdateEvent();
   const { toast } = useToast();
 
-  const [form, setForm] = useState({
-    name: '',
-    date: '',
-    time: '',
-    venue: '',
-    accent_color: '#4f46e5',
-    invitation_enabled: false,
-  });
-  const [saving, setSaving] = useState(false);
+  const [name, setName] = useState('');
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
+  const [venue, setVenue] = useState('');
+  const [accentColor, setAccentColor] = useState('#6366f1');
+  const [invitationEnabled, setInvitationEnabled] = useState(false);
 
   useEffect(() => {
     if (event) {
-      setForm({
-        name: event.name,
-        date: event.date ?? '',
-        time: event.time ?? '',
-        venue: event.venue ?? '',
-        accent_color: event.accent_color ?? '#4f46e5',
-        invitation_enabled: event.invitation_enabled,
-      });
+      setName(event.name);
+      setDate(event.date ?? '');
+      setTime(event.time ?? '');
+      setVenue(event.venue ?? '');
+      setAccentColor(event.accent_color ?? '#6366f1');
+      setInvitationEnabled(event.invitation_enabled);
     }
   }, [event]);
 
-  if (isLoading) return <LoadingScreen message="Loading event…" />;
-  if (error)
-    return <ErrorScreen message={error.message || 'Failed to load event'} />;
+  if (isLoading) return <LoadingScreen message="Loading event..." />;
+  if (error) return <ErrorScreen message="Failed to load event" />;
   if (!event) return <ErrorScreen message="Event not found" />;
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSave = async (e: FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim()) {
-      toast('Event name is required', 'error');
-      return;
-    }
-    setSaving(true);
     try {
       await updateEvent.mutateAsync({
         id: event.id,
         input: {
-          name: form.name.trim(),
-          date: form.date || null,
-          time: form.time || null,
-          venue: form.venue.trim() || null,
-          accent_color: form.accent_color,
-          invitation_enabled: form.invitation_enabled,
+          name: name.trim(),
+          date: date || null,
+          time: time || null,
+          venue: venue.trim() || null,
+          accent_color: accentColor,
+          invitation_enabled: invitationEnabled,
         },
       });
-      toast('Event saved', 'success');
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to save event';
-      toast(message, 'error');
-    } finally {
-      setSaving(false);
+      toast('Event saved successfully', 'success');
+    } catch {
+      toast('Failed to save event', 'error');
     }
+  };
+
+  const handleCopyLink = () => {
+    const url = `${window.location.origin}/invite/${event.slug}`;
+    navigator.clipboard.writeText(url);
+    toast('Invitation link copied!', 'success');
   };
 
   return (
     <div className="page">
-      <header className="page__header">
+      <div className="page__header">
         <div>
-          <Link to="/" className="back-link">
-            ← Back to events
+          <Link
+            to="/"
+            className="btn btn--ghost btn--sm"
+            style={{ marginBottom: 'var(--space-2)' }}
+          >
+            ← Back
           </Link>
           <h1>Event Settings</h1>
         </div>
-        <div className="flex flex--gap-2">
+        <div className="flex gap-2">
           <Link
             to={`/events/${event.id}/guests`}
             className="btn btn--secondary"
           >
             Manage Guests
           </Link>
-          <Link to={`/events/${event.id}/seating`} className="btn btn--primary">
+          <Link
+            to={`/events/${event.id}/seating`}
+            className="btn btn--secondary"
+          >
             Seating
           </Link>
+          <Link
+            to={`/events/${event.id}/overview`}
+            className="btn btn--secondary"
+          >
+            Overview
+          </Link>
         </div>
-      </header>
+      </div>
 
-      <div className="card form-card">
-        <form className="form" onSubmit={handleSubmit}>
-          <label className="form-field">
-            <span className="form-field__label">Event name</span>
+      <div className="page__body">
+        <form
+          className="card"
+          onSubmit={handleSave}
+          style={{ marginBottom: 'var(--space-5)' }}
+        >
+          <div className="form-field">
+            <label className="form-field__label" htmlFor="name">
+              Event Name
+            </label>
             <input
+              id="name"
+              type="text"
               className="input"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               required
             />
-          </label>
+          </div>
 
           <div className="form-row">
-            <label className="form-field">
-              <span className="form-field__label">Date</span>
+            <div className="form-field">
+              <label className="form-field__label" htmlFor="date">
+                Date
+              </label>
               <input
-                className="input"
+                id="date"
                 type="date"
-                value={form.date}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, date: e.target.value }))
-                }
-              />
-            </label>
-            <label className="form-field">
-              <span className="form-field__label">Time</span>
-              <input
                 className="input"
-                type="time"
-                value={form.time}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, time: e.target.value }))
-                }
-              />
-            </label>
-          </div>
-
-          <label className="form-field">
-            <span className="form-field__label">Venue</span>
-            <input
-              className="input"
-              value={form.venue}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, venue: e.target.value }))
-              }
-              placeholder="Grand Ballroom"
-            />
-          </label>
-
-          <label className="form-field">
-            <span className="form-field__label">Accent color</span>
-            <div className="color-picker">
-              <input
-                className="color-picker__input"
-                type="color"
-                value={form.accent_color}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, accent_color: e.target.value }))
-                }
-              />
-              <input
-                className="input color-picker__hex"
-                value={form.accent_color}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, accent_color: e.target.value }))
-                }
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
               />
             </div>
+            <div className="form-field">
+              <label className="form-field__label" htmlFor="time">
+                Time
+              </label>
+              <input
+                id="time"
+                type="time"
+                className="input"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="form-field">
+            <label className="form-field__label" htmlFor="venue">
+              Venue
+            </label>
+            <input
+              id="venue"
+              type="text"
+              className="input"
+              value={venue}
+              onChange={(e) => setVenue(e.target.value)}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-field__label" htmlFor="accent">
+              Accent Color
+            </label>
+            <div className="flex gap-2" style={{ alignItems: 'center' }}>
+              <input
+                id="accent"
+                type="color"
+                className="input"
+                value={accentColor}
+                onChange={(e) => setAccentColor(e.target.value)}
+                style={{ width: 60, height: 40, padding: 4 }}
+              />
+              <span className="text-secondary">{accentColor}</span>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="btn btn--primary"
+            disabled={updateEvent.isPending}
+            style={{ marginTop: 'var(--space-4)' }}
+          >
+            {updateEvent.isPending ? <Spinner size={20} /> : 'Save Changes'}
+          </button>
+        </form>
+
+        <div className="card" style={{ marginBottom: 'var(--space-5)' }}>
+          <h3 style={{ marginBottom: 'var(--space-3)' }}>Invitation</h3>
+          <label
+            className="invite-toggle"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-3)',
+              cursor: 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={invitationEnabled}
+              onChange={(e) => setInvitationEnabled(e.target.checked)}
+              style={{ width: 20, height: 20 }}
+            />
+            <span>Enable guest invitations & RSVP tracking</span>
           </label>
 
-          <div className="form__actions">
-            <button
-              className="btn btn--primary"
-              type="submit"
-              disabled={saving}
+          {invitationEnabled && (
+            <div
+              className="public-link"
+              style={{ marginTop: 'var(--space-4)' }}
             >
-              {saving ? <Spinner size={18} /> : 'Save changes'}
-            </button>
-          </div>
-        </form>
-      </div>
+              <span className="public-link__url">
+                {window.location.origin}/invite/{event.slug}
+              </span>
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                onClick={handleCopyLink}
+              >
+                Copy Link
+              </button>
+            </div>
+          )}
+        </div>
 
-      <div className="card form-card">
-        <h3>Digital Invitations</h3>
-        <p className="text-secondary">
-          Enable invitations to allow guests to RSVP online.
-        </p>
-        <label className="form-field invite-toggle">
-          <input
-            type="checkbox"
-            checked={form.invitation_enabled}
-            onChange={(e) =>
-              setForm((f) => ({
-                ...f,
-                invitation_enabled: e.target.checked,
-              }))
-            }
-          />
-          <span>Enable digital invitations</span>
-        </label>
-        {form.invitation_enabled && (
-          <div className="public-link" style={{ marginTop: 'var(--space-4)' }}>
-            <code className="public-link__url">
-              {window.location.origin}/invite/{event.slug}
-            </code>
-            <button
-              className="btn btn--secondary btn--sm"
-              onClick={() => {
-                navigator.clipboard.writeText(
-                  `${window.location.origin}/invite/${event.slug}`,
-                );
-                toast('Invitation link copied', 'success');
-              }}
-            >
-              Copy
-            </button>
-          </div>
-        )}
+        <RSVPTrackingPanel eventId={event.id} />
       </div>
-
-      <RSVPTracking eventId={event.id} />
     </div>
   );
 }
 
-function RSVPTracking({ eventId }: { eventId: string }) {
-  const { data: rsvps, isLoading } = useRSVPs(eventId);
-  const { data: guests } = useGuests(eventId);
+function RSVPTrackingPanel({ eventId }: { eventId: string }) {
+  const { data: rsvps, isLoading: rsvpLoading } = useRSVPs(eventId);
+  const { data: guests, isLoading: guestsLoading } = useGuests(eventId);
 
-  if (isLoading) return null;
+  if (rsvpLoading || guestsLoading) {
+    return (
+      <div className="card">
+        <Spinner size={24} />
+      </div>
+    );
+  }
 
-  const attending = rsvps?.filter((r) => r.status === 'attending') ?? [];
-  const declined = rsvps?.filter((r) => r.status === 'not_attending') ?? [];
-  const rsvpedIds = new Set(rsvps?.map((r) => r.guest_id) ?? []);
-  const pending = (guests ?? []).filter((g) => !rsvpedIds.has(g.id));
-  const totalPlusOnes = attending.reduce(
-    (sum, r) => sum + (r.plus_ones ?? 0),
-    0,
+  const attending = (rsvps ?? []).filter((r) => r.status === 'attending');
+  const declined = (rsvps ?? []).filter((r) => r.status === 'not_attending');
+  const pending = (guests ?? []).filter(
+    (g) => !(rsvps ?? []).some((r) => r.guest_id === g.id),
   );
+  const totalPlusOnes = attending.reduce((sum, r) => sum + r.plus_ones, 0);
 
-  if ((guests ?? []).length === 0) return null;
+  const statusBadge = (status: string): string => {
+    if (status === 'attending')
+      return 'rsvp-item__badge rsvp-item__badge--attending';
+    if (status === 'not_attending')
+      return 'rsvp-item__badge rsvp-item__badge--declined';
+    return 'rsvp-item__badge';
+  };
+
+  const statusLabel = (status: string): string => {
+    if (status === 'attending') return 'Attending';
+    if (status === 'not_attending') return 'Declined';
+    return 'Maybe';
+  };
 
   return (
-    <div className="card form-card">
-      <h3>RSVP Tracking</h3>
+    <div className="card">
+      <h3 style={{ marginBottom: 'var(--space-4)' }}>RSVP Tracking</h3>
 
-      <div className="rsvp-stats">
-        <div className="rsvp-stat rsvp-stat--attending">
+      <div className="rsvp-stats" style={{ marginBottom: 'var(--space-5)' }}>
+        <div className="rsvp-stat">
           <div className="rsvp-stat__number">{attending.length}</div>
           <div className="rsvp-stat__label">Attending</div>
         </div>
-        <div className="rsvp-stat rsvp-stat--declined">
+        <div className="rsvp-stat">
           <div className="rsvp-stat__number">{declined.length}</div>
           <div className="rsvp-stat__label">Declined</div>
         </div>
-        <div className="rsvp-stat rsvp-stat--pending">
+        <div className="rsvp-stat">
           <div className="rsvp-stat__number">{pending.length}</div>
           <div className="rsvp-stat__label">Pending</div>
         </div>
@@ -256,46 +283,32 @@ function RSVPTracking({ eventId }: { eventId: string }) {
         </div>
       </div>
 
-      {rsvps && rsvps.length > 0 && (
-        <div className="rsvp-list">
-          {rsvps.map((rsvp) => (
-            <div key={rsvp.id} className="rsvp-item">
-              <span className="rsvp-item__name">{rsvp.guest.name}</span>
-              <div className="rsvp-item__status">
-                {rsvp.status === 'attending' && rsvp.plus_ones > 0 && (
-                  <span className="rsvp-item__plus-ones">
-                    +{rsvp.plus_ones}
+      {(rsvps ?? []).length > 0 && (
+        <>
+          <h4 style={{ marginBottom: 'var(--space-3)' }}>RSVP Responses</h4>
+          <div className="rsvp-list" style={{ marginBottom: 'var(--space-5)' }}>
+            {(rsvps ?? []).map((rsvp) => (
+              <div key={rsvp.id} className="rsvp-item">
+                <span className="rsvp-item__name">{rsvp.guest.name}</span>
+                <div className="flex gap-3" style={{ alignItems: 'center' }}>
+                  {rsvp.plus_ones > 0 && (
+                    <span className="rsvp-item__plus-ones text-muted">
+                      +{rsvp.plus_ones}
+                    </span>
+                  )}
+                  <span className={statusBadge(rsvp.status)}>
+                    {statusLabel(rsvp.status)}
                   </span>
-                )}
-                <span
-                  className={`rsvp-item__badge rsvp-item__badge--${rsvp.status}`}
-                >
-                  {rsvp.status === 'attending'
-                    ? 'Attending'
-                    : rsvp.status === 'not_attending'
-                      ? 'Declined'
-                      : 'Maybe'}
-                </span>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </>
       )}
 
       {pending.length > 0 && (
         <>
-          <h4
-            style={{
-              marginTop: 'var(--space-5)',
-              marginBottom: 'var(--space-3)',
-              fontSize: '0.8125rem',
-              color: 'var(--text-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-            }}
-          >
-            Awaiting Response
-          </h4>
+          <h4 style={{ marginBottom: 'var(--space-3)' }}>Pending Guests</h4>
           <div className="rsvp-list">
             {pending.map((guest) => (
               <div key={guest.id} className="rsvp-item">
@@ -307,6 +320,12 @@ function RSVPTracking({ eventId }: { eventId: string }) {
             ))}
           </div>
         </>
+      )}
+
+      {(rsvps ?? []).length === 0 && pending.length === 0 && (
+        <p className="text-secondary">
+          No guests yet. Add guests from the Guest Management page.
+        </p>
       )}
     </div>
   );

@@ -1,31 +1,19 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/providers/auth-provider';
+import { useToast } from '@/providers/toast-provider';
 import { Spinner } from '@/components/ui/feedback';
 
-type Mode = 'signin' | 'signup';
-
 export function LoginPage() {
-  const { user, loading, signIn, signUp } = useAuth();
+  const { user, signIn, signUp } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
 
-  const [mode, setMode] = useState<Mode>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setError(null);
-  }, [mode]);
-
-  if (loading) {
-    return (
-      <div className="loading-screen">
-        <Spinner size={32} />
-      </div>
-    );
-  }
+  const [submitting, setSubmitting] = useState(false);
 
   if (user) {
     return <Navigate to="/" replace />;
@@ -35,129 +23,97 @@ export function LoginPage() {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
+
     try {
       if (mode === 'signin') {
         await signIn(email, password);
+        toast('Welcome back!', 'success');
       } else {
         await signUp(email, password);
+        toast('Account created! Check your email to confirm.', 'success');
       }
       navigate('/');
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Something went wrong';
-      setError(
-        mode === 'signin'
-          ? `Sign in failed: ${message}`
-          : `Sign up failed: ${message}`,
-      );
+      setError(message);
     } finally {
       setSubmitting(false);
     }
   };
 
+  const toggleMode = () => {
+    setMode((m) => (m === 'signin' ? 'signup' : 'signin'));
+    setError(null);
+  };
+
   return (
     <div className="auth-page">
-      <div className="auth-card card">
-        <div className="auth-card__brand">
-          <div className="auth-card__logo">Seatly</div>
-          <p className="auth-card__tagline text-secondary">
-            Event seating made simple
-          </p>
-        </div>
+      <div className="auth-card">
+        <div className="auth-card__logo">Seatly</div>
+        <div className="auth-card__tagline">Event seating made simple</div>
 
-        <div className="auth-card__tabs">
-          <button
-            type="button"
-            className={`auth-card__tab ${
-              mode === 'signin' ? 'auth-card__tab--active' : ''
-            }`}
-            onClick={() => setMode('signin')}
-          >
-            Sign in
-          </button>
-          <button
-            type="button"
-            className={`auth-card__tab ${
-              mode === 'signup' ? 'auth-card__tab--active' : ''
-            }`}
-            onClick={() => setMode('signup')}
-          >
-            Sign up
-          </button>
-        </div>
-
-        <form className="auth-card__form" onSubmit={handleSubmit}>
-          <label className="form-field">
-            <span className="form-field__label">Email</span>
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <div className="auth-form__field">
+            <label className="auth-form__label" htmlFor="email">
+              Email
+            </label>
             <input
-              className="input"
+              id="email"
               type="email"
+              className="input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              autoComplete="email"
               required
+              autoComplete="email"
             />
-          </label>
+          </div>
 
-          <label className="form-field">
-            <span className="form-field__label">Password</span>
+          <div className="auth-form__field">
+            <label className="auth-form__label" htmlFor="password">
+              Password
+            </label>
             <input
-              className="input"
+              id="password"
               type="password"
+              className="input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
+              required
               autoComplete={
                 mode === 'signin' ? 'current-password' : 'new-password'
               }
-              minLength={6}
-              required
             />
-          </label>
+          </div>
 
-          {error && <p className="form-error">{error}</p>}
+          {error && <div className="auth-form__error">{error}</div>}
 
           <button
-            className="btn btn--primary"
             type="submit"
+            className="btn btn--primary w-full"
             disabled={submitting}
           >
             {submitting ? (
-              <Spinner size={18} />
+              <Spinner size={20} />
             ) : mode === 'signin' ? (
-              'Sign in'
+              'Sign In'
             ) : (
-              'Create account'
+              'Sign Up'
             )}
           </button>
         </form>
 
-        <p className="auth-card__switch text-muted">
-          {mode === 'signin' ? (
-            <>
-              Don&apos;t have an account?{' '}
-              <button
-                type="button"
-                className="link-button"
-                onClick={() => setMode('signup')}
-              >
-                Sign up
-              </button>
-            </>
-          ) : (
-            <>
-              Already have an account?{' '}
-              <button
-                type="button"
-                className="link-button"
-                onClick={() => setMode('signin')}
-              >
-                Sign in
-              </button>
-            </>
-          )}
-        </p>
+        <button
+          type="button"
+          className="auth-form__toggle"
+          onClick={toggleMode}
+        >
+          {mode === 'signin'
+            ? "Don't have an account? Sign up"
+            : 'Already have an account? Sign in'}
+        </button>
       </div>
     </div>
   );

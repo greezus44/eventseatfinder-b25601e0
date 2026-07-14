@@ -1,37 +1,43 @@
-import { Spinner } from '@/components/ui/feedback';
-
 interface ConfirmDialogProps {
   title: string;
   message: string;
   confirmLabel: string;
-  loading: boolean;
-  onCancel: () => void;
   onConfirm: () => void;
+  onCancel: () => void;
 }
 
 export function ConfirmDialog({
   title,
   message,
   confirmLabel,
-  loading,
-  onCancel,
   onConfirm,
+  onCancel,
 }: ConfirmDialogProps) {
   return (
     <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal card" onClick={(e) => e.stopPropagation()}>
-        <h2 className="modal__title">{title}</h2>
-        <p className="text-secondary">{message}</p>
-        <div className="modal__actions">
-          <button className="btn btn--ghost" onClick={onCancel}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2 style={{ marginBottom: 'var(--space-3)' }}>{title}</h2>
+        <p
+          className="text-secondary"
+          style={{ marginBottom: 'var(--space-5)' }}
+        >
+          {message}
+        </p>
+        <div className="flex gap-3" style={{ justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            className="btn btn--secondary"
+            onClick={onCancel}
+          >
             Cancel
           </button>
           <button
-            className="btn btn--primary btn--danger"
+            type="button"
+            className="btn btn--primary"
             onClick={onConfirm}
-            disabled={loading}
+            style={{ background: 'var(--error)' }}
           >
-            {loading ? <Spinner size={18} /> : confirmLabel}
+            {confirmLabel}
           </button>
         </div>
       </div>

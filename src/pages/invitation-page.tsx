@@ -1,337 +1,342 @@
-import { useState, type FormEvent } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, type FormEvent, type KeyboardEvent } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { useEventBySlug } from '@/hooks/use-events';
-import { useGuestSearch } from '@/hooks/use-guests';
-import { useUpsertRSVP, useRSVPByGuest } from '@/hooks/use-rsvps';
-import { Spinner } from '@/components/ui/feedback';
-import type { RSVPStatus } from '@/types/rsvp';
+import { useGuestSearch, useGuestById } from '@/hooks/use-guests';
+import { useUpsertRSVP } from '@/hooks/use-rsvps';
+import { Spinner, ErrorScreen, LoadingScreen } from '@/components/ui/feedback';
 import type { GuestWithTable } from '@/types/guest';
+import type { RSVPStatus } from '@/types/rsvp';
 
 export function InvitationPage() {
   const { eventSlug } = useParams<{ eventSlug: string }>();
   const { data: event, isLoading, error } = useEventBySlug(eventSlug ?? '');
-  const [selectedGuest, setSelectedGuest] = useState<GuestWithTable | null>(
-    null,
+
+  const [search, setSearch] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
+
+  const { data: suggestions, isFetching } = useGuestSearch(
+    event?.id ?? '',
+    search,
+  );
+  const { data: selectedGuest } = useGuestById(
+    event?.id ?? '',
+    selectedGuestId,
   );
 
-  if (isLoading) {
-    return (
-      <div className="invite-loading">
-        <Spinner size={32} />
-      </div>
-    );
-  }
-
-  if (error || !event) {
-    return (
-      <div className="invite-container">
-        <div className="invite-card invite-card--error">
-          <h1>Invitation Not Found</h1>
-          <p>
-            We couldn't find this event. Please check your link and try again.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
+  if (isLoading) return <LoadingScreen message="Loading invitation..." />;
+  if (error) return <ErrorScreen message="Failed to load invitation" />;
+  if (!event) return <ErrorScreen message="Event not found" />;
   if (!event.invitation_enabled) {
     return (
-      <div className="invite-container">
-        <div className="invite-card invite-card--error">
-          <h1>Invitations Not Available</h1>
-          <p>Invitations for this event have not been enabled yet.</p>
-        </div>
-      </div>
+      <ErrorScreen message="Invitations are not enabled for this event." />
     );
   }
 
-  if (selectedGuest) {
-    return (
-      <RSVPForm
-        eventId={event.id}
-        eventName={event.name}
-        guest={selectedGuest}
-        onBack={() => setSelectedGuest(null)}
-      />
-    );
-  }
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    const list = suggestions ?? [];
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setShowSuggestions(true);
+      setActiveIndex((prev) => Math.min(prev + 1, list.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((prev) => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (list[activeIndex]) {
+        selectGuest(list[activeIndex]);
+      } else if (list.length > 0) {
+        selectGuest(list[0]);
+      }
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+      setActiveIndex(-1);
+    }
+  };
 
-  return (
-    <GuestSelect
-      eventId={event.id}
-      eventName={event.name}
-      eventDate={event.date}
-      eventTime={event.time}
-      eventVenue={event.venue}
-      onSelect={setSelectedGuest}
-    />
-  );
-}
+  const selectGuest = (guest: GuestWithTable) => {
+    setSelectedGuestId(guest.id);
+    setShowSuggestions(false);
+    setSearch(guest.name);
+    setActiveIndex(-1);
+  };
 
-function GuestSelect({
-  eventId,
-  eventName,
-  eventDate,
-  eventTime,
-  eventVenue,
-  onSelect,
-}: {
-  eventId: string;
-  eventName: string;
-  eventDate: string | null;
-  eventTime: string | null;
-  eventVenue: string | null;
-  onSelect: (guest: GuestWithTable) => void;
-}) {
-  const [query, setQuery] = useState('');
-  const { data: results, isLoading: searching } = useGuestSearch(
-    eventId,
-    query,
-  );
-
-  const formattedDate = eventDate
-    ? new Date(eventDate).toLocaleDateString('en-US', {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    : null;
-
-  const formattedTime = eventTime
-    ? new Date(`2000-01-01T${eventTime}`).toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-      })
-    : null;
+  const formatDate = (dateStr: string | null): string => {
+    if (!dateStr) return 'Date TBA';
+    return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
 
   return (
     <div className="invite-container">
       <div className="invite-hero">
-        {eventVenue && <p className="invite-venue">{eventVenue}</p>}
-        <h1 className="invite-title">{eventName}</h1>
-        <div className="invite-date-row">
-          {formattedDate && <span>{formattedDate}</span>}
-          {formattedTime && <span> · {formattedTime}</span>}
+        <div className="fys-venue">{event.venue ?? 'Venue TBA'}</div>
+        <h1 className="invite-title">{event.name}</h1>
+        <div className="fys-date">
+          {formatDate(event.date)}
+          {event.time ? ` at ${event.time}` : ''}
         </div>
       </div>
 
-      <div className="invite-search-section">
-        <p className="invite-prompt">Find your name to RSVP</p>
-        <div className="invite-search-wrap">
+      {!selectedGuest ? (
+        <div className="invite-search">
+          <label
+            htmlFor="invite-search"
+            className="text-secondary"
+            style={{ display: 'block', marginBottom: 'var(--space-2)' }}
+          >
+            Find your name to RSVP
+          </label>
           <input
+            id="invite-search"
             type="text"
             className="invite-search-input"
-            placeholder="Type your name…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setShowSuggestions(true);
+            }}
+            onKeyDown={handleKeyDown}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            placeholder="Start typing your name..."
             autoComplete="off"
-            spellCheck={false}
             autoFocus
           />
-          {searching && (
-            <span className="invite-search-spinner">
-              <Spinner size={18} />
-            </span>
+
+          {showSuggestions && search.trim() && (
+            <div className="invite-suggestions">
+              {isFetching ? (
+                <div
+                  className="fys-suggestion text-secondary"
+                  style={{ justifyContent: 'center' }}
+                >
+                  <Spinner size={20} />
+                </div>
+              ) : (suggestions ?? []).length === 0 ? (
+                <div
+                  className="fys-suggestion text-secondary"
+                  style={{ justifyContent: 'center' }}
+                >
+                  No matching guests found
+                </div>
+              ) : (
+                (suggestions ?? []).map((guest, idx) => (
+                  <button
+                    key={guest.id}
+                    type="button"
+                    className={`fys-suggestion ${idx === activeIndex ? 'fys-suggestion--active' : ''}`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      selectGuest(guest);
+                    }}
+                    onMouseEnter={() => setActiveIndex(idx)}
+                  >
+                    {guest.name}
+                  </button>
+                ))
+              )}
+            </div>
           )}
         </div>
-
-        {query.trim() && results && results.length > 0 && (
-          <ul className="invite-suggestions">
-            {results.map((guest) => (
-              <li
-                key={guest.id}
-                className="invite-suggestion"
-                onClick={() => onSelect(guest)}
-              >
-                <span className="invite-suggestion__name">{guest.name}</span>
-                <span className="invite-suggestion__arrow">→</span>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {query.trim() && results && results.length === 0 && !searching && (
-          <div className="invite-no-results">
-            <p>No matches found.</p>
-            <p className="text-muted" style={{ fontSize: '0.8125rem' }}>
-              Try searching with just your first or last name.
-            </p>
-          </div>
-        )}
-      </div>
-
-      <Link to={`/e/${eventSlugFromPath()}`} className="invite-find-seat-link">
-        Find Your Seat Instead →
-      </Link>
+      ) : (
+        <RSVPForm
+          guest={selectedGuest}
+          eventId={event.id}
+          eventSlug={event.slug}
+        />
+      )}
     </div>
   );
 }
 
-function eventSlugFromPath(): string {
-  const parts = window.location.pathname.split('/');
-  return parts[parts.length - 1] ?? '';
-}
-
 function RSVPForm({
-  eventId,
-  eventName,
   guest,
-  onBack,
+  eventId,
+  eventSlug,
 }: {
-  eventId: string;
-  eventName: string;
   guest: GuestWithTable;
-  onBack: () => void;
+  eventId: string;
+  eventSlug: string;
 }) {
-  const { data: existingRSVP } = useRSVPByGuest(eventId, guest.id);
   const upsertRSVP = useUpsertRSVP(eventId);
-  const [status, setStatus] = useState<RSVPStatus>(
-    existingRSVP?.status ?? 'attending',
-  );
-  const [plusOnes, setPlusOnes] = useState(
-    existingRSVP?.plus_ones?.toString() ?? '0',
-  );
-  const [message, setMessage] = useState(existingRSVP?.message ?? '');
+  const [status, setStatus] = useState<RSVPStatus | null>(null);
+  const [plusOnes, setPlusOnes] = useState(0);
+  const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (upsertRSVP.isPending) return;
+    if (!status) return;
     try {
       await upsertRSVP.mutateAsync({
         guest_id: guest.id,
         status,
-        plus_ones: parseInt(plusOnes, 10) || 0,
+        plus_ones: status === 'attending' ? plusOnes : 0,
         message: message.trim() || null,
       });
       setSubmitted(true);
     } catch {
-      // error handled by toast
+      // Error handled by mutation state
     }
   };
 
   if (submitted) {
     return (
-      <div className="invite-container">
+      <div className="invite-rsvp-card">
         <div className="invite-rsvp-confirmation">
-          <div className="invite-rsvp-check">✓</div>
-          <h2>Thank you, {guest.name}!</h2>
-          <p className="text-secondary">
-            {status === 'attending'
-              ? `Your RSVP has been recorded. We can't wait to see you at ${eventName}!`
-              : status === 'not_attending'
-                ? `Your response has been recorded. We'll miss you at ${eventName}.`
-                : `Your response has been recorded for ${eventName}.`}
-          </p>
-          {guest.table && (
-            <div className="invite-rsvp-table">
-              <p className="invite-rsvp-table__label">Your Table</p>
-              <p className="invite-rsvp-table__number">{guest.table.number}</p>
-              <p className="invite-rsvp-table__name">{guest.table.name}</p>
-            </div>
+          <div className="invite-rsvp-confirmation__check">✓</div>
+          {status === 'attending' ? (
+            <>
+              <h2>See you there, {guest.name.split(' ')[0]}!</h2>
+              <p
+                className="text-secondary"
+                style={{ marginTop: 'var(--space-2)' }}
+              >
+                Your response has been recorded. We can't wait to celebrate with
+                you!
+              </p>
+              {guest.table && (
+                <div
+                  className="fys-table-card"
+                  style={{ marginTop: 'var(--space-5)' }}
+                >
+                  <div className="fys-table-card__number">
+                    {guest.table.number}
+                  </div>
+                  <div className="fys-table-card__label">Your Table</div>
+                  {guest.table.name && (
+                    <div
+                      className="text-muted"
+                      style={{ marginTop: 'var(--space-2)' }}
+                    >
+                      {guest.table.name}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <h2>We'll miss you, {guest.name.split(' ')[0]}</h2>
+              <p
+                className="text-secondary"
+                style={{ marginTop: 'var(--space-2)' }}
+              >
+                Thank you for letting us know. Your response has been recorded.
+              </p>
+            </>
           )}
           <Link
-            to={`/e/${eventSlugFromPath()}`}
+            to={`/e/${eventSlug}`}
             className="btn btn--primary"
-            style={{ marginTop: 'var(--space-6)' }}
+            style={{ marginTop: 'var(--space-5)' }}
           >
             Find Your Seat
           </Link>
-          <button
-            className="btn btn--ghost"
-            style={{ marginTop: 'var(--space-3)' }}
-            onClick={() => {
-              setSubmitted(false);
-              onBack();
-            }}
-          >
-            ← Back to invitation
-          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="invite-container">
-      <div className="invite-rsvp-card">
-        <p className="invite-rsvp-greeting">Welcome</p>
-        <h2 className="invite-rsvp-name">{guest.name}</h2>
-        <p className="invite-rsvp-event">{eventName}</p>
+    <div className="invite-rsvp-card">
+      <div style={{ textAlign: 'center', marginBottom: 'var(--space-5)' }}>
+        <h2 style={{ marginBottom: 'var(--space-1)' }}>Hi, {guest.name}!</h2>
+        <p className="text-secondary">Will you be joining us?</p>
+      </div>
 
-        <form onSubmit={handleSubmit} className="invite-rsvp-form">
-          <div className="invite-rsvp-options">
-            <button
-              type="button"
-              className={`invite-rsvp-option ${status === 'attending' ? 'invite-rsvp-option--active invite-rsvp-option--yes' : ''}`}
-              onClick={() => setStatus('attending')}
-            >
-              <span className="invite-rsvp-option__icon">✓</span>
-              <span>Joyfully Accepts</span>
-            </button>
-            <button
-              type="button"
-              className={`invite-rsvp-option ${status === 'not_attending' ? 'invite-rsvp-option--active invite-rsvp-option--no' : ''}`}
-              onClick={() => setStatus('not_attending')}
-            >
-              <span className="invite-rsvp-option__icon">✕</span>
-              <span>Regretfully Declines</span>
-            </button>
-          </div>
+      <form onSubmit={handleSubmit}>
+        <div className="invite-rsvp-options">
+          <button
+            type="button"
+            className={`invite-rsvp-option ${status === 'attending' ? 'invite-rsvp-option--active' : ''}`}
+            onClick={() => setStatus('attending')}
+          >
+            <div className="invite-rsvp-option__icon">🎉</div>
+            <div className="invite-rsvp-option__label">Joyfully Accepts</div>
+          </button>
+          <button
+            type="button"
+            className={`invite-rsvp-option ${status === 'not_attending' ? 'invite-rsvp-option--active' : ''}`}
+            onClick={() => setStatus('not_attending')}
+          >
+            <div className="invite-rsvp-option__icon">💌</div>
+            <div className="invite-rsvp-option__label">
+              Regretfully Declines
+            </div>
+          </button>
+        </div>
 
-          {status === 'attending' && (
-            <div className="invite-rsvp-plus-ones">
-              <label htmlFor="plus-ones" className="invite-rsvp-label">
-                Number of Plus Ones
-              </label>
+        {status === 'attending' && (
+          <div className="form-field" style={{ marginTop: 'var(--space-5)' }}>
+            <label className="form-field__label">Plus Ones: {plusOnes}</label>
+            <div className="flex gap-2" style={{ alignItems: 'center' }}>
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                onClick={() => setPlusOnes((p) => Math.max(0, p - 1))}
+              >
+                −
+              </button>
               <input
-                id="plus-ones"
-                type="number"
-                className="input"
-                value={plusOnes}
-                onChange={(e) => setPlusOnes(e.target.value)}
+                type="range"
                 min={0}
                 max={5}
+                value={plusOnes}
+                onChange={(e) => setPlusOnes(parseInt(e.target.value, 10))}
+                style={{ flex: 1 }}
               />
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                onClick={() => setPlusOnes((p) => Math.min(5, p + 1))}
+              >
+                +
+              </button>
             </div>
-          )}
-
-          <div className="invite-rsvp-message">
-            <label htmlFor="message" className="invite-rsvp-label">
-              Message to the Host (optional)
-            </label>
-            <textarea
-              id="message"
-              className="input"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Send your well wishes…"
-              rows={3}
-            />
           </div>
+        )}
 
-          <button
-            type="submit"
-            className="btn btn--primary invite-rsvp-submit"
-            disabled={upsertRSVP.isPending}
+        <div className="form-field" style={{ marginTop: 'var(--space-4)' }}>
+          <label className="form-field__label" htmlFor="rsvp-message">
+            Message (optional)
+          </label>
+          <textarea
+            id="rsvp-message"
+            className="input"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Leave a note for the host..."
+            rows={3}
+            style={{ resize: 'vertical', fontFamily: 'inherit' }}
+          />
+        </div>
+
+        {upsertRSVP.isError && (
+          <div
+            className="auth-form__error"
+            style={{ marginTop: 'var(--space-3)' }}
           >
-            {upsertRSVP.isPending ? <Spinner size={18} /> : null}
-            Submit RSVP
-          </button>
+            Failed to submit RSVP. Please try again.
+          </div>
+        )}
 
-          {upsertRSVP.isError && (
-            <p className="invite-rsvp-error">
-              Failed to submit RSVP. Please try again.
-            </p>
-          )}
-        </form>
-
-        <button className="btn btn--ghost invite-rsvp-back" onClick={onBack}>
-          ← Search again
+        <button
+          type="submit"
+          className="btn btn--primary w-full"
+          disabled={!status || upsertRSVP.isPending}
+          style={{ marginTop: 'var(--space-5)' }}
+        >
+          {upsertRSVP.isPending ? <Spinner size={20} /> : 'Submit RSVP'}
         </button>
-      </div>
+      </form>
     </div>
   );
 }
