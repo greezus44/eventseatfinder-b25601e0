@@ -1,167 +1,145 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useEvents, useCreateEvent, useDeleteEvent } from '@/hooks/use-events';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/providers/auth-provider';
 import { useToast } from '@/providers/toast-provider';
 import { useConfirmDialog } from '@/components/confirm-dialog';
-import { classifyError } from '@/lib/guest-import';
+import { useEvents, useCreateEvent, useDeleteEvent } from '@/hooks/use-events';
 
 export function DashboardPage() {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const toast = useToast();
   const { confirm, dialog } = useConfirmDialog();
+  const navigate = useNavigate();
+
   const { data: events, isLoading } = useEvents();
   const createEvent = useCreateEvent();
   const deleteEvent = useDeleteEvent();
 
-  const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newSlug, setNewSlug] = useState('');
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
 
-  const slugify = (s: string) =>
-    s
+  const generateSlug = (val: string) => {
+    return val
       .toLowerCase()
       .trim()
       .replace(/[^a-z0-9\s-]/g, '')
       .replace(/\s+/g, '-')
-      .replace(/-+/g, '-');
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
-    const slug = newSlug || slugify(newName);
-    if (!slug) {
-      toast('Please enter a slug', 'error');
+    if (!name.trim() || !slug.trim()) {
+      toast('Please enter an event name and slug.', 'error');
       return;
     }
+    if (!user) {
+      toast('You must be signed in to create an event.', 'error');
+      return;
+    }
+
     try {
-      await createEvent.mutateAsync({
-        name: newName,
-        slug,
+      const created = await createEvent.mutateAsync({
+        name: name.trim(),
+        slug: slug.trim(),
         user_id: user.id,
+        invitation_enabled: false,
       });
-      toast('Event created', 'success');
-      setNewName('');
-      setNewSlug('');
-      setShowCreate(false);
-    } catch (err) {
-      const { message } = classifyError(err);
-      toast(message, 'error');
+      toast('Event created successfully!', 'success');
+      setName('');
+      setSlug('');
+      navigate(`/events/${created.id}`);
+    } catch (err: any) {
+      toast(err.message || 'Failed to create event.', 'error');
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
+  const handleDelete = async (eventId: string) => {
     const ok = await confirm({
-      title: 'Delete event',
-      message: `Are you sure you want to delete "${name}"? This cannot be undone.`,
+      title: 'Delete Event',
+      message: 'Are you sure you want to delete this event? This action cannot be undone.',
       confirmText: 'Delete',
+      cancelText: 'Cancel',
     });
     if (!ok) return;
+
     try {
-      await deleteEvent.mutateAsync(id);
-      toast('Event deleted', 'success');
-    } catch (err) {
-      const { message } = classifyError(err);
-      toast(message, 'error');
+      await deleteEvent.mutateAsync(eventId);
+      toast('Event deleted.', 'success');
+    } catch (err: any) {
+      toast(err.message || 'Failed to delete event.', 'error');
     }
   };
 
-  return (
-    <div>
-      <div className="dashboard-header">
-        <h1 className="dashboard-title">Your Events</h1>
-        <button
-          className="btn btn-primary"
-          onClick={() => setShowCreate(!showCreate)}
-        >
-          {showCreate ? 'Cancel' : '+ New Event'}
-        </button>
-      </div>
-
-      {dialog}
-
-      {showCreate && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <form onSubmit={handleCreate}>
-            <div className="form-group">
-              <label htmlFor="event-name">Event Name</label>
-              <input
-                id="event-name"
-                value={newName}
-                onChange={(e) => {
-                  setNewName(e.target.value);
-                  setNewSlug(slugify(e.target.value));
-                }}
-                placeholder="My Wedding"
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="event-slug">URL Slug</label>
-              <input
-                id="event-slug"
-                value={newSlug}
-                onChange={(e) => setNewSlug(slugify(e.target.value))}
-                placeholder="my-wedding"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={createEvent.isPending}
-            >
-              {createEvent.isPending ? 'Creating…' : 'Create Event'}
-            </button>
-          </form>
-        </div>
-      )}
-
-      {isLoading ? (
-        <div className="empty-state">
-          <div className="spinner" style={{ margin: '0 auto 16px' }} />
-          <p className="loading-text">Loading events…</p>
-        </div>
-      ) : !events || events.length === 0 ? (
-        <div className="empty-state">
-          <p className="empty-state-title">No events yet</p>
-          <p>Create your first event to get started.</p>
-        </div>
-      ) : (
-        <div className="grid grid-auto">
-          {events.map((event) => (
-            <div key={event.id} className="event-card">
-              <div
-                className="event-card-name"
-                style={{ cursor: 'pointer' }}
-                onClick={() => navigate(`/events/${event.id}`)}
-              >
-                {event.name}
-              </div>
-              <div className="event-card-meta">
-                {event.date && <span>{event.date}</span>}
-                {event.venue && <span> · {event.venue}</span>}
-              </div>
-              <div className="event-card-meta">/e/{event.slug}</div>
-              <div className="event-card-actions">
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => navigate(`/events/${event.id}`)}
-                >
-                  Edit
-                </button>
-                <button
-                  className="btn btn-danger btn-sm"
-                  onClick={() => handleDelete(event.id, event.name)}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+  return React.createElement(
+    'div',
+    { className: 'ee-container' },
+    React.createElement('h1', { style: { fontSize: '28px', fontWeight: 700, marginBottom: '24px' } }, 'Your Events'),
+    React.createElement(
+      'div',
+      { className: 'card mb-6' },
+      React.createElement('h2', { className: 'ee-subsection-title', style: { marginTop: 0 } }, 'Create New Event'),
+      React.createElement(
+        'form',
+        { onSubmit: handleCreate, className: 'ee-add-form' },
+        React.createElement(
+          'div',
+          { className: 'ee-flex-input' },
+          React.createElement('label', null, 'Event Name'),
+          React.createElement('input', {
+            type: 'text',
+            value: name,
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+              setName(e.target.value);
+              setSlug(generateSlug(e.target.value));
+            },
+            placeholder: 'Wedding Reception',
+          }),
+        ),
+        React.createElement(
+          'div',
+          { className: 'ee-flex-input' },
+          React.createElement('label', null, 'Slug'),
+          React.createElement('input', {
+            type: 'text',
+            value: slug,
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) => setSlug(generateSlug(e.target.value)),
+            placeholder: 'wedding-reception',
+          }),
+        ),
+        React.createElement('button', { type: 'submit', className: 'btn btn-primary', disabled: createEvent.isPending }, 'Create Event'),
+      ),
+    ),
+    isLoading
+      ? React.createElement('div', { className: 'text-center text-muted mt-6' }, 'Loading events...')
+      : events && events.length === 0
+        ? React.createElement('div', { className: 'card text-center text-muted' }, 'No events yet. Create one above to get started.')
+        : React.createElement(
+            'div',
+            { className: 'ee-list' },
+            events?.map((event) =>
+              React.createElement(
+                'div',
+                { key: event.id, className: 'ee-list-row' },
+                React.createElement(
+                  Link,
+                  { to: `/events/${event.id}`, style: { fontWeight: 500, fontSize: '15px' } },
+                  event.name,
+                ),
+                React.createElement(
+                  'div',
+                  { className: 'ee-row-gap' },
+                  React.createElement('span', { className: 'ee-muted' }, `/${event.slug}`),
+                  React.createElement(
+                    'button',
+                    { className: 'btn btn-danger ee-btn-sm', onClick: () => handleDelete(event.id) },
+                    'Delete',
+                  ),
+                ),
+              ),
+            ),
+          ),
+    dialog,
   );
 }

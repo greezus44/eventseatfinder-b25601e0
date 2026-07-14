@@ -26,56 +26,30 @@ export const GOOGLE_FONTS: FontOption[] = [
   { name: 'Cinzel', cssName: 'Cinzel' },
 ];
 
-export const FONT_WEIGHTS: number[] = [
-  100, 200, 300, 400, 500, 600, 700, 800, 900,
-];
+export const FONT_WEIGHTS: number[] = [300, 400, 500, 600, 700];
 
 export const FONT_SIZE_OPTIONS: number[] = [
-  12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 44, 48, 56, 64, 72, 80, 96,
+  10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36,
+  40, 44, 48, 52, 56, 60, 64, 72, 80, 96,
 ];
 
-/**
- * Returns a <link> tag string for loading the given Google Fonts.
- * De-duplicates font names.
- */
-export function getFontLinkTag(fontFamilies: string[]): string {
-  const unique = Array.from(
-    new Set(
-      fontFamilies.filter(
-        (f) => f && GOOGLE_FONTS.some((gf) => gf.name === f)
-      )
-    )
-  );
-  if (unique.length === 0) return '';
-  const families = unique
-    .map((f) => {
-      const cssName = GOOGLE_FONTS.find((gf) => gf.name === f)?.cssName ?? f;
-      return `family=${cssName.replace(/ /g, '+')}:wght@300;400;500;600;700;800`;
-    })
-    .join('&');
-  return `https://fonts.googleapis.com/css2?${families}&display=swap`;
-}
-
-/**
- * Returns a CSS font-family declaration string for the given font name.
- */
 export function getFontCss(fontFamily: string | null | undefined): string {
   if (!fontFamily) return "'Inter', sans-serif";
-  const cssName =
-    GOOGLE_FONTS.find((gf) => gf.name === fontFamily)?.cssName ?? fontFamily;
-  return `'${cssName}', sans-serif`;
+  const font = GOOGLE_FONTS.find(
+    (f) => f.name === fontFamily || f.cssName === fontFamily,
+  );
+  if (font) {
+    return `'${font.cssName}', sans-serif`;
+  }
+  return `'${fontFamily}', sans-serif`;
 }
 
-/**
- * Returns a CSS font-size string (e.g. "32px") or a fallback.
- */
 export function getFontSize(size: number | null | undefined): string {
-  return size ? `${size}px` : '16px';
+  if (size == null || isNaN(size)) return '16px';
+  return `${size}px`;
 }
 
-/**
- * Returns a CSS font-weight string or a fallback.
- */
 export function getFontWeight(weight: number | null | undefined): string {
-  return weight ? String(weight) : '400';
+  if (weight == null || isNaN(weight)) return '400';
+  return String(weight);
 }

@@ -1,14 +1,18 @@
-// ── Events ──────────────────────────────────────────────
+// ===== Event =====
 export interface Event {
   id: string;
+  user_id: string;
   name: string;
   slug: string;
   date: string | null;
   time: string | null;
   venue: string | null;
-  venue_image_url: string | null;
-  user_id: string;
+  logo_url: string | null;
+  cover_url: string | null;
+  accent_color: string | null;
+  invitation_enabled: boolean;
   created_at: string;
+  updated_at: string;
 }
 
 export interface EventInput {
@@ -17,10 +21,13 @@ export interface EventInput {
   date?: string | null;
   time?: string | null;
   venue?: string | null;
-  venue_image_url?: string | null;
+  logo_url?: string | null;
+  cover_url?: string | null;
+  accent_color?: string | null;
+  invitation_enabled?: boolean;
 }
 
-// ── Guests ───────────────────────────────────────────────
+// ===== Guest =====
 export interface Guest {
   id: string;
   event_id: string;
@@ -34,96 +41,154 @@ export interface GuestInput {
   table_id: string | null;
 }
 
-// ── Tables ───────────────────────────────────────────────
+// ===== Table =====
 export interface Table {
   id: string;
   event_id: string;
   name: string;
+  number: number;
   capacity: number;
-  x: number | null;
-  y: number | null;
+  position_x: number | null;
+  position_y: number | null;
   created_at: string;
 }
 
 export interface TableInput {
   name: string;
+  number: number;
   capacity: number;
-  x?: number | null;
-  y?: number | null;
+  position_x?: number | null;
+  position_y?: number | null;
 }
 
-// ── RSVPs ────────────────────────────────────────────────
+// ===== Rsvp =====
 export interface Rsvp {
   id: string;
-  guest_id: string;
-  status: 'yes' | 'no' | 'maybe' | null;
-  party_size: number | null;
-  created_at: string;
-}
-
-export interface RsvpInput {
-  guest_id: string;
-  status: 'yes' | 'no' | 'maybe' | null;
-  party_size?: number | null;
-}
-
-// ── Check-ins ────────────────────────────────────────────
-export interface CheckIn {
-  id: string;
-  guest_id: string;
-  checked_in_at: string;
-}
-
-// ── Guest Page Settings ──────────────────────────────────
-export interface GuestPageSettings {
-  id: string;
   event_id: string;
-  color_primary: string | null;
-  color_background: string | null;
-  color_card: string | null;
-  color_text: string | null;
-  color_header: string | null;
-  border_radius: number | null;
-  logo_url: string | null;
-  logo_size: number | null;
-  logo_rounded: boolean | null;
-  venue_image_url: string | null;
-  welcome_message: string | null;
-  event_subtitle: string | null;
-  // Typography — title
-  font_title_family: string | null;
-  font_title_size: number | null;
-  font_title_weight: number | null;
-  // Typography — subtitle
-  font_subtitle_family: string | null;
-  font_subtitle_size: number | null;
-  font_subtitle_weight: number | null;
-  // Typography — datetime
-  font_datetime_family: string | null;
-  font_datetime_size: number | null;
-  font_datetime_weight: number | null;
-  // Typography — venue
-  font_venue_family: string | null;
-  font_venue_size: number | null;
-  font_venue_weight: number | null;
+  guest_id: string;
+  status: string;
+  plus_ones: number;
+  message: string | null;
   created_at: string;
   updated_at: string;
 }
 
+// ===== CheckIn =====
+export interface CheckIn {
+  id: string;
+  event_id: string;
+  guest_id: string;
+  checked_in_at: string;
+  plus_ones: number;
+}
+
+// ===== GuestPageSettings =====
+export interface GuestPageSettings {
+  id: string;
+  event_id: string;
+  logo_url: string | null;
+  logo_size: number | null;
+  logo_position: string | null;
+  logo_rounded: boolean | null;
+  color_primary: string | null;
+  color_background: string | null;
+  color_card: string | null;
+  color_button: string | null;
+  color_button_text: string | null;
+  color_header: string | null;
+  color_text: string | null;
+  color_link: string | null;
+  font_heading: string | null;
+  font_body: string | null;
+  font_button: string | null;
+  font_heading_size: number | null;
+  font_body_size: number | null;
+  font_heading_weight: number | null;
+  font_body_weight: number | null;
+  font_heading_spacing: number | null;
+  font_body_spacing: number | null;
+  font_heading_line_height: number | null;
+  font_body_line_height: number | null;
+  border_radius: number | null;
+  card_shadow: boolean | null;
+  button_style: string | null;
+  background_image: string | null;
+  background_overlay_opacity: number | null;
+  venue_image_url: string | null;
+  created_at: string;
+  updated_at: string;
+  color_secondary: string | null;
+  color_footer: string | null;
+  cover_image: string | null;
+  banner_height: number | null;
+  welcome_message: string | null;
+  event_subtitle: string | null;
+  enable_schedule: boolean | null;
+  enable_gallery: boolean | null;
+  schedule_items: unknown | null;
+  gallery_images: unknown | null;
+  font_title_family: string | null;
+  font_title_size: number | null;
+  font_title_weight: number | null;
+  font_subtitle_family: string | null;
+  font_subtitle_size: number | null;
+  font_subtitle_weight: number | null;
+  font_datetime_family: string | null;
+  font_datetime_size: number | null;
+  font_datetime_weight: number | null;
+  font_venue_family: string | null;
+  font_venue_size: number | null;
+  font_venue_weight: number | null;
+  font_title_color: string | null;
+  font_subtitle_color: string | null;
+  font_datetime_color: string | null;
+  font_venue_color: string | null;
+  font_welcome_family: string | null;
+  font_welcome_size: number | null;
+  font_welcome_weight: number | null;
+  font_welcome_color: string | null;
+}
+
 export interface GuestPageSettingsInput {
-  event_id?: string;
+  logo_url?: string | null;
+  logo_size?: number | null;
+  logo_position?: string | null;
+  logo_rounded?: boolean | null;
   color_primary?: string | null;
   color_background?: string | null;
   color_card?: string | null;
-  color_text?: string | null;
+  color_button?: string | null;
+  color_button_text?: string | null;
   color_header?: string | null;
+  color_text?: string | null;
+  color_link?: string | null;
+  font_heading?: string | null;
+  font_body?: string | null;
+  font_button?: string | null;
+  font_heading_size?: number | null;
+  font_body_size?: number | null;
+  font_heading_weight?: number | null;
+  font_body_weight?: number | null;
+  font_heading_spacing?: number | null;
+  font_body_spacing?: number | null;
+  font_heading_line_height?: number | null;
+  font_body_line_height?: number | null;
   border_radius?: number | null;
-  logo_url?: string | null;
-  logo_size?: number | null;
-  logo_rounded?: boolean | null;
+  card_shadow?: boolean | null;
+  button_style?: string | null;
+  background_image?: string | null;
+  background_overlay_opacity?: number | null;
   venue_image_url?: string | null;
+  color_secondary?: string | null;
+  color_footer?: string | null;
+  cover_image?: string | null;
+  banner_height?: number | null;
   welcome_message?: string | null;
   event_subtitle?: string | null;
+  enable_schedule?: boolean | null;
+  enable_gallery?: boolean | null;
+  schedule_items?: unknown | null;
+  gallery_images?: unknown | null;
   font_title_family?: string | null;
   font_title_size?: number | null;
   font_title_weight?: number | null;
@@ -136,4 +201,12 @@ export interface GuestPageSettingsInput {
   font_venue_family?: string | null;
   font_venue_size?: number | null;
   font_venue_weight?: number | null;
+  font_title_color?: string | null;
+  font_subtitle_color?: string | null;
+  font_datetime_color?: string | null;
+  font_venue_color?: string | null;
+  font_welcome_family?: string | null;
+  font_welcome_size?: number | null;
+  font_welcome_weight?: number | null;
+  font_welcome_color?: string | null;
 }

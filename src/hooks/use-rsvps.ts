@@ -1,41 +1,43 @@
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { Rsvp, RsvpInput } from '@/types';
+import type { Rsvp } from '@/types';
 
-export function useRsvps(guestId: string) {
-  return useQuery({
-    queryKey: ['rsvps', guestId],
+export function useRsvps(eventId: string | undefined) {
+  return useQuery<Rsvp[]>({
+    queryKey: ['rsvps', eventId],
+    enabled: !!eventId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rsvps')
         .select('*')
-        .eq('guest_id', guestId)
-        .maybeSingle();
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false });
       if (error) throw error;
-      return data as Rsvp | null;
+      return data as Rsvp[];
     },
-    enabled: !!guestId,
   });
 }
 
 export function useCreateRsvp() {
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: RsvpInput) => {
+    mutationFn: async (input: {
+      event_id: string;
+      guest_id: string;
+      status: string;
+      plus_ones?: number;
+      message?: string | null;
+    }) => {
       const { data, error } = await supabase
         .from('rsvps')
         .insert(input)
         .select()
         .maybeSingle();
       if (error) throw error;
-      return data as Rsvp | null;
+      return data as Rsvp;
     },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['rsvps', variables.guest_id] });
+      qc.invalidateQueries({ queryKey: ['rsvps', variables.event_id] });
     },
   });
 }

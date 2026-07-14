@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { createContext, useCallback, useContext, useState } from 'react';
 
 interface ConfirmOptions {
   title?: string;
@@ -7,90 +7,76 @@ interface ConfirmOptions {
   cancelText?: string;
 }
 
-interface ConfirmDialogState extends ConfirmOptions {
-  open: boolean;
-  resolve: (value: boolean) => void;
-}
-
-interface UseConfirmDialogReturn {
+interface ConfirmDialogContextValue {
   confirm: (options: ConfirmOptions) => Promise<boolean>;
   dialog: React.ReactNode;
 }
 
-export function useConfirmDialog(): UseConfirmDialogReturn {
-  const [state, setState] = useState<ConfirmDialogState | null>(null);
+const ConfirmDialogContext = createContext<ConfirmDialogContextValue | undefined>(undefined);
 
-  const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
-    return new Promise((resolve) => {
-      setState({ ...options, open: true, resolve });
+export function ConfirmDialogProvider({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const [options, setOptions] = useState<ConfirmOptions>({ message: '' });
+  const [resolver, setResolver] = useState<((value: boolean) => void) | null>(null);
+
+  const confirm = useCallback((opts: ConfirmOptions): Promise<boolean> => {
+    setOptions(opts);
+    setOpen(true);
+    return new Promise<boolean>((resolve) => {
+      setResolver(() => resolve);
     });
   }, []);
 
-  const handleClose = (result: boolean) => {
-    if (state) {
-      state.resolve(result);
-      setState(null);
-    }
+  const handleConfirm = () => {
+    setOpen(false);
+    resolver?.(true);
+    setResolver(null);
   };
 
-  const dialog = state ? (
-    <div className="confirm-overlay" onClick={() => handleClose(false)}>
-      <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-        {state.title && <h2 className="confirm-title">{state.title}</h2>}
-        <p className="confirm-message">{state.message}</p>
-        <div className="confirm-actions">
-          <button
-            className="btn btn-secondary"
-            onClick={() => handleClose(false)}
-          >
-            {state.cancelText ?? 'Cancel'}
-          </button>
-          <button
-            className="btn btn-danger"
-            onClick={() => handleClose(true)}
-          >
-            {state.confirmText ?? 'Confirm'}
-          </button>
-        </div>
-      </div>
-    </div>
-  ) : null;
+  const handleCancel = () => {
+    setOpen(false);
+    resolver?.(false);
+    setResolver(null);
+  };
 
-  return { confirm, dialog };
+  const dialog = open
+    ? React.createElement(
+        'div',
+        { className: 'confirm-overlay' },
+        React.createElement(
+          'div',
+          { className: 'confirm-dialog' },
+          options.title
+            ? React.createElement('h3', { className: 'confirm-title' }, options.title)
+            : null,
+          React.createElement('p', { className: 'confirm-message' }, options.message),
+          React.createElement(
+            'div',
+            { className: 'confirm-actions' },
+            React.createElement(
+              'button',
+              { className: 'btn btn-secondary', onClick: handleCancel },
+              options.cancelText || 'Cancel',
+            ),
+            React.createElement(
+              'button',
+              { className: 'btn btn-danger', onClick: handleConfirm },
+              options.confirmText || 'Confirm',
+            ),
+          ),
+        ),
+      )
+    : null;
+
+  const value: ConfirmDialogContextValue = { confirm, dialog };
+
+  return React.createElement(ConfirmDialogContext.Provider, { value }, children, dialog);
 }
 
-export function ConfirmDialog({
-  open,
-  title,
-  message,
-  confirmText,
-  cancelText,
-  onConfirm,
-  onCancel,
-}: {
-  open: boolean;
-  title?: string;
-  message: string;
-  confirmText?: string;
-  cancelText?: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  if (!open) return null;
-  return (
-    <div className="confirm-overlay" onClick={onCancel}>
-      <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-        {title && <h2 className="confirm-title">{title}</h2>}
-        <p className="confirm-message">{message}</p>
-        <div className="confirm-actions">
-          <button className="btn btn-secondary" onClick={onCancel}>
-            {cancelText ?? 'Cancel'}
-          </button>
-          <button className="btn btn-danger" onClick={onConfirm}>
-            {confirmText ?? 'Confirm'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+export function useConfirmDialog() {
+  const ctx = useContext(ConfirmDialogContext);
+  if (!ctx) throw new Error('useConfirmDialog must be used within ConfirmDialogProvider');
+  return ctx;
 }
+
+export const ConfirmDialog = ConfirmDialogProvider;

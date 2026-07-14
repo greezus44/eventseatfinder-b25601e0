@@ -1,83 +1,58 @@
 import React, { useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useEvent } from '@/hooks/use-events';
-import { useTables } from '@/hooks/use-tables';
 import { useGuests } from '@/hooks/use-guests';
+import { useTables } from '@/hooks/use-tables';
 
 export function PrintSeatingChartPage() {
   const { eventId } = useParams<{ eventId: string }>();
-  const { data: event } = useEvent(eventId ?? '');
-  const { data: tables, isLoading: tablesLoading } = useTables(eventId ?? '');
-  const { data: guests, isLoading: guestsLoading } = useGuests(eventId ?? '');
+  const { data: event } = useEvent(eventId);
+  const { data: guests } = useGuests(eventId);
+  const { data: tables } = useTables(eventId);
 
-  const guestsByTable = React.useMemo(() => {
-    const m = new Map<string | null, typeof guests>();
-    for (const g of guests ?? []) {
-      const list = m.get(g.table_id) ?? [];
-      list.push(g);
-      m.set(g.table_id, list);
+  useEffect(() => {
+    window.print();
+  }, []);
+
+  const guestsByTable: Record<string, string[]> = {};
+  (guests || []).forEach((g) => {
+    if (g.table_id) {
+      if (!guestsByTable[g.table_id]) guestsByTable[g.table_id] = [];
+      guestsByTable[g.table_id].push(g.name);
     }
-    return m;
-  }, [guests]);
+  });
 
-  return (
-    <div className="print-page">
-      <div className="print-header">
-        <h1 className="print-title">{event?.name ?? 'Event'}</h1>
-        {event?.date && (
-          <p className="print-subtitle">
-            {event.date}
-            {event.time ? ` at ${event.time}` : ''}
-            {event.venue ? ` · ${event.venue}` : ''}
-          </p>
-        )}
-      </div>
-
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-        <Link to={`/events/${eventId}`} className="btn btn-secondary btn-sm">
-          ← Back to Editor
-        </Link>
-        <button className="btn btn-primary btn-sm" onClick={() => window.print()}>
-          Print
-        </button>
-      </div>
-
-      {tablesLoading || guestsLoading ? (
-        <div className="empty-state">
-          <div className="spinner" style={{ margin: '0 auto 16px' }} />
-          <p className="loading-text">Loading…</p>
-        </div>
-      ) : !tables || tables.length === 0 ? (
-        <div className="empty-state">
-          <p className="empty-state-title">No tables</p>
-          <p>Add tables to see the seating chart.</p>
-        </div>
-      ) : (
-        <div>
-          {tables.map((table) => {
-            const tableGuests = guestsByTable.get(table.id) ?? [];
-            return (
-              <div key={table.id} className="print-table-card">
-                <div className="print-table-name">
-                  {table.name} ({tableGuests.length}/{table.capacity})
-                </div>
-                {tableGuests.length === 0 ? (
-                  <p style={{ fontSize: 14, color: 'var(--gray-500)' }}>
-                    No guests assigned
-                  </p>
-                ) : (
-                  tableGuests.map((g, i) => (
-                    <div key={g.id} className="print-guest-row">
-                      <span>{g.name}</span>
-                      <span className="print-guest-number">#{i + 1}</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
+  return React.createElement(
+    'div',
+    { className: 'print-content print-page', style: { padding: '40px', maxWidth: '900px', margin: '0 auto' } },
+    React.createElement('h1', { style: { fontSize: '28px', fontWeight: 700, marginBottom: '8px' } }, event?.name || 'Event'),
+    React.createElement('p', { className: 'text-muted', style: { marginBottom: '32px' } }, 'Seating Chart'),
+    (tables || []).length === 0
+      ? React.createElement('p', { className: 'text-muted' }, 'No tables assigned.')
+      : React.createElement(
+          'div',
+          { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '20px' } },
+          (tables || []).map((table) =>
+            React.createElement(
+              'div',
+              { key: table.id, className: 'card', style: { padding: '16px' } },
+              React.createElement(
+                'h3',
+                { style: { fontSize: '16px', fontWeight: 600, marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid #EFEFEF' } },
+                `${table.name} (Table ${table.number})`,
+              ),
+              React.createElement(
+                'ul',
+                { style: { listStyle: 'none', padding: 0 } },
+                (guestsByTable[table.id] || []).map((name, idx) =>
+                  React.createElement('li', { key: idx, style: { padding: '4px 0', fontSize: '13px' } }, name),
+                ),
+              ),
+              (guestsByTable[table.id] || []).length === 0
+                ? React.createElement('p', { className: 'ee-muted', style: { fontSize: '12px' } }, 'No guests assigned')
+                : null,
+            ),
+          ),
+        ),
   );
 }
