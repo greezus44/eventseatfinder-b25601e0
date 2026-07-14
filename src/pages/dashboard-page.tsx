@@ -1,73 +1,88 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useEvents, useCreateEvent, useDeleteEvent } from '@/hooks/use-events'
-import { useGuests } from '@/hooks/use-guests'
+import { useEvents } from '@/hooks/use-events'
 import { useToast } from '@/providers/toast-provider'
-import { useConfirmDialog } from '@/providers/confirm-dialog'
-import { AppHeader } from '@/components/app-header'
+import { supabase } from '@/lib/supabase'
+import { useConfirm } from '@/providers/confirm-dialog'
 
-function GuestCount({ eventId }: { eventId: string }) {
-  const { data } = useGuests(eventId); return <>{data?.length ?? 0}</>
-}
-function slugify(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'event'
-}
-export function DashboardPage() {
-  const { data: events, isLoading } = useEvents()
-  const createEvent = useCreateEvent(); const deleteEvent = useDeleteEvent()
-  const toast = useToast(); const { confirm } = useConfirmDialog(); const navigate = useNavigate()
-  const [showModal, setShowModal] = useState(false); const [name, setName] = useState(''); const [creating, setCreating] = useState(false)
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault(); if (!name.trim()) return; setCreating(true)
-    try { const ev = await createEvent.mutateAsync({ name: name.trim(), slug: slugify(name) }); toast('Event created'); setShowModal(false); setName(''); navigate(`/events/${ev.id}`) }
-    catch (err) { toast(err instanceof Error ? err.message : 'Failed to create event', 'error') }
-    finally { setCreating(false) }
+export default function DashboardPage() {
+  const { events, loading, refetch } = useEvents()
+  const navigate = useNavigate()
+  const { toast } = useToast()
+  const { confirm } = useConfirm()
+
+  const handleCreate = async () => {
+    const { data, error } = await supabase.from('events').insert({
+      name: 'Untitled Event',
+      title_text: 'Wedding of Aisyah & Hafiz',
+      subtitle_text: 'Khamis, 15 Februari 2025',
+      logo_size: 80,
+      title_size: 28,
+      title_color: '#1a1a1a',
+      subtitle_size: 16,
+      subtitle_color: '#555555',
+      datetime_size: 14,
+      datetime_color: '#777777',
+      venue_text_size: 14,
+      venue_text_color: '#777777',
+      background_color: '#fafafa',
+      accent_color: '#1a1a1a',
+      text_color: '#1a1a1a',
+    }).select().single()
+
+    if (error) {
+      toast('Failed to create event', 'error')
+      return
+    }
+    navigate(`/events/${data.id}`)
   }
-  const handleDelete = async (id: string, evName: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    const confirmed = await confirm({ title: 'Delete Event', message: `Delete "${evName}" and all its guests and tables?`, confirmText: 'Delete', danger: true })
-    if (!confirmed) return
-    try { await deleteEvent.mutateAsync(id); toast('Event deleted') }
-    catch (err) { toast(err instanceof Error ? err.message : 'Failed to delete', 'error') }
+
+  const handleDelete = (id: string, name: string) => {
+    confirm({
+      message: `Delete "${name}"? This will remove all guests and tables for this event.`,
+      onConfirm: async () => {
+        const { error } = await supabase.from('events').delete().eq('id', id)
+        if (error) {
+          toast('Failed to delete event', 'error')
+        } else {
+          toast('Event deleted')
+          refetch()
+        }
+      },
+    })
   }
+
+  if (loading) {
+    return <div className="spinner-container"><div className="spinner spinner-lg" /></div>
+  }
+
   return (
-    <>
-      <AppHeader />
-      <div className="page">
-        <div className="page-header"><h1 className="page-title">My Events</h1><p className="page-subtitle">Manage your event seating plans</p></div>
-        {isLoading ? <div className="spinner-container"><div className="spinner" /></div> : (
-          <div className="events-grid">
-            {events?.map((ev) => (
-              <div key={ev.id} className="card event-card" onClick={() => navigate(`/events/${ev.id}`)}>
-                <div className="event-card-name">{ev.name}</div>
-                <div className="event-card-meta">
-                  {ev.date && <span>{new Date(ev.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>}
-                  {ev.venue && <span>{ev.venue}</span>}
-                </div>
-                <div className="event-card-footer">
-                  <span className="event-card-guests"><GuestCount eventId={ev.id} /> guests</span>
-                  <div className="event-card-actions"><button className="btn btn-ghost btn-sm" onClick={(e) => handleDelete(ev.id, ev.name, e)}>Delete</button></div>
-                </div>
-              </div>
-            ))}
-            <button className="new-event-btn" onClick={() => setShowModal(true)}><span className="new-event-icon">+</span><span>New Event</span></button>
-          </div>
-        )}
+    <div className="page">
+      <div className="page-header">
+        <h1 className="page-title">Your Events</h1>
+        <p className="page-subtitle">Manage seating for your events</p>
       </div>
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2 className="modal-title">New Event</h2>
-            <form onSubmit={handleCreate}>
-              <div className="form-group"><label className="form-label">Event Name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Wedding" autoFocus required /></div>
-              <div className="modal-actions">
-                <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={creating || !name.trim()}>{creating ? 'Creating…' : 'Create Event'}</button>
+      <div className="events-grid">
+        {events.map(ev => (
+          <div key={ev.id} className="card event-card" onClick={() => navigate(`/events/${ev.id}`)}>
+            <div className="event-card-name">{ev.name}</div>
+            <div className="event-card-meta">
+              {ev.date && <span>{new Date(ev.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>}
+              {ev.venue && <span>{ev.venue}</span>}
+            </div>
+            <div className="event-card-footer">
+              <span className="event-card-guests">Click to manage</span>
+              <div className="event-card-actions">
+                <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); navigate(`/events/${ev.id}`) }}>Edit</button>
+                <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); handleDelete(ev.id, ev.name) }}>Delete</button>
               </div>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
-    </>
+        ))}
+        <button className="new-event-btn" onClick={handleCreate}>
+          <span className="new-event-icon">+</span>
+          <span>Create New Event</span>
+        </button>
+      </div>
+    </div>
   )
 }

@@ -1,14 +1,36 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { GuestPageSettings, GuestPageSettingsInput } from '@/types'
+import type { GuestPageSettings } from '@/types'
 
-export function useGuestPageSettings(eventId: string) {
-  return useQuery({ queryKey: ['guest-page-settings', eventId], queryFn: async () => { const { data, error } = await supabase.from('guest_page_settings').select('*').eq('event_id', eventId).maybeSingle(); if (error) throw error; return data as GuestPageSettings | null }, enabled: !!eventId })
-}
-export function useGuestPageSettingsBySlug(slug: string) {
-  return useQuery({ queryKey: ['guest-page-settings-slug', slug], queryFn: async () => { const { data, error } = await supabase.from('guest_page_settings').select('*, events!inner(*)').eq('events.slug', slug).maybeSingle(); if (error) throw error; return data as (GuestPageSettings & { events: import('@/types').Event }) | null }, enabled: !!slug })
-}
-export function useUpsertGuestPageSettings() {
-  const qc = useQueryClient()
-  return useMutation({ mutationFn: async (input: GuestPageSettingsInput) => { const { data, error } = await supabase.from('guest_page_settings').upsert(input, { onConflict: 'event_id' }).select().single(); if (error) throw error; return data as GuestPageSettings }, onSuccess: (data) => { qc.invalidateQueries({ queryKey: ['guest-page-settings', data.event_id] }) } })
+export function useGuestPageSettings(eventId: string | undefined) {
+  const [settings, setSettings] = useState<GuestPageSettings | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchSettings = useCallback(async () => {
+    if (!eventId) {
+      setSettings(null)
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    setError(null)
+    const { data, error } = await supabase
+      .from('guest_page_settings')
+      .select('*')
+      .eq('event_id', eventId)
+      .maybeSingle()
+    if (error) {
+      setError(error.message)
+    } else {
+      setSettings(data)
+    }
+    setLoading(false)
+  }, [eventId])
+
+  useEffect(() => {
+    fetchSettings()
+  }, [fetchSettings])
+
+  return { settings, loading, error, refetch: fetchSettings }
 }

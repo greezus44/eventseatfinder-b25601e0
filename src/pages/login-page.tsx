@@ -1,36 +1,71 @@
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { useToast } from '@/providers/toast-provider'
+
 export default function LoginPage() {
-  const [mode, setMode] = useState<'login' | 'signup'>('login')
-  const [email, setEmail] = useState(''); const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false); const [error, setError] = useState('')
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setError(''); setLoading(true)
-    try {
-      if (mode === 'login') { const { error } = await supabase.auth.signInWithPassword({ email, password }); if (error) throw error }
-      else { const { error } = await supabase.auth.signUp({ email, password }); if (error) throw error }
+  const { toast } = useToast()
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+
+    if (mode === 'signup') {
+      const { error } = await supabase.auth.signUp({ email, password })
+      if (error) {
+        setError(error.message)
+        setLoading(false)
+        return
+      }
+      toast('Account created! Please sign in.')
+      setMode('signin')
+      setLoading(false)
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) {
+        setError(error.message)
+        setLoading(false)
+        return
+      }
       navigate('/')
-    } catch (err) { setError(err instanceof Error ? err.message : 'An error occurred') }
-    finally { setLoading(false) }
+      setLoading(false)
+    }
   }
+
   return (
     <div className="auth-page">
       <div className="card auth-card">
         <div className="auth-header">
           <div className="auth-logo">Seatly</div>
-          <h1 className="auth-title">{mode === 'login' ? 'Welcome back' : 'Create account'}</h1>
-          <p className="auth-subtitle">{mode === 'login' ? 'Sign in to manage your events' : 'Set up your event seating'}</p>
+          <h1 className="auth-title">{mode === 'signin' ? 'Welcome back' : 'Create account'}</h1>
+          <p className="auth-subtitle">{mode === 'signin' ? 'Sign in to manage your events' : 'Sign up to get started'}</p>
         </div>
         <form className="auth-form" onSubmit={handleSubmit}>
-          <div className="form-group"><label className="form-label">Email</label><input type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></div>
-          <div className="form-group"><label className="form-label">Password</label><input type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} /></div>
           {error && <div className="auth-error">{error}</div>}
-          <button type="submit" className="btn btn-primary btn-block" disabled={loading}>{loading ? 'Please wait…' : mode === 'login' ? 'Sign In' : 'Create Account'}</button>
+          <div className="form-group">
+            <label className="form-label">Email</label>
+            <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@example.com" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Password</label>
+            <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} placeholder="••••••••" />
+          </div>
+          <button className="btn btn-primary btn-block" type="submit" disabled={loading}>
+            {loading ? 'Loading…' : mode === 'signin' ? 'Sign in' : 'Sign up'}
+          </button>
         </form>
         <div className="auth-switch">
-          {mode === 'login' ? <>No account? <button onClick={() => { setMode('signup'); setError('') }}>Sign up</button></> : <>Already have an account? <button onClick={() => { setMode('login'); setError('') }}>Sign in</button></>}
+          {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
+          <button onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(null) }}>
+            {mode === 'signin' ? 'Sign up' : 'Sign in'}
+          </button>
         </div>
       </div>
     </div>
