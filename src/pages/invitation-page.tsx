@@ -30,14 +30,15 @@ const T = {
     bahasaMelayu: 'Bahasa Melayu',
   },
   ms: {
+    // Bruneian Malay — natural, polite, suitable for wedding guests in Brunei
     findSeat: 'Cari Tempat Duduk',
-    venueLayout: 'Pelan Tempat Majlis',
-    searchPlaceholder: 'CARI NAMA ANDA',
-    loading: 'Memuatkan tetamu\u2026',
-    noGuests: 'Tiada tetamu yang sepadan',
+    venueLayout: 'Pelan Dewan',
+    searchPlaceholder: 'TAIP NAMA ANDA',
+    loading: 'Sedang muatkan\u2026',
+    noGuests: 'Tiada nama yang sepadan',
     thisIsYourTable: 'Ini Meja Anda',
-    searchAgain: '\u2190 Cari semula',
-    noVenueLayout: 'Tiada pelan tempat duduk tersedia.',
+    searchAgain: '\u2190 Cari Lagi',
+    noVenueLayout: 'Pelan dewan belum tersedia.',
     eventNotFound: 'Majlis tidak dijumpai',
     english: 'English',
     bahasaMelayu: 'Bahasa Melayu',
@@ -138,35 +139,24 @@ export function InvitationPage() {
 
   const formatDate = () => {
     if (!event.date) return ''
-    return new Date(event.date).toLocaleDateString(lang === 'ms' ? 'ms-MY' : 'en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    return new Date(event.date).toLocaleDateString(lang === 'ms' ? 'ms-BN' : 'en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
   }
 
   return (
     <div className="gp-page" style={{ background: bg, color: text, position: 'relative' }}>
       {/* Language switcher — top-right corner */}
-      <div
-        className="gp-lang-switcher"
-        style={{ borderColor: primary }}
-      >
+      <div className="gp-lang-switcher" style={{ borderColor: primary }}>
         <button
           className="gp-lang-btn"
           onClick={() => setLang('en')}
-          style={
-            lang === 'en'
-              ? { background: primary, color: '#fff' }
-              : { background: bg, color: primary }
-          }
+          style={lang === 'en' ? { background: primary, color: '#fff' } : { background: bg, color: primary }}
         >
           {t.english}
         </button>
         <button
           className="gp-lang-btn"
           onClick={() => setLang('ms')}
-          style={
-            lang === 'ms'
-              ? { background: primary, color: '#fff' }
-              : { background: bg, color: primary }
-          }
+          style={lang === 'ms' ? { background: primary, color: '#fff' } : { background: bg, color: primary }}
         >
           {t.bahasaMelayu}
         </button>
@@ -175,49 +165,29 @@ export function InvitationPage() {
       <div className="gp-container">
         {logoUrl && (
           <div className="gp-logo-wrapper">
-            <img
-              src={logoUrl}
-              alt="Event logo"
-              className="gp-logo"
-              style={{ width: `${Math.min(logoSize, 500)}px`, maxWidth: '100%', height: 'auto', borderRadius: logoRounded ? '50%' : '0' }}
-            />
+            <img src={logoUrl} alt="Event logo" className="gp-logo" style={{ width: `${Math.min(logoSize, 500)}px`, maxWidth: '100%', height: 'auto', borderRadius: logoRounded ? '50%' : '0' }} />
           </div>
         )}
-        <h1
-          className="gp-title"
-          style={{ fontFamily: getFontCss(titleFont), fontSize: `${settings.font_title_size ?? 32}px`, color: settings.font_title_color ?? text }}
-        >
+        <h1 className="gp-title" style={{ fontFamily: getFontCss(titleFont), fontSize: `${settings.font_title_size ?? 32}px`, color: settings.font_title_color ?? text }}>
           {event.name}
         </h1>
         {subtitle && subtitle.trim() && (
-          <p
-            className="gp-subtitle"
-            style={{ fontFamily: getFontCss(subtitleFont), fontSize: `${settings.font_subtitle_size ?? 16}px`, color: settings.font_subtitle_color ?? text }}
-          >
+          <p className="gp-subtitle" style={{ fontFamily: getFontCss(subtitleFont), fontSize: `${settings.font_subtitle_size ?? 16}px`, color: settings.font_subtitle_color ?? text }}>
             {subtitle}
           </p>
         )}
         {event.date && (
-          <p
-            className="gp-datetime"
-            style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${settings.font_datetime_size ?? 14}px`, color: settings.font_datetime_color ?? text }}
-          >
+          <p className="gp-datetime" style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${settings.font_datetime_size ?? 14}px`, color: settings.font_datetime_color ?? text }}>
             {formatDate()}
           </p>
         )}
         {event.time && (
-          <p
-            className="gp-datetime"
-            style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${settings.font_datetime_size ?? 14}px`, color: settings.font_datetime_color ?? text }}
-          >
+          <p className="gp-datetime" style={{ fontFamily: getFontCss(datetimeFont), fontSize: `${settings.font_datetime_size ?? 14}px`, color: settings.font_datetime_color ?? text }}>
             {formatTime12(event.time)}
           </p>
         )}
         {event.venue && (
-          <p
-            className="gp-venue"
-            style={{ fontFamily: getFontCss(venueFont), fontSize: `${settings.font_venue_size ?? 14}px`, color: settings.font_venue_color ?? text }}
-          >
+          <p className="gp-venue" style={{ fontFamily: getFontCss(venueFont), fontSize: `${settings.font_venue_size ?? 14}px`, color: settings.font_venue_color ?? text }}>
             {event.venue}
           </p>
         )}
@@ -309,11 +279,7 @@ export function InvitationPage() {
         {activeTab === 'layout' && (
           <div className="gp-layout-section">
             {venueImageUrl ? (
-              <div
-                className="gp-layout-viewport"
-                style={{ borderColor: primary, borderRadius: radius }}
-                onClick={() => setLightboxOpen(true)}
-              >
+              <div className="gp-layout-viewport" style={{ borderColor: primary, borderRadius: radius }} onClick={() => setLightboxOpen(true)}>
                 <img src={venueImageUrl} alt="Venue layout" className="gp-venue-img" style={{ borderRadius: radius }} draggable={false} />
               </div>
             ) : (
