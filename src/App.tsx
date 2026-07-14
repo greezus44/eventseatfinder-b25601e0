@@ -1,5 +1,16 @@
-import { Router } from '@/routes/router';
-import { AuthProvider } from '@/providers/auth-provider';
 import { QueryProvider } from '@/providers/query-provider';
+import { AuthProvider } from '@/providers/auth-provider';
 import { ToastProvider } from '@/providers/toast-provider';
-export default function App() { return (<QueryProvider><AuthProvider><ToastProvider><Router /></ToastProvider></AuthProvider></QueryProvider>); }
+import { AppRouter } from '@/routes/router';
+
+export function App() {
+  return (
+    <QueryProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <AppRouter />
+        </ToastProvider>
+      </AuthProvider>
+    </QueryProvider>
+  );
+}

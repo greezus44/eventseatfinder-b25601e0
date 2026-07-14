@@ -3,166 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/providers/auth-provider';
 import { useToast } from '@/providers/toast-provider';
 
-const LOGIN_CSS = `
-.login-root {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #F8F8F8;
-  padding: 24px;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-}
-.login-card {
-  width: 100%;
-  max-width: 420px;
-  background: #FFFFFF;
-  border: 1px solid #E5E5E5;
-  border-radius: 20px;
-  padding: 48px 40px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.04);
-}
-.login-logo-wrap {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 28px;
-}
-.login-logo {
-  width: 56px;
-  height: 56px;
-  background: #1A1A1A;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #FFFFFF;
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-.login-title {
-  text-align: center;
-  font-size: 24px;
-  font-weight: 700;
-  color: #1A1A1A;
-  margin: 0 0 6px 0;
-  letter-spacing: -0.02em;
-}
-.login-subtitle {
-  text-align: center;
-  font-size: 14px;
-  color: #8A8A8A;
-  margin: 0 0 32px 0;
-}
-.login-toggle {
-  display: flex;
-  background: #F8F8F8;
-  border: 1px solid #E5E5E5;
-  border-radius: 12px;
-  padding: 4px;
-  margin-bottom: 28px;
-}
-.login-toggle-btn {
-  flex: 1;
-  padding: 10px 16px;
-  border: none;
-  background: transparent;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #8A8A8A;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.login-toggle-btn--active {
-  background: #1A1A1A;
-  color: #FFFFFF;
-}
-.login-field {
-  margin-bottom: 20px;
-}
-.login-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: #4A4A4A;
-  margin-bottom: 8px;
-}
-.login-input {
-  width: 100%;
-  padding: 12px 16px;
-  border: 1px solid #D5D5D5;
-  border-radius: 10px;
-  font-size: 15px;
-  color: #1A1A1A;
-  background: #FFFFFF;
-  outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  box-sizing: border-box;
-}
-.login-input:focus {
-  border-color: #1A1A1A;
-  box-shadow: 0 0 0 3px rgba(26,26,26,0.06);
-}
-.login-input::placeholder {
-  color: #B5B5B5;
-}
-.login-submit {
-  width: 100%;
-  padding: 13px 16px;
-  background: #1A1A1A;
-  color: #FFFFFF;
-  border: none;
-  border-radius: 10px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s ease, opacity 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 4px;
-}
-.login-submit:hover:not(:disabled) {
-  background: #2A2A2A;
-}
-.login-submit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.login-spinner {
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: #FFFFFF;
-  border-radius: 50%;
-  animation: login-spin 0.6s linear infinite;
-}
-@keyframes login-spin {
-  to { transform: rotate(360deg); }
-}
-.login-error {
-  background: #F0F0F0;
-  border: 1px solid #D5D5D5;
-  color: #4A4A4A;
-  padding: 12px 16px;
-  border-radius: 10px;
-  font-size: 14px;
-  margin-bottom: 20px;
-}
-.login-footer {
-  text-align: center;
-  margin-top: 28px;
-  font-size: 13px;
-  color: #8A8A8A;
-}
-`;
-
 export function LoginPage() {
-  const navigate = useNavigate();
   const { signIn, signUp } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
@@ -172,24 +16,24 @@ export function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim()) {
+    if (!email.trim() || !password) {
       setError('Please enter your email and password.');
       return;
     }
     setError(null);
     setLoading(true);
     try {
-      if (mode === 'signin') {
-        await signIn(email.trim(), password);
-        toast('Welcome back!', 'success');
+      const result = mode === 'signin'
+        ? await signIn(email.trim(), password)
+        : await signUp(email.trim(), password);
+      if (result.error) {
+        setError(result.error);
       } else {
-        await signUp(email.trim(), password);
-        toast('Account created. Please check your email to confirm.', 'success');
+        toast(mode === 'signin' ? 'Welcome back!' : 'Account created!', 'success');
+        navigate('/');
       }
-      navigate('/');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-      setError(message);
+    } catch {
+      setError('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -198,26 +42,24 @@ export function LoginPage() {
   return (
     <>
       <style>{LOGIN_CSS}</style>
-      <div className="login-root">
+      <div className="login-page">
         <div className="login-card">
-          <div className="login-logo-wrap">
-            <div className="login-logo">S</div>
+          {/* Logo */}
+          <div className="login-logo">
+            <div className="login-logo-mark">S</div>
           </div>
-          <h1 className="login-title">Seatly</h1>
-          <p className="login-subtitle">
-            {mode === 'signin' ? 'Sign in to manage your events' : 'Create an account to get started'}
-          </p>
+          <h1 className="login-app-name">Seatly</h1>
+          <p className="login-tagline">Event seating, simplified.</p>
 
+          {/* Toggle */}
           <div className="login-toggle">
             <button
-              type="button"
               className={`login-toggle-btn${mode === 'signin' ? ' login-toggle-btn--active' : ''}`}
               onClick={() => { setMode('signin'); setError(null); }}
             >
               Sign In
             </button>
             <button
-              type="button"
               className={`login-toggle-btn${mode === 'signup' ? ' login-toggle-btn--active' : ''}`}
               onClick={() => { setMode('signup'); setError(null); }}
             >
@@ -225,18 +67,17 @@ export function LoginPage() {
             </button>
           </div>
 
-          {error && <div className="login-error">{error}</div>}
-
-          <form onSubmit={handleSubmit}>
+          {/* Form */}
+          <form className="login-form" onSubmit={handleSubmit}>
             <div className="login-field">
               <label className="login-label" htmlFor="login-email">Email</label>
               <input
                 id="login-email"
-                className="login-input"
                 type="email"
-                placeholder="you@example.com"
+                className="login-input"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
                 autoComplete="email"
                 disabled={loading}
               />
@@ -245,30 +86,258 @@ export function LoginPage() {
               <label className="login-label" htmlFor="login-password">Password</label>
               <input
                 id="login-password"
-                className="login-input"
                 type="password"
-                placeholder="••••••••"
+                className="login-input"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
                 autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
                 disabled={loading}
               />
             </div>
-            <button className="login-submit" type="submit" disabled={loading}>
-              {loading && <span className="login-spinner" />}
-              {loading
-                ? (mode === 'signin' ? 'Signing in…' : 'Creating account…')
-                : (mode === 'signin' ? 'Sign In' : 'Create Account')}
+
+            {error && <p className="login-error">{error}</p>}
+
+            <button
+              type="submit"
+              className="login-submit-btn"
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <span className="login-spinner" />
+                  <span>{mode === 'signin' ? 'Signing in…' : 'Creating account…'}</span>
+                </>
+              ) : (
+                <span>{mode === 'signin' ? 'Sign In' : 'Create Account'}</span>
+              )}
             </button>
           </form>
 
           <p className="login-footer">
             {mode === 'signin'
-              ? 'New to Seatly? Use the toggle above to sign up.'
-              : 'Already have an account? Use the toggle above to sign in.'}
+              ? "Don't have an account? "
+              : 'Already have an account? '}
+            <button
+              className="login-switch-link"
+              onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(null); }}
+            >
+              {mode === 'signin' ? 'Sign up' : 'Sign in'}
+            </button>
           </p>
         </div>
       </div>
     </>
   );
 }
+
+const LOGIN_CSS = `
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #F8F8F8;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.login-card {
+  background: #FFFFFF;
+  border: 1px solid #EFEFEF;
+  border-radius: 16px;
+  padding: 40px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Logo */
+.login-logo {
+  margin-bottom: 16px;
+}
+
+.login-logo-mark {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: #1A1A1A;
+  color: #FFFFFF;
+  font-size: 28px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.login-app-name {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0;
+  color: #1A1A1A;
+}
+
+.login-tagline {
+  font-size: 14px;
+  color: #4A4A4A;
+  margin: 4px 0 28px 0;
+}
+
+/* Toggle */
+.login-toggle {
+  display: flex;
+  width: 100%;
+  border: 1px solid #EFEFEF;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.login-toggle-btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  background: #FFFFFF;
+  color: #4A4A4A;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.login-toggle-btn--active {
+  background: #1A1A1A;
+  color: #FFFFFF;
+  font-weight: 600;
+}
+
+.login-toggle-btn:not(.login-toggle-btn--active):hover {
+  background: #F8F8F8;
+  color: #1A1A1A;
+}
+
+/* Form */
+.login-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #4A4A4A;
+}
+
+.login-input {
+  padding: 12px 14px;
+  border: 1px solid #DADADA;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #1A1A1A;
+  background: #FFFFFF;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+
+.login-input:focus {
+  border-color: #1A1A1A;
+  box-shadow: 0 0 0 3px rgba(26,26,26,0.06);
+}
+
+.login-input:disabled {
+  background: #F8F8F8;
+  cursor: not-allowed;
+}
+
+.login-error {
+  font-size: 13px;
+  color: #1A1A1A;
+  background: #EFEFEF;
+  border: 1px solid #DADADA;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.login-submit-btn {
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  background: #1A1A1A;
+  color: #FFFFFF;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.login-submit-btn:hover:not(:disabled) {
+  background: #4A4A4A;
+}
+
+.login-submit-btn:disabled {
+  background: #DADADA;
+  cursor: not-allowed;
+}
+
+.login-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: login-spin 0.7s linear infinite;
+}
+
+@keyframes login-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Footer */
+.login-footer {
+  font-size: 13px;
+  color: #4A4A4A;
+  margin: 24px 0 0 0;
+  text-align: center;
+}
+
+.login-switch-link {
+  background: none;
+  border: none;
+  color: #1A1A1A;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  text-decoration: underline;
+  transition: color 0.15s;
+}
+
+.login-switch-link:hover {
+  color: #4A4A4A;
+}
+`;

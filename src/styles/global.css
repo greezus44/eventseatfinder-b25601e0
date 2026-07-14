@@ -4,7 +4,6 @@
    ============================================================ */
 
 :root {
-  /* Monochrome palette */
   --white: #FFFFFF;
   --off-white: #F8F8F8;
   --light-grey: #EFEFEF;
@@ -15,7 +14,6 @@
   --dark-grey-2: #333333;
   --near-black: #1A1A1A;
 
-  /* Semantic */
   --bg-primary: var(--white);
   --bg-secondary: var(--off-white);
   --bg-tertiary: var(--light-grey);
@@ -25,32 +23,26 @@
   --border-color: var(--mid-grey);
   --border-light: var(--light-grey-2);
 
-  /* Accent (overridable per-event) */
   --accent: var(--near-black);
   --accent-hover: var(--dark-grey-2);
 
-  /* Radii */
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 20px;
   --radius-full: 9999px;
 
-  /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
   --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.1);
 
-  /* Transitions */
   --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-serif: 'Cormorant Garamond', Georgia, serif;
 }
 
-/* Reset */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -76,11 +68,12 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 input, textarea, select { font-family: inherit; font-size: inherit; }
 img { display: block; max-width: 100%; }
 
-/* Scrollbar */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--mid-grey); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--mid-grey-2); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ============================================================
    GUEST PAGE STYLES — Premium reference design
@@ -95,7 +88,6 @@ img { display: block; max-width: 100%; }
   overflow-x: hidden;
 }
 
-/* Loading */
 .gp-loading-screen {
   display: flex;
   align-items: center;
@@ -107,13 +99,9 @@ img { display: block; max-width: 100%; }
   width: 40px;
   height: 40px;
   border: 3px solid rgba(0,0,0,0.08);
-  border-top-width: 3px;
+  border-top-color: var(--accent, #1A1A1A);
   border-radius: 50%;
-  animation: gp-spin 0.8s linear infinite;
-}
-
-@keyframes gp-spin {
-  to { transform: rotate(360deg); }
+  animation: spin 0.8s linear infinite;
 }
 
 .gp-not-found-text {
@@ -122,7 +110,6 @@ img { display: block; max-width: 100%; }
   font-weight: 500;
 }
 
-/* ── Language switcher (top right) ── */
 .gp-lang-switcher {
   position: absolute;
   top: 24px;
@@ -155,7 +142,6 @@ img { display: block; max-width: 100%; }
   background: rgba(0,0,0,0.04);
 }
 
-/* ── Hero section ── */
 .gp-hero {
   display: flex;
   flex-direction: column;
@@ -206,7 +192,6 @@ img { display: block; max-width: 100%; }
   line-height: 1.8;
 }
 
-/* ── Segmented tabs ── */
 .gp-tabs-wrap {
   display: flex;
   justify-content: center;
@@ -248,7 +233,6 @@ img { display: block; max-width: 100%; }
   opacity: 0.5;
 }
 
-/* ── Content area ── */
 .gp-content {
   max-width: 600px;
   margin: 0 auto;
@@ -269,7 +253,6 @@ img { display: block; max-width: 100%; }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Search box ── */
 .gp-search-wrap {
   margin-bottom: 24px;
 }
@@ -310,7 +293,6 @@ img { display: block; max-width: 100%; }
   opacity: 0.7;
 }
 
-/* ── Results ── */
 .gp-results-wrap {
   margin-top: 8px;
 }
@@ -373,7 +355,6 @@ img { display: block; max-width: 100%; }
   opacity: 0.7;
 }
 
-/* ── Venue layout tab ── */
 .gp-venue-wrap {
   position: relative;
 }
@@ -470,47 +451,37 @@ img { display: block; max-width: 100%; }
   opacity: 0.6;
 }
 
-/* ── Responsive ── */
 @media (max-width: 640px) {
   .gp-hero {
     padding: 60px 20px 36px;
   }
-
   .gp-event-name {
     font-size: 28px;
   }
-
   .gp-lang-switcher {
     top: 16px;
     right: 16px;
   }
-
   .gp-lang-btn {
     padding: 6px 10px;
     font-size: 10px;
   }
-
   .gp-tab {
     padding: 10px 20px;
     font-size: 11px;
   }
-
   .gp-search-box {
     height: 52px;
   }
-
   .gp-content {
     padding: 0 16px 60px;
   }
-
   .gp-result-row {
     padding: 14px 16px;
   }
-
   .gp-result-name {
     font-size: 13px;
   }
-
   .gp-badge {
     padding: 5px 10px;
     font-size: 10px;
