@@ -1,15 +1,14 @@
-import { useState, useRef, useEffect, useCallback, type CSSProperties, type ChangeEvent } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useRef, useCallback, useMemo, useEffect, type ChangeEvent, type DragEvent } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useEvent, useUpdateEvent, useDeleteEvent } from '@/hooks/use-events';
 import { useGuests, useCreateGuest, useBulkCreateGuests, useUpdateGuest, useDeleteGuest } from '@/hooks/use-guests';
-import { useTables, useCreateTable, useDeleteTable, useUpdateTablePosition } from '@/hooks/use-tables';
+import { useTables, useCreateTable, useDeleteTable } from '@/hooks/use-tables';
 import { useGuestPageSettings, useUpsertGuestPageSettings } from '@/hooks/use-guest-page-settings';
 import { useToast } from '@/providers/toast-provider';
 import { ConfirmDialog, Modal } from '@/components/ui/confirm-dialog';
-import { DEFAULT_SETTINGS, FONT_OPTIONS, COLOR_PRESETS } from '@/types/guest-page-settings';
+import { DEFAULT_SETTINGS, FONT_OPTIONS, THEME_PRESETS } from '@/types/guest-page-settings';
 import type { GuestPageSettingsInput } from '@/types/guest-page-settings';
 import type { GuestWithTable } from '@/types/guest';
-import type { Table } from '@/types/table';
 import type { Event } from '@/types/event';
 
 type TabKey = 'details' | 'guests' | 'tables' | 'venue' | 'invitation' | 'schedule' | 'settings';
@@ -24,141 +23,471 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'settings', label: 'Settings' },
 ];
 
+/* ---------- helpers ---------- */
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex.trim());
+  if (!m) return null;
+  return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const c = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+  return `#${c(r)}${c(g)}${c(b)}`;
+}
+
+function darken(hex: string, amount = 0.2): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  return rgbToHex(rgb.r * (1 - amount), rgb.g * (1 - amount), rgb.b * (1 - amount));
+}
+
+function contrastText(hex: string): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return '#ffffff';
+  const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+  return luminance > 0.55 ? '#0f172a' : '#ffffff';
+}
+
+function deriveFromPrimary(primary: string) {
+  return {
+    color_link: primary,
+    color_secondary: darken(primary, 0.2),
+    color_footer: darken('#0f172a', 0),
+    color_button_text: contrastText(primary),
+  };
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ---------- main component ---------- */
+
 export function EventEditorPage() {
-  const { eventId = '' } = useParams<{ eventId: string }>();
-  const { toast } = useToast();
+  const { eventId = '' } = useParams();
+  const navigate = useNavigate();
+
+  const [activeTab, setActiveTab] = useState<TabKey>('details');
 
   const { data: event, isLoading: eventLoading } = useEvent(eventId);
-  const { data: guests = [], isLoading: guestsLoading } = useGuests(eventId);
-  const { data: tables = [] } = useTables(eventId);
-  const { data: settings } = useGuestPageSettings(eventId);
-
   const updateEvent = useUpdateEvent(eventId);
   const deleteEvent = useDeleteEvent();
+
+  const { data: guests, isLoading: guestsLoading } = useGuests(eventId);
   const createGuest = useCreateGuest(eventId);
   const bulkCreateGuests = useBulkCreateGuests(eventId);
   const updateGuest = useUpdateGuest(eventId);
   const deleteGuest = useDeleteGuest(eventId);
+
+  const { data: tables } = useTables(eventId);
   const createTable = useCreateTable(eventId);
   const deleteTable = useDeleteTable(eventId);
-  const updateTablePosition = useUpdateTablePosition(eventId);
+
+  const { data: settings } = useGuestPageSettings(eventId);
   const upsertSettings = useUpsertGuestPageSettings(eventId);
 
-  const [activeTab, setActiveTab] = useState<TabKey>('details');
+  if (eventLoading) {
+    return <div className="ee-loading">Loading event…</div>;
+  }
+  if (!event) {
+    return <div className="ee-loading">Event not found.</div>;
+  }
 
-  // ── Event Details form state ──
-  const [detailsForm, setDetailsForm] = useState<Partial<Event>>({});
-  const [detailsSaving, setDetailsSaving] = useState(false);
+  return (
+    <div className="ee-page">
+      <EventHeader event={event} />
+      <div className="ee-tabs">
+        <div className="ee-tabs__inner">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              className={`ee-tab${activeTab === t.key ? ' ee-tab--active' : ''}`}
+              onClick={() => setActiveTab(t.key)}
+              type="button"
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-  useEffect(() => {
-    if (event) {
-      setDetailsForm({
-        name: event.name,
-        slug: event.slug,
-        date: event.date,
-        time: event.time,
-        venue: event.venue,
-        logo_url: event.logo_url,
-        cover_url: event.cover_url,
-        accent_color: event.accent_color,
-        invitation_enabled: event.invitation_enabled,
+      <div className="ee-content">
+        <div className={`ee-section${activeTab === 'details' ? ' ee-section--active' : ''}`}>
+          <EventDetailsSection event={event} onSave={updateEvent.mutateAsync} />
+        </div>
+        <div className={`ee-section${activeTab === 'guests' ? ' ee-section--active' : ''}`}>
+          <GuestsSection
+            guests={guests ?? []}
+            guestsLoading={guestsLoading}
+            tables={tables ?? []}
+            createGuest={createGuest.mutateAsync}
+            bulkCreateGuests={bulkCreateGuests.mutateAsync}
+            updateGuest={updateGuest.mutateAsync}
+            deleteGuest={deleteGuest.mutateAsync}
+          />
+        </div>
+        <div className={`ee-section${activeTab === 'tables' ? ' ee-section--active' : ''}`}>
+          <TablesSection
+            tables={tables ?? []}
+            guests={guests ?? []}
+            createTable={createTable.mutateAsync}
+            deleteTable={deleteTable.mutateAsync}
+          />
+        </div>
+        <div className={`ee-section${activeTab === 'venue' ? ' ee-section--active' : ''}`}>
+          <VenueLayoutSection
+            venueImageUrl={settings?.venue_image_url ?? null}
+            upsertSettings={upsertSettings.mutateAsync}
+          />
+        </div>
+        <div className={`ee-section${activeTab === 'invitation' ? ' ee-section--active' : ''}`}>
+          <InvitationSection event={event} onSave={updateEvent.mutateAsync} />
+        </div>
+        <div className={`ee-section${activeTab === 'schedule' ? ' ee-section--active' : ''}`}>
+          <ScheduleSection settings={settings} upsertSettings={upsertSettings.mutateAsync} />
+        </div>
+        <div className={`ee-section${activeTab === 'settings' ? ' ee-section--active' : ''}`}>
+          <SettingsSection
+            event={event}
+            settings={settings}
+            upsertSettings={upsertSettings.mutateAsync}
+            deleteEvent={deleteEvent.mutateAsync}
+            onDeleted={() => navigate('/')}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- event header ---------- */
+
+function EventHeader({ event }: { event: Event }) {
+  return (
+    <div className="ee-header">
+      <Link to="/" className="ee-header__back">← Back to Dashboard</Link>
+      <h1 className="ee-header__title">{event.name}</h1>
+      <p className="ee-header__subtitle">
+        {[event.date && formatDate(event.date), event.time, event.venue].filter(Boolean).join(' · ') || 'No date or venue set'}
+      </p>
+    </div>
+  );
+}
+
+function formatDate(d: string): string {
+  try {
+    const dt = new Date(d);
+    if (isNaN(dt.getTime())) return d;
+    return dt.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  } catch {
+    return d;
+  }
+}
+
+/* ---------- event details section ---------- */
+
+function EventDetailsSection({ event, onSave }: { event: Event; onSave: (v: Partial<Event>) => Promise<unknown> }) {
+  const { toast } = useToast();
+  const [form, setForm] = useState({
+    name: event.name,
+    slug: event.slug,
+    date: event.date,
+    time: event.time,
+    venue: event.venue,
+    logo_url: event.logo_url ?? '',
+    cover_url: event.cover_url ?? '',
+    accent_color: event.accent_color ?? '#0f766e',
+    invitation_enabled: event.invitation_enabled,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSave({
+        name: form.name,
+        slug: form.slug,
+        date: form.date,
+        time: form.time,
+        venue: form.venue,
+        logo_url: form.logo_url || null,
+        cover_url: form.cover_url || null,
+        accent_color: form.accent_color,
+        invitation_enabled: form.invitation_enabled,
       });
+      toast('Event details saved', 'success');
+    } catch (e) {
+      toast('Failed to save event details', 'error');
+    } finally {
+      setSaving(false);
     }
-  }, [event]);
+  };
 
-  // ── Guest modal state ──
-  const [addGuestOpen, setAddGuestOpen] = useState(false);
-  const [bulkGuestOpen, setBulkGuestOpen] = useState(false);
-  const [editGuestOpen, setEditGuestOpen] = useState(false);
-  const [newGuestName, setNewGuestName] = useState('');
-  const [newGuestTableId, setNewGuestTableId] = useState('');
+  return (
+    <div className="ee-panel">
+      <h2 className="ee-panel__title">Event Details</h2>
+      <div className="ee-form-grid">
+        <label className="ee-field">
+          <span className="ee-field__label">Event Name</span>
+          <input className="ee-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        </label>
+        <label className="ee-field">
+          <span className="ee-field__label">Slug</span>
+          <input className="ee-input" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} />
+        </label>
+        <label className="ee-field">
+          <span className="ee-field__label">Date</span>
+          <input className="ee-input" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+        </label>
+        <label className="ee-field">
+          <span className="ee-field__label">Time</span>
+          <input className="ee-input" type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
+        </label>
+        <label className="ee-field ee-field--full">
+          <span className="ee-field__label">Venue</span>
+          <input className="ee-input" value={form.venue} onChange={(e) => setForm({ ...form, venue: e.target.value })} />
+        </label>
+        <label className="ee-field ee-field--full">
+          <span className="ee-field__label">Logo URL</span>
+          <input className="ee-input" value={form.logo_url} onChange={(e) => setForm({ ...form, logo_url: e.target.value })} placeholder="https://…" />
+        </label>
+        <label className="ee-field ee-field--full">
+          <span className="ee-field__label">Cover Image URL</span>
+          <input className="ee-input" value={form.cover_url} onChange={(e) => setForm({ ...form, cover_url: e.target.value })} placeholder="https://…" />
+        </label>
+        <label className="ee-field">
+          <span className="ee-field__label">Accent Colour</span>
+          <div className="ee-color-row">
+            <input type="color" className="ee-color-input" value={form.accent_color} onChange={(e) => setForm({ ...form, accent_color: e.target.value })} />
+            <input className="ee-input ee-input--hex" value={form.accent_color} onChange={(e) => setForm({ ...form, accent_color: e.target.value })} />
+          </div>
+        </label>
+        <label className="ee-field ee-field--check">
+          <input type="checkbox" checked={form.invitation_enabled} onChange={(e) => setForm({ ...form, invitation_enabled: e.target.checked })} />
+          <span className="ee-field__label">Invitation Enabled</span>
+        </label>
+      </div>
+      <div className="ee-actions">
+        <button className="btn btn--primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save Details'}</button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- guests section ---------- */
+
+interface GuestsSectionProps {
+  guests: GuestWithTable[];
+  guestsLoading: boolean;
+  tables: { id: string; name: string; number: number; capacity: number }[];
+  createGuest: (v: { name: string; table_id?: string | null }) => Promise<unknown>;
+  bulkCreateGuests: (v: { name: string; table_id?: string | null }[]) => Promise<unknown>;
+  updateGuest: (v: { id: string; name?: string; table_id?: string | null }) => Promise<unknown>;
+  deleteGuest: (id: string) => Promise<unknown>;
+}
+
+function GuestsSection(props: GuestsSectionProps) {
+  const { guests, guestsLoading, tables, createGuest, bulkCreateGuests, updateGuest, deleteGuest } = props;
+  const { toast } = useToast();
+  const [search, setSearch] = useState('');
+  const [addOpen, setAddOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [editGuest, setEditGuest] = useState<GuestWithTable | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  // add form
+  const [newName, setNewName] = useState('');
+  const [newTable, setNewTable] = useState('');
+
+  // bulk form
   const [bulkText, setBulkText] = useState('');
-  const [editGuestName, setEditGuestName] = useState('');
-  const [editGuestTableId, setEditGuestTableId] = useState('');
-  const [editGuestId, setEditGuestId] = useState<string | null>(null);
-  const [guestSearch, setGuestSearch] = useState('');
-  const [deleteGuestId, setDeleteGuestId] = useState<string | null>(null);
 
-  // ── Table modal state ──
-  const [addTableOpen, setAddTableOpen] = useState(false);
-  const [newTableName, setNewTableName] = useState('');
-  const [newTableNumber, setNewTableNumber] = useState('');
-  const [newTableCapacity, setNewTableCapacity] = useState('');
-  const [deleteTableId, setDeleteTableId] = useState<string | null>(null);
+  // edit form
+  const [editName, setEditName] = useState('');
+  const [editTable, setEditTable] = useState('');
 
-  // ── Venue drag state ──
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const dragOffset = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const canvasRef = useRef<HTMLDivElement>(null);
+  const filtered = useMemo(() => {
+    if (!search.trim()) return guests;
+    const q = search.toLowerCase();
+    return guests.filter((g) => g.name.toLowerCase().includes(q));
+  }, [guests, search]);
 
-  // ── Schedule state ──
-  const [scheduleForm, setScheduleForm] = useState<GuestPageSettingsInput>({});
-  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const handleAdd = async () => {
+    if (!newName.trim()) { toast('Name is required', 'error'); return; }
+    try {
+      await createGuest({ name: newName.trim(), table_id: newTable || null });
+      toast('Guest added', 'success');
+      setAddOpen(false); setNewName(''); setNewTable('');
+    } catch { toast('Failed to add guest', 'error'); }
+  };
 
-  // ── Settings state ──
-  const [settingsForm, setSettingsForm] = useState<GuestPageSettingsInput>({});
-  const [settingsSaving, setSettingsSaving] = useState(false);
+  const handleBulk = async () => {
+    const names = bulkText.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (!names.length) { toast('Enter at least one name', 'error'); return; }
+    try {
+      await bulkCreateGuests(names.map((n) => ({ name: n })));
+      toast(`${names.length} guest${names.length > 1 ? 's' : ''} added`, 'success');
+      setBulkOpen(false); setBulkText('');
+    } catch { toast('Failed to add guests', 'error'); }
+  };
 
-  // ── Delete event state ──
-  const [deleteEventOpen, setDeleteEventOpen] = useState(false);
+  const openEdit = (g: GuestWithTable) => {
+    setEditGuest(g);
+    setEditName(g.name);
+    setEditTable(g.table_id ?? '');
+    setEditOpen(true);
+  };
+  const [editOpen, setEditOpen] = useState(false);
 
-  useEffect(() => {
-    const s = settings ?? null;
-    const base: GuestPageSettingsInput = {
-      ...DEFAULT_SETTINGS,
-      logo_url: s?.logo_url ?? null,
-      logo_size: s?.logo_size,
-      logo_rounded: s?.logo_rounded,
-      logo_position: s?.logo_position,
-      color_primary: s?.color_primary,
-      color_secondary: s?.color_secondary,
-      color_background: s?.color_background,
-      color_card: s?.color_card,
-      color_text: s?.color_text,
-      color_header: s?.color_header,
-      color_button: s?.color_button,
-      color_button_text: s?.color_button_text,
-      color_link: s?.color_link,
-      color_footer: s?.color_footer,
-      font_heading: s?.font_heading,
-      font_body: s?.font_body,
-      font_button: s?.font_button,
-      font_heading_size: s?.font_heading_size,
-      font_body_size: s?.font_body_size,
-      font_heading_weight: s?.font_heading_weight,
-      font_body_weight: s?.font_body_weight,
-      font_heading_spacing: s?.font_heading_spacing,
-      font_body_spacing: s?.font_body_spacing,
-      font_heading_line_height: s?.font_heading_line_height,
-      font_body_line_height: s?.font_body_line_height,
-      border_radius: s?.border_radius,
-      background_overlay_opacity: s?.background_overlay_opacity,
-      background_image: s?.background_image ?? null,
-      cover_image: s?.cover_image ?? null,
-      banner_height: s?.banner_height,
-      welcome_message: s?.welcome_message ?? null,
-      event_subtitle: s?.event_subtitle ?? null,
-      card_shadow: s?.card_shadow,
-      button_style: s?.button_style,
-      venue_image_url: s?.venue_image_url ?? null,
-      enable_schedule: s?.enable_schedule,
-      enable_gallery: s?.enable_gallery,
-      schedule_items: s?.schedule_items ?? [],
-      gallery_images: s?.gallery_images ?? [],
-    };
-    setScheduleForm({
-      enable_schedule: base.enable_schedule,
-      schedule_items: base.schedule_items ?? [],
-      enable_gallery: base.enable_gallery,
-      gallery_images: base.gallery_images ?? [],
-      welcome_message: base.welcome_message,
-      event_subtitle: base.event_subtitle,
-    });
-    setSettingsForm(base);
-  }, [settings]);
+  const handleEdit = async () => {
+    if (!editGuest) return;
+    if (!editName.trim()) { toast('Name is required', 'error'); return; }
+    try {
+      await updateGuest({ id: editGuest.id, name: editName.trim(), table_id: editTable || null });
+      toast('Guest updated', 'success');
+      setEditOpen(false); setEditGuest(null);
+    } catch { toast('Failed to update guest', 'error'); }
+  };
 
-  // ── Derived: guest count per table ──
-  const guestCountByTable = useCallback(() => {
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    try {
+      await deleteGuest(deleteId);
+      toast('Guest deleted', 'success');
+    } catch { toast('Failed to delete guest', 'error'); } finally {
+      setDeleteId(null);
+    }
+  };
+
+  return (
+    <div className="ee-panel">
+      <div className="ee-panel__header">
+        <h2 className="ee-panel__title">Guests</h2>
+        <div className="ee-panel__actions">
+          <button className="btn btn--primary" onClick={() => setAddOpen(true)}>+ Add Guest</button>
+          <button className="btn btn--ghost" onClick={() => setBulkOpen(true)}>Bulk Add</button>
+        </div>
+      </div>
+
+      <input className="ee-input ee-input--search" placeholder="Search guests…" value={search} onChange={(e) => setSearch(e.target.value)} />
+
+      {guestsLoading ? (
+        <p className="ee-empty">Loading guests…</p>
+      ) : filtered.length === 0 ? (
+        <p className="ee-empty">{search ? 'No guests match your search.' : 'No guests yet. Add your first guest.'}</p>
+      ) : (
+        <div className="ee-table-wrap">
+          <table className="ee-table">
+            <thead>
+              <tr><th>Name</th><th>Table</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+              {filtered.map((g) => (
+                <tr key={g.id}>
+                  <td>{g.name}</td>
+                  <td>{g.table ? `Table ${g.table.number} — ${g.table.name}` : '—'}</td>
+                  <td className="ee-table__actions">
+                    <button className="btn btn--ghost btn--sm" onClick={() => openEdit(g)}>Edit</button>
+                    <button className="btn btn--danger btn--sm" onClick={() => setDeleteId(g.id)}>Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Add modal */}
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add Guest">
+        <div className="ee-modal-form">
+          <label className="ee-field">
+            <span className="ee-field__label">Name</span>
+            <input className="ee-input" value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAdd()} autoFocus />
+          </label>
+          <label className="ee-field">
+            <span className="ee-field__label">Table (optional)</span>
+            <select className="ee-input" value={newTable} onChange={(e) => setNewTable(e.target.value)}>
+              <option value="">No table</option>
+              {tables.map((t) => <option key={t.id} value={t.id}>Table {t.number} — {t.name}</option>)}
+            </select>
+          </label>
+          <div className="ee-actions">
+            <button className="btn btn--ghost" onClick={() => setAddOpen(false)}>Cancel</button>
+            <button className="btn btn--primary" onClick={handleAdd}>Add Guest</button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Bulk modal */}
+      <Modal open={bulkOpen} onClose={() => setBulkOpen(false)} title="Bulk Add Guests">
+        <div className="ee-modal-form">
+          <label className="ee-field">
+            <span className="ee-field__label">Guest Names (one per line)</span>
+            <textarea className="ee-textarea" rows={8} value={bulkText} onChange={(e) => setBulkText(e.target.value)} placeholder={'Alice\nBob\nCharlie'} autoFocus />
+          </label>
+          <div className="ee-actions">
+            <button className="btn btn--ghost" onClick={() => setBulkOpen(false)}>Cancel</button>
+            <button className="btn btn--primary" onClick={handleBulk}>Add All</button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit modal */}
+      <Modal open={editOpen} onClose={() => { setEditOpen(false); setEditGuest(null); }} title="Edit Guest">
+        <div className="ee-modal-form">
+          <label className="ee-field">
+            <span className="ee-field__label">Name</span>
+            <input className="ee-input" value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus />
+          </label>
+          <label className="ee-field">
+            <span className="ee-field__label">Table</span>
+            <select className="ee-input" value={editTable} onChange={(e) => setEditTable(e.target.value)}>
+              <option value="">No table</option>
+              {tables.map((t) => <option key={t.id} value={t.id}>Table {t.number} — {t.name}</option>)}
+            </select>
+          </label>
+          <div className="ee-actions">
+            <button className="btn btn--ghost" onClick={() => { setEditOpen(false); setEditGuest(null); }}>Cancel</button>
+            <button className="btn btn--primary" onClick={handleEdit}>Save</button>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        open={!!deleteId}
+        title="Delete Guest"
+        message="Are you sure you want to delete this guest? This cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteId(null)}
+      />
+    </div>
+  );
+}
+
+/* ---------- tables section ---------- */
+
+interface TablesSectionProps {
+  tables: { id: string; name: string; number: number; capacity: number }[];
+  guests: GuestWithTable[];
+  createTable: (v: { name: string; number: number; capacity: number }) => Promise<unknown>;
+  deleteTable: (id: string) => Promise<unknown>;
+}
+
+function TablesSection(props: TablesSectionProps) {
+  const { tables, guests, createTable, deleteTable } = props;
+  const { toast } = useToast();
+  const [addOpen, setAddOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [form, setForm] = useState({ name: '', number: 1, capacity: 8 });
+
+  const guestCount = useMemo(() => {
     const map: Record<string, number> = {};
     for (const g of guests) {
       if (g.table_id) map[g.table_id] = (map[g.table_id] ?? 0) + 1;
@@ -166,1234 +495,879 @@ export function EventEditorPage() {
     return map;
   }, [guests]);
 
-  const filteredGuests = guestSearch.trim()
-    ? guests.filter((g) => g.name.toLowerCase().includes(guestSearch.trim().toLowerCase()))
-    : guests;
-
-  // ── Handlers: Event Details ──
-  const handleDetailsChange = (field: keyof Event, value: string | boolean | null) => {
-    setDetailsForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleSaveDetails = async () => {
-    if (!event) return;
-    setDetailsSaving(true);
+  const handleAdd = async () => {
+    if (!form.name.trim()) { toast('Table name is required', 'error'); return; }
     try {
-      await updateEvent.mutateAsync({
-        name: detailsForm.name ?? '',
-        slug: detailsForm.slug ?? '',
-        date: detailsForm.date ?? '',
-        time: detailsForm.time ?? '',
-        venue: detailsForm.venue ?? '',
-        logo_url: detailsForm.logo_url ?? null,
-        cover_url: detailsForm.cover_url ?? null,
-        accent_color: detailsForm.accent_color ?? null,
-        invitation_enabled: detailsForm.invitation_enabled ?? false,
-      });
-      toast('Event details saved', 'success');
-    } catch {
-      toast('Failed to save event details', 'error');
-    } finally {
-      setDetailsSaving(false);
-    }
-  };
-
-  // ── Handlers: Guests ──
-  const handleAddGuest = async () => {
-    if (!newGuestName.trim()) {
-      toast('Guest name is required', 'error');
-      return;
-    }
-    try {
-      await createGuest.mutateAsync({
-        name: newGuestName.trim(),
-        table_id: newGuestTableId || undefined,
-      });
-      toast('Guest added', 'success');
-      setNewGuestName('');
-      setNewGuestTableId('');
-      setAddGuestOpen(false);
-    } catch {
-      toast('Failed to add guest', 'error');
-    }
-  };
-
-  const handleBulkAddGuests = async () => {
-    const names = bulkText.split('\n').map((n) => n.trim()).filter(Boolean);
-    if (names.length === 0) {
-      toast('Enter at least one name', 'error');
-      return;
-    }
-    try {
-      await bulkCreateGuests.mutateAsync(names.map((name) => ({ name })));
-      toast(`${names.length} guest${names.length > 1 ? 's' : ''} added`, 'success');
-      setBulkText('');
-      setBulkGuestOpen(false);
-    } catch {
-      toast('Failed to add guests', 'error');
-    }
-  };
-
-  const openEditGuest = (g: GuestWithTable) => {
-    setEditGuestId(g.id);
-    setEditGuestName(g.name);
-    setEditGuestTableId(g.table_id ?? '');
-    setEditGuestOpen(true);
-  };
-
-  const handleEditGuest = async () => {
-    if (!editGuestId || !editGuestName.trim()) {
-      toast('Guest name is required', 'error');
-      return;
-    }
-    try {
-      await updateGuest.mutateAsync({
-        id: editGuestId,
-        name: editGuestName.trim(),
-        table_id: editGuestTableId || null,
-      });
-      toast('Guest updated', 'success');
-      setEditGuestOpen(false);
-      setEditGuestId(null);
-    } catch {
-      toast('Failed to update guest', 'error');
-    }
-  };
-
-  const handleDeleteGuest = async () => {
-    if (!deleteGuestId) return;
-    try {
-      await deleteGuest.mutateAsync(deleteGuestId);
-      toast('Guest deleted', 'success');
-      setDeleteGuestId(null);
-    } catch {
-      toast('Failed to delete guest', 'error');
-    }
-  };
-
-  // ── Handlers: Tables ──
-  const handleAddTable = async () => {
-    const num = parseInt(newTableNumber, 10);
-    const cap = parseInt(newTableCapacity, 10);
-    if (!newTableName.trim() || isNaN(num) || isNaN(cap)) {
-      toast('Table name, number, and capacity are required', 'error');
-      return;
-    }
-    try {
-      await createTable.mutateAsync({ name: newTableName.trim(), number: num, capacity: cap });
+      await createTable({ name: form.name.trim(), number: form.number, capacity: form.capacity });
       toast('Table added', 'success');
-      setNewTableName('');
-      setNewTableNumber('');
-      setNewTableCapacity('');
-      setAddTableOpen(false);
-    } catch {
-      toast('Failed to add table', 'error');
-    }
+      setAddOpen(false);
+      setForm({ name: '', number: (tables.length ?? 0) + 1, capacity: 8 });
+    } catch { toast('Failed to add table', 'error'); }
   };
 
-  const handleDeleteTable = async () => {
-    if (!deleteTableId) return;
+  const handleDelete = async () => {
+    if (!deleteId) return;
     try {
-      await deleteTable.mutateAsync(deleteTableId);
+      await deleteTable(deleteId);
       toast('Table deleted', 'success');
-      setDeleteTableId(null);
-    } catch {
-      toast('Failed to delete table', 'error');
+    } catch { toast('Failed to delete table', 'error'); } finally {
+      setDeleteId(null);
     }
   };
-
-  // ── Handlers: Venue drag ──
-  const handleMouseDown = (e: React.MouseEvent, table: Table) => {
-    e.preventDefault();
-    const card = e.currentTarget as HTMLElement;
-    const rect = card.getBoundingClientRect();
-    dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    setDraggingId(table.id);
-  };
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!draggingId || !canvasRef.current) return;
-    const canvasRect = canvasRef.current.getBoundingClientRect();
-    const x = e.clientX - canvasRect.left - dragOffset.current.x;
-    const y = e.clientY - canvasRect.top - dragOffset.current.y;
-    const card = canvasRef.current.querySelector(`[data-table-id="${draggingId}"]`) as HTMLElement | null;
-    if (card) {
-      card.style.left = `${Math.max(0, x)}px`;
-      card.style.top = `${Math.max(0, y)}px`;
-    }
-  }, [draggingId]);
-
-  const handleMouseUp = useCallback(async () => {
-    if (!draggingId || !canvasRef.current) return;
-    const card = canvasRef.current.querySelector(`[data-table-id="${draggingId}"]`) as HTMLElement | null;
-    if (card) {
-      const x = parseInt(card.style.left || '0', 10);
-      const y = parseInt(card.style.top || '0', 10);
-      try {
-        await updateTablePosition.mutateAsync({ id: draggingId, position_x: x, position_y: y });
-      } catch {
-        toast('Failed to save position', 'error');
-      }
-    }
-    setDraggingId(null);
-  }, [draggingId, updateTablePosition, toast]);
-
-  useEffect(() => {
-    if (draggingId) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [draggingId, handleMouseMove, handleMouseUp]);
-
-  // ── Handlers: Schedule ──
-  const handleScheduleChange = (field: keyof GuestPageSettingsInput, value: unknown) => {
-    setScheduleForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleSaveSchedule = async () => {
-    setScheduleSaving(true);
-    try {
-      await upsertSettings.mutateAsync(scheduleForm);
-      toast('Schedule saved', 'success');
-    } catch {
-      toast('Failed to save schedule', 'error');
-    } finally {
-      setScheduleSaving(false);
-    }
-  };
-
-  // ── Handlers: Settings ──
-  const handleSettingsChange = (field: keyof GuestPageSettingsInput, value: unknown) => {
-    setSettingsForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleApplyPreset = (preset: typeof COLOR_PRESETS[number]) => {
-    setSettingsForm((prev) => ({
-      ...prev,
-      color_primary: preset.primary,
-      color_secondary: preset.secondary,
-      color_background: preset.background,
-      color_footer: preset.footer,
-    }));
-  };
-
-  const handleSaveSettings = async () => {
-    setSettingsSaving(true);
-    try {
-      await upsertSettings.mutateAsync(settingsForm);
-      toast('Settings saved', 'success');
-    } catch {
-      toast('Failed to save settings', 'error');
-    } finally {
-      setSettingsSaving(false);
-    }
-  };
-
-  // ── Handler: Delete event ──
-  const handleDeleteEvent = async () => {
-    if (!event) return;
-    try {
-      await deleteEvent.mutateAsync(event.id);
-      toast('Event deleted', 'success');
-      setDeleteEventOpen(false);
-      // Navigate via Link after state update — use window.location for redirect
-      window.location.href = '/';
-    } catch {
-      toast('Failed to delete event', 'error');
-    }
-  };
-
-  // ── Loading / not found ──
-  if (eventLoading) {
-    return (
-      <div className="ee-page">
-        <div className="ee-loading">Loading event…</div>
-      </div>
-    );
-  }
-
-  if (!event) {
-    return (
-      <div className="ee-page">
-        <div className="ee-loading">
-          <p>Event not found.</p>
-          <Link to="/" className="btn btn--primary">Back to Dashboard</Link>
-        </div>
-      </div>
-    );
-  }
-
-  const counts = guestCountByTable();
 
   return (
-    <div className="ee-page">
-      {/* ── Event Header ── */}
-      <header className="ee-header">
-        <Link to="/" className="ee-back">← Back to Dashboard</Link>
-        <h1 className="ee-title">{event.name}</h1>
-        <p className="ee-subtitle">
-          {event.date && <span>{event.date}</span>}
-          {event.time && <span> · {event.time}</span>}
-          {event.venue && <span> · {event.venue}</span>}
-        </p>
-      </header>
+    <div className="ee-panel">
+      <div className="ee-panel__header">
+        <h2 className="ee-panel__title">Tables</h2>
+        <div className="ee-panel__actions">
+          <button className="btn btn--primary" onClick={() => { setForm({ name: '', number: (tables.length ?? 0) + 1, capacity: 8 }); setAddOpen(true); }}>+ Add Table</button>
+        </div>
+      </div>
 
-      {/* ── Sticky Tab Bar ── */}
-      <nav className="ee-tabs" role="tablist">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            className={`ee-tab${activeTab === tab.key ? ' ee-tab--active' : ''}`}
-            onClick={() => setActiveTab(tab.key)}
-            role="tab"
-            aria-selected={activeTab === tab.key}
-            type="button"
-          >
-            {tab.label}
+      {tables.length === 0 ? (
+        <p className="ee-empty">No tables yet. Add your first table.</p>
+      ) : (
+        <div className="ee-table-wrap">
+          <table className="ee-table">
+            <thead>
+              <tr><th>#</th><th>Name</th><th>Capacity</th><th>Guests</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+              {tables.map((t) => (
+                <tr key={t.id}>
+                  <td>{t.number}</td>
+                  <td>{t.name}</td>
+                  <td>{t.capacity}</td>
+                  <td>{guestCount[t.id] ?? 0}</td>
+                  <td className="ee-table__actions">
+                    <button className="btn btn--danger btn--sm" onClick={() => setDeleteId(t.id)}>Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add Table">
+        <div className="ee-modal-form">
+          <label className="ee-field">
+            <span className="ee-field__label">Table Name</span>
+            <input className="ee-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
+          </label>
+          <label className="ee-field">
+            <span className="ee-field__label">Table Number</span>
+            <input className="ee-input" type="number" min={1} value={form.number} onChange={(e) => setForm({ ...form, number: Number(e.target.value) })} />
+          </label>
+          <label className="ee-field">
+            <span className="ee-field__label">Capacity</span>
+            <input className="ee-input" type="number" min={1} value={form.capacity} onChange={(e) => setForm({ ...form, capacity: Number(e.target.value) })} />
+          </label>
+          <div className="ee-actions">
+            <button className="btn btn--ghost" onClick={() => setAddOpen(false)}>Cancel</button>
+            <button className="btn btn--primary" onClick={handleAdd}>Add Table</button>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        open={!!deleteId}
+        title="Delete Table"
+        message="Are you sure you want to delete this table? Guests assigned to it will become unassigned."
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteId(null)}
+      />
+    </div>
+  );
+}
+
+/* ---------- venue layout section (image upload) ---------- */
+
+function VenueLayoutSection({
+  venueImageUrl,
+  upsertSettings,
+}: {
+  venueImageUrl: string | null;
+  upsertSettings: (v: GuestPageSettingsInput) => Promise<unknown>;
+}) {
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFile = useCallback(async (file: File) => {
+    const allowed = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      toast('Unsupported format. Use PNG, JPG, JPEG, or WebP.', 'error');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast('File too large. Maximum size is 5MB.', 'error');
+      return;
+    }
+    setUploading(true);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      await upsertSettings({ venue_image_url: dataUrl });
+      toast('Venue layout image saved', 'success');
+    } catch {
+      toast('Failed to upload image', 'error');
+    } finally {
+      setUploading(false);
+    }
+  }, [upsertSettings, toast]);
+
+  const onInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) void handleFile(f);
+    e.target.value = '';
+  };
+
+  const onDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) void handleFile(f);
+  };
+
+  const onDragOver = (e: DragEvent) => { e.preventDefault(); setDragOver(true); };
+  const onDragLeave = (e: DragEvent) => { e.preventDefault(); setDragOver(false); };
+
+  const handleRemove = async () => {
+    setUploading(true);
+    try {
+      await upsertSettings({ venue_image_url: null });
+      toast('Venue layout image removed', 'success');
+    } catch {
+      toast('Failed to remove image', 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="ee-panel">
+      <h2 className="ee-panel__title">Venue Layout</h2>
+
+      {!venueImageUrl ? (
+        <div
+          className={`ee-dropzone${dragOver ? ' ee-dropzone--over' : ''}`}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/jpg,image/webp"
+            onChange={onInputChange}
+            style={{ display: 'none' }}
+          />
+          <div className="ee-dropzone__icon">🖼️</div>
+          <p className="ee-dropzone__text">Drag &amp; drop your venue layout image here</p>
+          <p className="ee-dropzone__subtext">or</p>
+          <button className="btn btn--primary" type="button" disabled={uploading}>
+            {uploading ? 'Uploading…' : 'Click to Browse'}
           </button>
-        ))}
-      </nav>
-
-      {/* ── Tab Content Area — all sections stay mounted ── */}
-      <div className="ee-content">
-        {/* ═══════════════ Event Details ═══════════════ */}
-        <section
-          className={`ee-section${activeTab === 'details' ? ' ee-section--active' : ''}`}
-          style={activeTab === 'details' ? undefined : { display: 'none' }}
-        >
-          <h2 className="ee-section__title">Event Details</h2>
-          <div className="ee-form">
-            <div className="ee-field">
-              <label className="ee-label">Event Name</label>
-              <input
-                className="ee-input"
-                type="text"
-                value={detailsForm.name ?? ''}
-                onChange={(e) => handleDetailsChange('name', e.target.value)}
-              />
-            </div>
-            <div className="ee-field">
-              <label className="ee-label">Slug</label>
-              <input
-                className="ee-input"
-                type="text"
-                value={detailsForm.slug ?? ''}
-                onChange={(e) => handleDetailsChange('slug', e.target.value)}
-              />
-            </div>
-            <div className="ee-row">
-              <div className="ee-field">
-                <label className="ee-label">Date</label>
-                <input
-                  className="ee-input"
-                  type="date"
-                  value={detailsForm.date ?? ''}
-                  onChange={(e) => handleDetailsChange('date', e.target.value)}
-                />
-              </div>
-              <div className="ee-field">
-                <label className="ee-label">Time</label>
-                <input
-                  className="ee-input"
-                  type="time"
-                  value={detailsForm.time ?? ''}
-                  onChange={(e) => handleDetailsChange('time', e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="ee-field">
-              <label className="ee-label">Venue</label>
-              <input
-                className="ee-input"
-                type="text"
-                value={detailsForm.venue ?? ''}
-                onChange={(e) => handleDetailsChange('venue', e.target.value)}
-              />
-            </div>
-            <div className="ee-field">
-              <label className="ee-label">Logo URL</label>
-              <input
-                className="ee-input"
-                type="text"
-                value={detailsForm.logo_url ?? ''}
-                onChange={(e) => handleDetailsChange('logo_url', e.target.value)}
-                placeholder="https://…"
-              />
-            </div>
-            <div className="ee-field">
-              <label className="ee-label">Cover URL</label>
-              <input
-                className="ee-input"
-                type="text"
-                value={detailsForm.cover_url ?? ''}
-                onChange={(e) => handleDetailsChange('cover_url', e.target.value)}
-                placeholder="https://…"
-              />
-            </div>
-            <div className="ee-field">
-              <label className="ee-label">Accent Color</label>
-              <div className="ee-color-row">
-                <input
-                  className="ee-color-picker"
-                  type="color"
-                  value={detailsForm.accent_color ?? '#0f766e'}
-                  onChange={(e) => handleDetailsChange('accent_color', e.target.value)}
-                />
-                <input
-                  className="ee-input ee-input--narrow"
-                  type="text"
-                  value={detailsForm.accent_color ?? ''}
-                  onChange={(e) => handleDetailsChange('accent_color', e.target.value)}
-                  placeholder="#0f766e"
-                />
-              </div>
-            </div>
-            <div className="ee-field ee-field--check">
-              <label className="ee-check">
-                <input
-                  type="checkbox"
-                  checked={detailsForm.invitation_enabled ?? false}
-                  onChange={(e) => handleDetailsChange('invitation_enabled', e.target.checked)}
-                />
-                <span>Invitation Enabled</span>
-              </label>
-            </div>
-            <div className="ee-actions">
-              <button
-                className="btn btn--primary"
-                onClick={handleSaveDetails}
-                disabled={detailsSaving}
-                type="button"
-              >
-                {detailsSaving ? 'Saving…' : 'Save Details'}
-              </button>
-            </div>
+          <p className="ee-dropzone__formats">Supported formats: PNG, JPG, JPEG, WebP (max 5MB)</p>
+        </div>
+      ) : (
+        <div className="ee-venue-preview">
+          <div className="ee-venue-preview__image-wrap">
+            <img src={venueImageUrl} alt="Venue layout" className="ee-venue-preview__img" />
           </div>
-        </section>
-
-        {/* ═══════════════ Guests ═══════════════ */}
-        <section
-          className={`ee-section${activeTab === 'guests' ? ' ee-section--active' : ''}`}
-          style={activeTab === 'guests' ? undefined : { display: 'none' }}
-        >
-          <h2 className="ee-section__title">Guests</h2>
-          <div className="ee-toolbar">
-            <button className="btn btn--primary" onClick={() => setAddGuestOpen(true)} type="button">+ Add Guest</button>
-            <button className="btn btn--ghost" onClick={() => setBulkGuestOpen(true)} type="button">Bulk Add</button>
-            <input
-              className="ee-input ee-search"
-              type="text"
-              placeholder="Search guests…"
-              value={guestSearch}
-              onChange={(e) => setGuestSearch(e.target.value)}
-            />
+          <div className="ee-venue-preview__actions">
+            <button className="btn btn--ghost" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+              {uploading ? 'Uploading…' : 'Replace Image'}
+            </button>
+            <button className="btn btn--danger" onClick={handleRemove} disabled={uploading}>
+              Remove Image
+            </button>
           </div>
-          {guestsLoading ? (
-            <p className="ee-muted">Loading guests…</p>
-          ) : filteredGuests.length === 0 ? (
-            <p className="ee-muted">No guests yet. Add your first guest to get started.</p>
-          ) : (
-            <table className="ee-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Table</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredGuests.map((g) => (
-                  <tr key={g.id}>
-                    <td>{g.name}</td>
-                    <td>{g.table ? `Table ${g.table.number} — ${g.table.name}` : '—'}</td>
-                    <td>
-                      <div className="ee-row-actions">
-                        <button className="btn btn--ghost btn--sm" onClick={() => openEditGuest(g)} type="button">Edit</button>
-                        <button className="btn btn--danger btn--sm" onClick={() => setDeleteGuestId(g.id)} type="button">Delete</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-
-          {/* Add Guest Modal */}
-          <Modal open={addGuestOpen} onClose={() => setAddGuestOpen(false)} title="Add Guest">
-            <div className="ee-modal-form">
-              <div className="ee-field">
-                <label className="ee-label">Name</label>
-                <input
-                  className="ee-input"
-                  type="text"
-                  value={newGuestName}
-                  onChange={(e) => setNewGuestName(e.target.value)}
-                  autoFocus
-                />
-              </div>
-              <div className="ee-field">
-                <label className="ee-label">Table</label>
-                <select
-                  className="ee-input"
-                  value={newGuestTableId}
-                  onChange={(e) => setNewGuestTableId(e.target.value)}
-                >
-                  <option value="">— No table —</option>
-                  {tables.map((t) => (
-                    <option key={t.id} value={t.id}>Table {t.number} — {t.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="ee-actions">
-                <button className="btn btn--ghost" onClick={() => setAddGuestOpen(false)} type="button">Cancel</button>
-                <button className="btn btn--primary" onClick={handleAddGuest} type="button">Add</button>
-              </div>
-            </div>
-          </Modal>
-
-          {/* Bulk Add Modal */}
-          <Modal open={bulkGuestOpen} onClose={() => setBulkGuestOpen(false)} title="Bulk Add Guests">
-            <div className="ee-modal-form">
-              <div className="ee-field">
-                <label className="ee-label">Names (one per line)</label>
-                <textarea
-                  className="ee-textarea"
-                  rows={10}
-                  value={bulkText}
-                  onChange={(e) => setBulkText(e.target.value)}
-                  placeholder={'Alice\nBob\nCharlie'}
-                  autoFocus
-                />
-              </div>
-              <div className="ee-actions">
-                <button className="btn btn--ghost" onClick={() => setBulkGuestOpen(false)} type="button">Cancel</button>
-                <button className="btn btn--primary" onClick={handleBulkAddGuests} type="button">Add All</button>
-              </div>
-            </div>
-          </Modal>
-
-          {/* Edit Guest Modal */}
-          <Modal open={editGuestOpen} onClose={() => setEditGuestOpen(false)} title="Edit Guest">
-            <div className="ee-modal-form">
-              <div className="ee-field">
-                <label className="ee-label">Name</label>
-                <input
-                  className="ee-input"
-                  type="text"
-                  value={editGuestName}
-                  onChange={(e) => setEditGuestName(e.target.value)}
-                  autoFocus
-                />
-              </div>
-              <div className="ee-field">
-                <label className="ee-label">Table</label>
-                <select
-                  className="ee-input"
-                  value={editGuestTableId}
-                  onChange={(e) => setEditGuestTableId(e.target.value)}
-                >
-                  <option value="">— No table —</option>
-                  {tables.map((t) => (
-                    <option key={t.id} value={t.id}>Table {t.number} — {t.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="ee-actions">
-                <button className="btn btn--ghost" onClick={() => setEditGuestOpen(false)} type="button">Cancel</button>
-                <button className="btn btn--primary" onClick={handleEditGuest} type="button">Save</button>
-              </div>
-            </div>
-          </Modal>
-
-          <ConfirmDialog
-            open={deleteGuestId !== null}
-            title="Delete Guest"
-            message="Are you sure you want to delete this guest? This cannot be undone."
-            confirmLabel="Delete"
-            onConfirm={handleDeleteGuest}
-            onCancel={() => setDeleteGuestId(null)}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/jpg,image/webp"
+            onChange={onInputChange}
+            style={{ display: 'none' }}
           />
-        </section>
+        </div>
+      )}
+    </div>
+  );
+}
 
-        {/* ═══════════════ Tables ═══════════════ */}
-        <section
-          className={`ee-section${activeTab === 'tables' ? ' ee-section--active' : ''}`}
-          style={activeTab === 'tables' ? undefined : { display: 'none' }}
-        >
-          <h2 className="ee-section__title">Tables</h2>
-          <div className="ee-toolbar">
-            <button className="btn btn--primary" onClick={() => setAddTableOpen(true)} type="button">+ Add Table</button>
-          </div>
-          {tables.length === 0 ? (
-            <p className="ee-muted">No tables yet. Add your first table to get started.</p>
-          ) : (
-            <table className="ee-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Name</th>
-                  <th>Capacity</th>
-                  <th>Guests</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tables.map((t) => (
-                  <tr key={t.id}>
-                    <td>{t.number}</td>
-                    <td>{t.name}</td>
-                    <td>{t.capacity}</td>
-                    <td>{counts[t.id] ?? 0}</td>
-                    <td>
-                      <button className="btn btn--danger btn--sm" onClick={() => setDeleteTableId(t.id)} type="button">Delete</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+/* ---------- invitation section ---------- */
 
-          <Modal open={addTableOpen} onClose={() => setAddTableOpen(false)} title="Add Table">
-            <div className="ee-modal-form">
-              <div className="ee-field">
-                <label className="ee-label">Name</label>
-                <input
-                  className="ee-input"
-                  type="text"
-                  value={newTableName}
-                  onChange={(e) => setNewTableName(e.target.value)}
-                  autoFocus
-                />
-              </div>
-              <div className="ee-row">
-                <div className="ee-field">
-                  <label className="ee-label">Number</label>
-                  <input
-                    className="ee-input"
-                    type="number"
-                    value={newTableNumber}
-                    onChange={(e) => setNewTableNumber(e.target.value)}
-                  />
-                </div>
-                <div className="ee-field">
-                  <label className="ee-label">Capacity</label>
-                  <input
-                    className="ee-input"
-                    type="number"
-                    value={newTableCapacity}
-                    onChange={(e) => setNewTableCapacity(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="ee-actions">
-                <button className="btn btn--ghost" onClick={() => setAddTableOpen(false)} type="button">Cancel</button>
-                <button className="btn btn--primary" onClick={handleAddTable} type="button">Add</button>
-              </div>
-            </div>
-          </Modal>
+function InvitationSection({ event, onSave }: { event: Event; onSave: (v: Partial<Event>) => Promise<unknown> }) {
+  const { toast } = useToast();
+  const [enabled, setEnabled] = useState(event.invitation_enabled);
+  const [saving, setSaving] = useState(false);
 
-          <ConfirmDialog
-            open={deleteTableId !== null}
-            title="Delete Table"
-            message="Are you sure you want to delete this table? Guests assigned to it will be unassigned."
-            confirmLabel="Delete"
-            onConfirm={handleDeleteTable}
-            onCancel={() => setDeleteTableId(null)}
-          />
-        </section>
+  // keep in sync if event changes
+  useEffect(() => { setEnabled(event.invitation_enabled); }, [event.invitation_enabled]);
 
-        {/* ═══════════════ Venue Layout ═══════════════ */}
-        <section
-          className={`ee-section${activeTab === 'venue' ? ' ee-section--active' : ''}`}
-          style={activeTab === 'venue' ? undefined : { display: 'none' }}
-        >
-          <h2 className="ee-section__title">Venue Layout</h2>
-          <div className="ee-toolbar">
-            <button className="btn btn--primary" onClick={() => setAddTableOpen(true)} type="button">+ Add Table</button>
-            <span className="ee-muted ee-hint">Drag table cards to position them on the floor plan.</span>
-          </div>
-          <div className="ee-canvas" ref={canvasRef}>
-            {tables.length === 0 && (
-              <p className="ee-muted ee-canvas-empty">No tables to display. Add tables from the Tables tab or the button above.</p>
-            )}
-            {tables.map((t) => {
-              const style: CSSProperties = {
-                left: t.position_x ?? 20,
-                top: t.position_y ?? 20,
-              };
-              return (
-                <div
-                  key={t.id}
-                  data-table-id={t.id}
-                  className={`ee-venue-card${draggingId === t.id ? ' ee-venue-card--dragging' : ''}`}
-                  style={style}
-                  onMouseDown={(e) => handleMouseDown(e, t)}
-                >
-                  <div className="ee-venue-card__header">
-                    <span className="ee-venue-card__number">Table {t.number}</span>
-                    <button
-                      className="btn btn--danger btn--sm ee-venue-card__delete"
-                      onClick={(e) => { e.stopPropagation(); setDeleteTableId(t.id); }}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      type="button"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <div className="ee-venue-card__name">{t.name}</div>
-                  <div className="ee-venue-card__meta">
-                    {counts[t.id] ?? 0} / {t.capacity} guests
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+  const handleToggle = async () => {
+    const next = !enabled;
+    setEnabled(next);
+    setSaving(true);
+    try {
+      await onSave({ invitation_enabled: next });
+      toast(next ? 'Invitations enabled' : 'Invitations disabled', 'success');
+    } catch {
+      setEnabled(!next);
+      toast('Failed to update invitation setting', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
 
-          <ConfirmDialog
-            open={deleteTableId !== null}
-            title="Delete Table"
-            message="Are you sure you want to delete this table?"
-            confirmLabel="Delete"
-            onConfirm={handleDeleteTable}
-            onCancel={() => setDeleteTableId(null)}
-          />
-        </section>
+  return (
+    <div className="ee-panel">
+      <h2 className="ee-panel__title">Invitation</h2>
 
-        {/* ═══════════════ Invitation ═══════════════ */}
-        <section
-          className={`ee-section${activeTab === 'invitation' ? ' ee-section--active' : ''}`}
-          style={activeTab === 'invitation' ? undefined : { display: 'none' }}
-        >
-          <h2 className="ee-section__title">Invitation</h2>
-          <div className="ee-form">
-            <div className="ee-field ee-field--check">
-              <label className="ee-check">
-                <input
-                  type="checkbox"
-                  checked={event.invitation_enabled}
-                  onChange={(e) => handleDetailsChange('invitation_enabled', e.target.checked)}
-                />
-                <span>Invitation Enabled</span>
-              </label>
-              <p className="ee-muted ee-help">
-                Toggle this to make the invitation page accessible to guests.
-              </p>
-            </div>
-            <div className="ee-status">
-              <span className={`ee-badge ${event.invitation_enabled ? 'ee-badge--on' : 'ee-badge--off'}`}>
-                {event.invitation_enabled ? 'Active' : 'Disabled'}
-              </span>
-            </div>
-            <div className="ee-field">
-              <label className="ee-label">Public Invitation Page</label>
-              <div className="ee-link-row">
-                <Link to={`/invite/${event.slug}`} className="ee-link" target="_blank">
-                  /invite/{event.slug}
-                </Link>
-              </div>
-            </div>
-            <div className="ee-field">
-              <label className="ee-label">Find Your Seat Page</label>
-              <div className="ee-link-row">
-                <Link to={`/e/${event.slug}`} className="ee-link" target="_blank">
-                  /e/{event.slug}
-                </Link>
-              </div>
-            </div>
-            <div className="ee-actions">
-              <button
-                className="btn btn--primary"
-                onClick={handleSaveDetails}
-                disabled={detailsSaving}
-                type="button"
-              >
-                {detailsSaving ? 'Saving…' : 'Save Invitation Settings'}
-              </button>
-            </div>
-          </div>
-        </section>
+      <div className="ee-invite-toggle">
+        <label className="ee-field ee-field--check">
+          <input type="checkbox" checked={enabled} onChange={handleToggle} disabled={saving} />
+          <span className="ee-field__label">Enable public invitation page</span>
+        </label>
+      </div>
 
-        {/* ═══════════════ Schedule ═══════════════ */}
-        <section
-          className={`ee-section${activeTab === 'schedule' ? ' ee-section--active' : ''}`}
-          style={activeTab === 'schedule' ? undefined : { display: 'none' }}
-        >
-          <h2 className="ee-section__title">Schedule & Gallery</h2>
-          <div className="ee-form">
-            <div className="ee-field ee-field--check">
-              <label className="ee-check">
-                <input
-                  type="checkbox"
-                  checked={scheduleForm.enable_schedule ?? false}
-                  onChange={(e) => handleScheduleChange('enable_schedule', e.target.checked)}
-                />
-                <span>Enable Schedule</span>
-              </label>
-            </div>
-            <div className="ee-field">
-              <label className="ee-label">Schedule Items (JSON)</label>
-              <textarea
-                className="ee-textarea"
-                rows={8}
-                value={JSON.stringify(scheduleForm.schedule_items ?? [], null, 2)}
-                onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
-                  try {
-                    const parsed = JSON.parse(e.target.value);
-                    handleScheduleChange('schedule_items', parsed);
-                  } catch {
-                    // ignore parse errors while typing
-                  }
-                }}
-                placeholder='[{"time":"18:00","title":"Ceremony","description":"Main hall"}]'
-              />
-            </div>
-            <div className="ee-field ee-field--check">
-              <label className="ee-check">
-                <input
-                  type="checkbox"
-                  checked={scheduleForm.enable_gallery ?? false}
-                  onChange={(e) => handleScheduleChange('enable_gallery', e.target.checked)}
-                />
-                <span>Enable Gallery</span>
-              </label>
-            </div>
-            <div className="ee-field">
-              <label className="ee-label">Gallery Images (one URL per line)</label>
-              <textarea
-                className="ee-textarea"
-                rows={6}
-                value={(scheduleForm.gallery_images ?? []).join('\n')}
-                onChange={(e) => handleScheduleChange('gallery_images', e.target.value.split('\n').map((s) => s.trim()).filter(Boolean))}
-                placeholder={'https://…/photo1.jpg\nhttps://…/photo2.jpg'}
-              />
-            </div>
-            <div className="ee-field">
-              <label className="ee-label">Welcome Message</label>
-              <textarea
-                className="ee-textarea"
-                rows={3}
-                value={scheduleForm.welcome_message ?? ''}
-                onChange={(e) => handleScheduleChange('welcome_message', e.target.value)}
-                placeholder="Welcome to our wedding!"
-              />
-            </div>
-            <div className="ee-field">
-              <label className="ee-label">Event Subtitle</label>
-              <input
-                className="ee-input"
-                type="text"
-                value={scheduleForm.event_subtitle ?? ''}
-                onChange={(e) => handleScheduleChange('event_subtitle', e.target.value)}
-                placeholder="A celebration of love"
-              />
-            </div>
-            <div className="ee-actions">
-              <button
-                className="btn btn--primary"
-                onClick={handleSaveSchedule}
-                disabled={scheduleSaving}
-                type="button"
-              >
-                {scheduleSaving ? 'Saving…' : 'Save Schedule'}
-              </button>
-            </div>
-          </div>
-        </section>
+      <div className={`ee-invite-status${enabled ? ' ee-invite-status--on' : ' ee-invite-status--off'}`}>
+        {enabled ? 'Invitations are currently enabled.' : 'Invitations are currently disabled.'}
+      </div>
 
-        {/* ═══════════════ Settings ═══════════════ */}
-        <section
-          className={`ee-section${activeTab === 'settings' ? ' ee-section--active' : ''}`}
-          style={activeTab === 'settings' ? undefined : { display: 'none' }}
-        >
-          <h2 className="ee-section__title">Guest Page Settings</h2>
-          <div className="ee-settings-grid">
-            {/* ── Controls ── */}
-            <div className="ee-form">
-              {/* Color Presets */}
-              <h3 className="ee-group-title">Color Presets</h3>
-              <div className="ee-presets">
-                {COLOR_PRESETS.map((preset) => (
-                  <button
-                    key={preset.name}
-                    className="ee-preset"
-                    onClick={() => handleApplyPreset(preset)}
-                    type="button"
-                    title={preset.name}
-                  >
-                    <span className="ee-preset__swatch" style={{ background: preset.primary }} />
-                    <span className="ee-preset__swatch" style={{ background: preset.secondary }} />
-                    <span className="ee-preset__swatch" style={{ background: preset.background }} />
-                    <span className="ee-preset__swatch" style={{ background: preset.footer }} />
-                    <span className="ee-preset__label">{preset.name}</span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Colors */}
-              <h3 className="ee-group-title">Colors</h3>
-              <div className="ee-colors-grid">
-                {([
-                  ['color_primary', 'Primary'],
-                  ['color_secondary', 'Secondary'],
-                  ['color_background', 'Background'],
-                  ['color_card', 'Card'],
-                  ['color_text', 'Text'],
-                  ['color_header', 'Header'],
-                  ['color_button', 'Button'],
-                  ['color_button_text', 'Button Text'],
-                  ['color_link', 'Link'],
-                  ['color_footer', 'Footer'],
-                ] as [keyof GuestPageSettingsInput, string][]).map(([field, label]) => (
-                  <div className="ee-field" key={field}>
-                    <label className="ee-label">{label}</label>
-                    <div className="ee-color-row">
-                      <input
-                        className="ee-color-picker"
-                        type="color"
-                        value={(settingsForm[field] as string) ?? '#000000'}
-                        onChange={(e) => handleSettingsChange(field, e.target.value)}
-                      />
-                      <input
-                        className="ee-input ee-input--narrow"
-                        type="text"
-                        value={(settingsForm[field] as string) ?? ''}
-                        onChange={(e) => handleSettingsChange(field, e.target.value)}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Fonts */}
-              <h3 className="ee-group-title">Fonts</h3>
-              <div className="ee-row ee-row--3">
-                <div className="ee-field">
-                  <label className="ee-label">Heading Font</label>
-                  <select
-                    className="ee-input"
-                    value={settingsForm.font_heading ?? 'Inter'}
-                    onChange={(e) => handleSettingsChange('font_heading', e.target.value)}
-                  >
-                    {FONT_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
-                  </select>
-                </div>
-                <div className="ee-field">
-                  <label className="ee-label">Body Font</label>
-                  <select
-                    className="ee-input"
-                    value={settingsForm.font_body ?? 'Inter'}
-                    onChange={(e) => handleSettingsChange('font_body', e.target.value)}
-                  >
-                    {FONT_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
-                  </select>
-                </div>
-                <div className="ee-field">
-                  <label className="ee-label">Button Font</label>
-                  <select
-                    className="ee-input"
-                    value={settingsForm.font_button ?? 'Inter'}
-                    onChange={(e) => handleSettingsChange('font_button', e.target.value)}
-                  >
-                    {FONT_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {/* Sizes & Weights */}
-              <h3 className="ee-group-title">Typography</h3>
-              <div className="ee-sliders">
-                {([
-                  ['font_heading_size', 'Heading Size', 12, 96],
-                  ['font_body_size', 'Body Size', 10, 32],
-                  ['font_heading_weight', 'Heading Weight', 100, 900],
-                  ['font_body_weight', 'Body Weight', 100, 900],
-                  ['font_heading_spacing', 'Heading Spacing', -5, 20],
-                  ['font_body_spacing', 'Body Spacing', -5, 20],
-                  ['font_heading_line_height', 'Heading Line Height', 1, 3],
-                  ['font_body_line_height', 'Body Line Height', 1, 3],
-                  ['border_radius', 'Border Radius', 0, 32],
-                  ['background_overlay_opacity', 'Overlay Opacity', 0, 1],
-                  ['banner_height', 'Banner Height', 100, 800],
-                ] as [keyof GuestPageSettingsInput, string, number, number][]).map(([field, label, min, max]) => (
-                  <div className="ee-field ee-field--slider" key={field}>
-                    <label className="ee-label">
-                      {label}: <span className="ee-slider-val">{String(settingsForm[field] ?? '')}</span>
-                    </label>
-                    <input
-                      className="ee-slider"
-                      type="range"
-                      min={min}
-                      max={max}
-                      step={field === 'background_overlay_opacity' || field.includes('line_height') ? 0.1 : 1}
-                      value={Number(settingsForm[field] ?? min)}
-                      onChange={(e) => handleSettingsChange(field, parseFloat(e.target.value))}
-                    />
-                  </div>
-                ))}
-              </div>
-
-              {/* Style Selects */}
-              <h3 className="ee-group-title">Style Options</h3>
-              <div className="ee-row ee-row--3">
-                <div className="ee-field">
-                  <label className="ee-label">Card Shadow</label>
-                  <select
-                    className="ee-input"
-                    value={settingsForm.card_shadow ?? 'md'}
-                    onChange={(e) => handleSettingsChange('card_shadow', e.target.value)}
-                  >
-                    <option value="none">None</option>
-                    <option value="sm">Small</option>
-                    <option value="md">Medium</option>
-                    <option value="lg">Large</option>
-                  </select>
-                </div>
-                <div className="ee-field">
-                  <label className="ee-label">Button Style</label>
-                  <select
-                    className="ee-input"
-                    value={settingsForm.button_style ?? 'filled'}
-                    onChange={(e) => handleSettingsChange('button_style', e.target.value)}
-                  >
-                    <option value="filled">Filled</option>
-                    <option value="outline">Outline</option>
-                    <option value="ghost">Ghost</option>
-                  </select>
-                </div>
-                <div className="ee-field">
-                  <label className="ee-label">Logo Position</label>
-                  <select
-                    className="ee-input"
-                    value={settingsForm.logo_position ?? 'center'}
-                    onChange={(e) => handleSettingsChange('logo_position', e.target.value)}
-                  >
-                    <option value="left">Left</option>
-                    <option value="center">Center</option>
-                    <option value="right">Right</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="ee-field ee-field--check">
-                <label className="ee-check">
-                  <input
-                    type="checkbox"
-                    checked={settingsForm.logo_rounded ?? false}
-                    onChange={(e) => handleSettingsChange('logo_rounded', e.target.checked)}
-                  />
-                  <span>Rounded Logo</span>
-                </label>
-              </div>
-
-              {/* Image URLs */}
-              <h3 className="ee-group-title">Images</h3>
-              <div className="ee-field">
-                <label className="ee-label">Logo URL</label>
-                <input
-                  className="ee-input"
-                  type="text"
-                  value={settingsForm.logo_url ?? ''}
-                  onChange={(e) => handleSettingsChange('logo_url', e.target.value)}
-                  placeholder="https://…"
-                />
-              </div>
-              <div className="ee-field">
-                <label className="ee-label">Venue Image URL</label>
-                <input
-                  className="ee-input"
-                  type="text"
-                  value={settingsForm.venue_image_url ?? ''}
-                  onChange={(e) => handleSettingsChange('venue_image_url', e.target.value)}
-                  placeholder="https://…"
-                />
-              </div>
-              <div className="ee-field">
-                <label className="ee-label">Background Image</label>
-                <input
-                  className="ee-input"
-                  type="text"
-                  value={settingsForm.background_image ?? ''}
-                  onChange={(e) => handleSettingsChange('background_image', e.target.value)}
-                  placeholder="https://…"
-                />
-              </div>
-              <div className="ee-field">
-                <label className="ee-label">Cover Image</label>
-                <input
-                  className="ee-input"
-                  type="text"
-                  value={settingsForm.cover_image ?? ''}
-                  onChange={(e) => handleSettingsChange('cover_image', e.target.value)}
-                  placeholder="https://…"
-                />
-              </div>
-
-              <div className="ee-actions">
-                <button
-                  className="btn btn--primary"
-                  onClick={handleSaveSettings}
-                  disabled={settingsSaving}
-                  type="button"
-                >
-                  {settingsSaving ? 'Saving…' : 'Save Settings'}
-                </button>
-              </div>
-
-              {/* Danger Zone */}
-              <div className="ee-danger-zone">
-                <h3 className="ee-group-title ee-group-title--danger">Danger Zone</h3>
-                <button
-                  className="btn btn--danger"
-                  onClick={() => setDeleteEventOpen(true)}
-                  type="button"
-                >
-                  Delete Event
-                </button>
-              </div>
-            </div>
-
-            {/* ── Live Preview ── */}
-            <div className="ee-preview">
-              <h3 className="ee-preview__title">Live Preview</h3>
-              <div
-                className="ee-preview__card"
-                style={{
-                  background: settingsForm.color_background ?? '#f8fafc',
-                  color: settingsForm.color_text ?? '#0f172a',
-                  fontFamily: settingsForm.font_body ?? 'Inter',
-                  borderRadius: (settingsForm.border_radius ?? 16) / 2,
-                }}
-              >
-                {/* Banner */}
-                <div
-                  className="ee-preview__banner"
-                  style={{
-                    height: Math.min(settingsForm.banner_height ?? 400, 200),
-                    background: settingsForm.cover_image
-                      ? `url(${settingsForm.cover_image}) center/cover`
-                      : `linear-gradient(135deg, ${settingsForm.color_primary ?? '#0f766e'}, ${settingsForm.color_secondary ?? '#115e59'})`,
-                    borderRadius: (settingsForm.border_radius ?? 16) / 2,
-                  }}
-                >
-                  {settingsForm.logo_url && (
-                    <img
-                      src={settingsForm.logo_url}
-                      alt="Logo"
-                      className="ee-preview__logo"
-                      style={{
-                        width: Math.min(settingsForm.logo_size ?? 80, 80),
-                        height: Math.min(settingsForm.logo_size ?? 80, 80),
-                        borderRadius: settingsForm.logo_rounded ? '50%' : '8px',
-                      }}
-                    />
-                  )}
-                </div>
-                {/* Content */}
-                <div className="ee-preview__content">
-                  <h2
-                    className="ee-preview__heading"
-                    style={{
-                      fontFamily: settingsForm.font_heading ?? 'Inter',
-                      fontSize: Math.min(settingsForm.font_heading_size ?? 48, 36),
-                      fontWeight: settingsForm.font_heading_weight ?? 700,
-                      letterSpacing: `${settingsForm.font_heading_spacing ?? 0}px`,
-                      lineHeight: settingsForm.font_heading_line_height ?? 1.2,
-                      color: settingsForm.color_header ?? '#ffffff',
-                    }}
-                  >
-                    {event.name}
-                  </h2>
-                  {settingsForm.event_subtitle && (
-                    <p className="ee-preview__subtitle">{settingsForm.event_subtitle}</p>
-                  )}
-                  {settingsForm.welcome_message && (
-                    <p
-                      className="ee-preview__welcome"
-                      style={{
-                        fontSize: Math.min(settingsForm.font_body_size ?? 16, 16),
-                        lineHeight: settingsForm.font_body_line_height ?? 1.5,
-                      }}
-                    >
-                      {settingsForm.welcome_message}
-                    </p>
-                  )}
-                  {/* Card */}
-                  <div
-                    className="ee-preview__inner-card"
-                    style={{
-                      background: settingsForm.color_card ?? '#ffffff',
-                      borderRadius: (settingsForm.border_radius ?? 16) / 2,
-                      boxShadow: shadowFor(settingsForm.card_shadow ?? 'md'),
-                    }}
-                  >
-                    <p className="ee-preview__label">Find Your Seat</p>
-                    <button
-                      style={{
-                        background: settingsForm.button_style === 'outline' || settingsForm.button_style === 'ghost'
-                          ? 'transparent'
-                          : settingsForm.color_button ?? '#0f766e',
-                        color: settingsForm.color_button_text ?? '#ffffff',
-                        border: settingsForm.button_style === 'outline'
-                          ? `2px solid ${settingsForm.color_button ?? '#0f766e'}`
-                          : 'none',
-                        borderRadius: (settingsForm.border_radius ?? 16) / 3,
-                        fontFamily: settingsForm.font_button ?? 'Inter',
-                      }}
-                      className="ee-preview__btn"
-                      type="button"
-                    >
-                      Search
-                    </button>
-                    <a
-                      href="#"
-                      onClick={(e) => e.preventDefault()}
-                      className="ee-preview__link"
-                      style={{ color: settingsForm.color_link ?? '#0f766e' }}
-                    >
-                      View invitation →
-                    </a>
-                  </div>
-                  {/* Footer */}
-                  <div
-                    className="ee-preview__footer"
-                    style={{
-                      background: settingsForm.color_footer ?? '#0f172a',
-                      borderRadius: (settingsForm.border_radius ?? 16) / 3,
-                    }}
-                  >
-                    <span style={{ color: '#94a3b8' }}>Made with Seatly</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <ConfirmDialog
-            open={deleteEventOpen}
-            title="Delete Event"
-            message="Are you sure you want to delete this event? All guests, tables, and settings will be permanently removed. This cannot be undone."
-            confirmLabel="Delete Event"
-            onConfirm={handleDeleteEvent}
-            onCancel={() => setDeleteEventOpen(false)}
-          />
-        </section>
+      <div className="ee-invite-links">
+        <div className="ee-invite-link-row">
+          <span className="ee-invite-link-row__label">Invitation Page</span>
+          <Link to={`/invite/${event.slug}`} className="ee-invite-link" target="_blank" rel="noopener noreferrer">/invite/{event.slug}</Link>
+        </div>
+        <div className="ee-invite-link-row">
+          <span className="ee-invite-link-row__label">Find Your Seat</span>
+          <Link to={`/e/${event.slug}`} className="ee-invite-link" target="_blank" rel="noopener noreferrer">/e/{event.slug}</Link>
+        </div>
       </div>
     </div>
   );
 }
 
-// ── Helpers ──
+/* ---------- schedule section ---------- */
 
-function shadowFor(level: string): string {
-  switch (level) {
-    case 'none': return 'none';
-    case 'sm': return '0 1px 2px rgba(0,0,0,0.08)';
-    case 'lg': return '0 12px 32px rgba(0,0,0,0.16)';
-    case 'md':
-    default: return '0 4px 12px rgba(0,0,0,0.12)';
+interface ScheduleSectionProps {
+  settings: { schedule_items: unknown[] | null; gallery_images: string[] | null; welcome_message: string | null; event_subtitle: string | null; enable_schedule: boolean; enable_gallery: boolean } | null | undefined;
+  upsertSettings: (v: GuestPageSettingsInput) => Promise<unknown>;
+}
+
+function ScheduleSection(props: ScheduleSectionProps) {
+  const { settings, upsertSettings } = props;
+  const { toast } = useToast();
+
+  const [enableSchedule, setEnableSchedule] = useState(settings?.enable_schedule ?? false);
+  const [enableGallery, setEnableGallery] = useState(settings?.enable_gallery ?? false);
+  const [scheduleText, setScheduleText] = useState(() => {
+    try {
+      return settings?.schedule_items ? JSON.stringify(settings.schedule_items, null, 2) : '[]';
+    } catch { return '[]'; }
+  });
+  const [galleryText, setGalleryText] = useState((settings?.gallery_images ?? []).join('\n'));
+  const [welcomeMessage, setWelcomeMessage] = useState(settings?.welcome_message ?? '');
+  const [subtitle, setSubtitle] = useState(settings?.event_subtitle ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      let scheduleItems: unknown[];
+      try {
+        scheduleItems = JSON.parse(scheduleText);
+      } catch {
+        toast('Schedule items is not valid JSON', 'error');
+        setSaving(false);
+        return;
+      }
+      const galleryImages = galleryText.split('\n').map((l) => l.trim()).filter(Boolean);
+      await upsertSettings({
+        enable_schedule: enableSchedule,
+        enable_gallery: enableGallery,
+        schedule_items: scheduleItems,
+        gallery_images: galleryImages,
+        welcome_message: welcomeMessage || null,
+        event_subtitle: subtitle || null,
+      });
+      toast('Schedule settings saved', 'success');
+    } catch {
+      toast('Failed to save schedule settings', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="ee-panel">
+      <h2 className="ee-panel__title">Schedule &amp; Gallery</h2>
+
+      <label className="ee-field ee-field--check">
+        <input type="checkbox" checked={enableSchedule} onChange={(e) => setEnableSchedule(e.target.checked)} />
+        <span className="ee-field__label">Enable Schedule</span>
+      </label>
+
+      <label className="ee-field">
+        <span className="ee-field__label">Schedule Items (JSON array)</span>
+        <textarea className="ee-textarea" rows={10} value={scheduleText} onChange={(e) => setScheduleText(e.target.value)} placeholder='[{"time":"18:00","title":"Doors Open"}]' />
+      </label>
+
+      <label className="ee-field ee-field--check">
+        <input type="checkbox" checked={enableGallery} onChange={(e) => setEnableGallery(e.target.checked)} />
+        <span className="ee-field__label">Enable Gallery</span>
+      </label>
+
+      <label className="ee-field">
+        <span className="ee-field__label">Gallery Images (one URL per line)</span>
+        <textarea className="ee-textarea" rows={6} value={galleryText} onChange={(e) => setGalleryText(e.target.value)} placeholder={'https://…\nhttps://…'} />
+      </label>
+
+      <label className="ee-field">
+        <span className="ee-field__label">Welcome Message</span>
+        <textarea className="ee-textarea" rows={4} value={welcomeMessage} onChange={(e) => setWelcomeMessage(e.target.value)} placeholder="Welcome to our event…" />
+      </label>
+
+      <label className="ee-field">
+        <span className="ee-field__label">Event Subtitle</span>
+        <input className="ee-input" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="A subtitle shown on the guest page" />
+      </label>
+
+      <div className="ee-actions">
+        <button className="btn btn--primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save Schedule'}</button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- settings section (theme editor) ---------- */
+
+interface SettingsSectionProps {
+  event: Event;
+  settings: {
+    logo_url: string | null;
+    cover_image: string | null;
+    color_primary: string;
+    color_background: string;
+    color_card: string;
+    color_text: string;
+    color_header: string;
+    color_button: string;
+    color_button_text: string;
+    color_link: string;
+    color_footer: string;
+    color_secondary: string;
+    font_heading: string;
+    font_body: string;
+    event_subtitle: string | null;
+    welcome_message: string | null;
+  } | null | undefined;
+  upsertSettings: (v: GuestPageSettingsInput) => Promise<unknown>;
+  deleteEvent: (id: string) => Promise<unknown>;
+  onDeleted: () => void;
+}
+
+function SettingsSection(props: SettingsSectionProps) {
+  const { event, settings, upsertSettings, deleteEvent, onDeleted } = props;
+  const { toast } = useToast();
+
+  // Build initial form from settings or defaults
+  const initial = useMemo(() => ({
+    logo_url: settings?.logo_url ?? DEFAULT_SETTINGS.logo_url ?? '',
+    cover_image: settings?.cover_image ?? DEFAULT_SETTINGS.cover_image ?? '',
+    color_primary: settings?.color_primary ?? DEFAULT_SETTINGS.color_primary!,
+    color_background: settings?.color_background ?? DEFAULT_SETTINGS.color_background!,
+    color_card: settings?.color_card ?? DEFAULT_SETTINGS.color_card!,
+    color_text: settings?.color_text ?? DEFAULT_SETTINGS.color_text!,
+    color_header: settings?.color_header ?? DEFAULT_SETTINGS.color_header!,
+    color_button: settings?.color_button ?? DEFAULT_SETTINGS.color_button!,
+    color_button_text: settings?.color_button_text ?? DEFAULT_SETTINGS.color_button_text!,
+    color_link: settings?.color_link ?? DEFAULT_SETTINGS.color_link!,
+    color_footer: settings?.color_footer ?? DEFAULT_SETTINGS.color_footer!,
+    color_secondary: settings?.color_secondary ?? DEFAULT_SETTINGS.color_secondary!,
+    font_heading: settings?.font_heading ?? DEFAULT_SETTINGS.font_heading!,
+    font_body: settings?.font_body ?? DEFAULT_SETTINGS.font_body!,
+  }), [settings]);
+
+  const [form, setForm] = useState(initial);
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
+  const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  // Sync if settings load later
+  useEffect(() => { setForm(initial); }, [initial]);
+
+  const applyPreset = (preset: typeof THEME_PRESETS[number]) => {
+    setForm((prev) => ({
+      ...prev,
+      color_primary: preset.color_primary,
+      color_background: preset.color_background,
+      color_card: preset.color_card,
+      color_text: preset.color_text,
+      color_button: preset.color_button,
+      color_button_text: preset.color_button_text,
+      color_link: preset.color_link,
+      color_footer: preset.color_footer,
+      color_secondary: darken(preset.color_primary, 0.2),
+      color_header: preset.color_background,
+      font_heading: preset.font_heading,
+      font_body: preset.font_body,
+    }));
+  };
+
+  const updatePrimary = (hex: string) => {
+    const derived = deriveFromPrimary(hex);
+    setForm((prev) => ({
+      ...prev,
+      color_primary: hex,
+      color_link: derived.color_link,
+      color_secondary: derived.color_secondary,
+      color_footer: derived.color_footer,
+      color_button_text: derived.color_button_text,
+      color_header: prev.color_background,
+    }));
+  };
+
+  const updateBackground = (hex: string) => {
+    setForm((prev) => ({
+      ...prev,
+      color_background: hex,
+      color_header: hex,
+      color_card: isLight(hex) ? '#ffffff' : '#1e293b',
+      color_text: isLight(hex) ? '#0f172a' : '#f1f5f9',
+    }));
+  };
+
+  const updateButton = (hex: string) => {
+    setForm((prev) => ({
+      ...prev,
+      color_button: hex,
+      color_button_text: contrastText(hex),
+    }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await upsertSettings({
+        logo_url: form.logo_url || null,
+        cover_image: form.cover_image || null,
+        color_primary: form.color_primary,
+        color_background: form.color_background,
+        color_card: form.color_card,
+        color_text: form.color_text,
+        color_header: form.color_header,
+        color_button: form.color_button,
+        color_button_text: form.color_button_text,
+        color_link: form.color_link,
+        color_footer: form.color_footer,
+        color_secondary: form.color_secondary,
+        font_heading: form.font_heading,
+        font_body: form.font_body,
+      });
+      toast('Theme settings saved', 'success');
+    } catch {
+      toast('Failed to save theme settings', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteEvent(event.id);
+      toast('Event deleted', 'success');
+      onDeleted();
+    } catch {
+      toast('Failed to delete event', 'error');
+    }
+  };
+
+  return (
+    <div className="ee-settings-grid">
+      {/* left column: editor */}
+      <div className="ee-settings-editor">
+        {/* Theme presets */}
+        <div className="ee-panel">
+          <h2 className="ee-panel__title">Theme Presets</h2>
+          <div className="ee-presets">
+            {THEME_PRESETS.map((p) => (
+              <button
+                key={p.name}
+                className={`ee-preset${form.color_primary === p.color_primary && form.font_heading === p.font_heading ? ' ee-preset--active' : ''}`}
+                onClick={() => applyPreset(p)}
+                type="button"
+              >
+                <span className="ee-preset__swatches">
+                  <span className="ee-preset__swatch" style={{ background: p.color_primary }} />
+                  <span className="ee-preset__swatch" style={{ background: p.color_background }} />
+                  <span className="ee-preset__swatch" style={{ background: p.color_button }} />
+                </span>
+                <span className="ee-preset__name">{p.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Branding */}
+        <div className="ee-panel">
+          <h2 className="ee-panel__title">Branding</h2>
+          <label className="ee-field">
+            <span className="ee-field__label">Event Logo URL</span>
+            <input className="ee-input" value={form.logo_url} onChange={(e) => setForm({ ...form, logo_url: e.target.value })} placeholder="https://…" />
+          </label>
+          <label className="ee-field">
+            <span className="ee-field__label">Cover Image URL</span>
+            <input className="ee-input" value={form.cover_image} onChange={(e) => setForm({ ...form, cover_image: e.target.value })} placeholder="https://…" />
+          </label>
+        </div>
+
+        {/* Colours */}
+        <div className="ee-panel">
+          <h2 className="ee-panel__title">Colours</h2>
+          <label className="ee-field">
+            <span className="ee-field__label">Primary / Accent</span>
+            <div className="ee-color-row">
+              <input type="color" className="ee-color-input" value={form.color_primary} onChange={(e) => updatePrimary(e.target.value)} />
+              <input className="ee-input ee-input--hex" value={form.color_primary} onChange={(e) => updatePrimary(e.target.value)} />
+            </div>
+          </label>
+          <label className="ee-field">
+            <span className="ee-field__label">Background</span>
+            <div className="ee-color-row">
+              <input type="color" className="ee-color-input" value={form.color_background} onChange={(e) => updateBackground(e.target.value)} />
+              <input className="ee-input ee-input--hex" value={form.color_background} onChange={(e) => updateBackground(e.target.value)} />
+            </div>
+          </label>
+          <label className="ee-field">
+            <span className="ee-field__label">Button</span>
+            <div className="ee-color-row">
+              <input type="color" className="ee-color-input" value={form.color_button} onChange={(e) => updateButton(e.target.value)} />
+              <input className="ee-input ee-input--hex" value={form.color_button} onChange={(e) => updateButton(e.target.value)} />
+            </div>
+          </label>
+        </div>
+
+        {/* Fonts */}
+        <div className="ee-panel">
+          <h2 className="ee-panel__title">Fonts</h2>
+          <label className="ee-field">
+            <span className="ee-field__label">Heading Font</span>
+            <select
+              className="ee-input"
+              value={form.font_heading}
+              onChange={(e) => setForm({ ...form, font_heading: e.target.value })}
+              style={{ fontFamily: form.font_heading }}
+            >
+              {FONT_OPTIONS.map((f) => (
+                <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
+              ))}
+            </select>
+          </label>
+          <label className="ee-field">
+            <span className="ee-field__label">Body Font</span>
+            <select
+              className="ee-input"
+              value={form.font_body}
+              onChange={(e) => setForm({ ...form, font_body: e.target.value })}
+              style={{ fontFamily: form.font_body }}
+            >
+              {FONT_OPTIONS.map((f) => (
+                <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="ee-actions">
+          <button className="btn btn--primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save Theme'}</button>
+        </div>
+
+        {/* Danger zone */}
+        <div className="ee-panel ee-panel--danger">
+          <h2 className="ee-panel__title">Danger Zone</h2>
+          <p className="ee-danger-text">Deleting an event permanently removes it along with all guests, tables, and settings.</p>
+          <button className="btn btn--danger" onClick={() => setDeleteOpen(true)}>Delete Event</button>
+        </div>
+      </div>
+
+      {/* right column: live preview (sticky) */}
+      <div className="ee-preview-wrap">
+        <div className="ee-preview-toolbar">
+          <button
+            className={`ee-preview-toggle${previewDevice === 'desktop' ? ' ee-preview-toggle--active' : ''}`}
+            onClick={() => setPreviewDevice('desktop')}
+            type="button"
+          >Desktop</button>
+          <button
+            className={`ee-preview-toggle${previewDevice === 'mobile' ? ' ee-preview-toggle--active' : ''}`}
+            onClick={() => setPreviewDevice('mobile')}
+            type="button"
+          >Mobile</button>
+        </div>
+        <div className="ee-preview-scroll">
+          <div
+            className="ee-preview"
+            style={{
+              width: previewDevice === 'desktop' ? '100%' : '375px',
+              maxWidth: '100%',
+              margin: '0 auto',
+              background: form.color_background,
+              fontFamily: form.font_body,
+              color: form.color_text,
+              borderRadius: '12px',
+              overflow: 'hidden',
+              border: '1px solid #e2e8f0',
+            }}
+          >
+            {/* Banner */}
+            <div
+              className="ee-preview__banner"
+              style={{
+                height: '180px',
+                background: form.cover_image
+                  ? `url(${form.cover_image}) center/cover`
+                  : `linear-gradient(135deg, ${form.color_primary}, ${form.color_secondary})`,
+              }}
+            >
+              {form.logo_url && (
+                <img
+                  src={form.logo_url}
+                  alt="logo"
+                  className="ee-preview__logo"
+                  style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '2px solid #fff' }}
+                />
+              )}
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '24px', textAlign: 'center' }}>
+              <h3
+                className="ee-preview__heading"
+                style={{ fontFamily: form.font_heading, color: form.color_text, fontSize: 28, margin: '0 0 8px' }}
+              >
+                {event.name}
+              </h3>
+              {settings?.event_subtitle && (
+                <p style={{ color: form.color_text, opacity: 0.7, margin: '0 0 12px', fontSize: 14 }}>
+                  {settings.event_subtitle}
+                </p>
+              )}
+              <p style={{ color: form.color_text, opacity: 0.8, margin: '0 0 20px', fontSize: 14, lineHeight: 1.5 }}>
+                {settings?.welcome_message || 'Welcome to our event. We are glad you could join us.'}
+              </p>
+
+              {/* Card */}
+              <div
+                style={{
+                  background: form.color_card,
+                  borderRadius: '12px',
+                  padding: '20px',
+                  margin: '0 0 16px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                  textAlign: 'left',
+                }}
+              >
+                <p style={{ margin: '0 0 12px', fontSize: 14, color: form.color_text }}>
+                  Find your seat at the event.
+                </p>
+                <button
+                  style={{
+                    background: form.color_button,
+                    color: form.color_button_text,
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '10px 20px',
+                    fontFamily: form.font_body,
+                    fontSize: 14,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Find Your Seat
+                </button>
+                <div style={{ marginTop: '12px' }}>
+                  <a
+                    href="#"
+                    onClick={(e) => e.preventDefault()}
+                    style={{ color: form.color_link, fontFamily: form.font_body, fontSize: 14, textDecoration: 'underline' }}
+                  >
+                    View invitation details
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                background: form.color_footer,
+                color: contrastText(form.color_footer),
+                padding: '16px',
+                textAlign: 'center',
+                fontSize: 12,
+              }}
+            >
+              {event.name} · {event.venue || 'Venue TBA'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Delete Event"
+        message={`Are you sure you want to delete "${event.name}"? This will permanently remove all guests, tables, and settings. This cannot be undone.`}
+        confirmLabel="Delete Event"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteOpen(false)}
+      />
+    </div>
+  );
+}
+
+function isLight(hex: string): boolean {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return true;
+  const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+  return luminance > 0.55;
+}
+
+/* ---------- inline styles for ee- classes (injected once) ---------- */
+
+const STYLE_ID = 'ee-event-editor-styles';
+function injectStyles() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById(STYLE_ID)) return;
+  const css = `
+.ee-page { max-width: 1100px; margin: 0 auto; padding: 0 24px 80px; }
+.ee-loading { padding: 80px 24px; text-align: center; color: #64748b; font-size: 16px; }
+
+.ee-header { padding: 32px 0 24px; }
+.ee-header__back { display: inline-block; color: #0f766e; text-decoration: none; font-size: 14px; font-weight: 500; margin-bottom: 12px; }
+.ee-header__back:hover { text-decoration: underline; }
+.ee-header__title { font-size: 32px; font-weight: 700; margin: 0 0 4px; color: #0f172a; }
+.ee-header__subtitle { font-size: 15px; color: #64748b; margin: 0; }
+
+.ee-tabs { position: sticky; top: 0; z-index: 20; background: #ffffff; border-bottom: 1px solid #e2e8f0; margin: 0 -24px 24px; padding: 0 24px; }
+.ee-tabs__inner { display: flex; gap: 8px; padding: 12px 0; overflow-x: auto; scrollbar-width: none; }
+.ee-tabs__inner::-webkit-scrollbar { display: none; }
+.ee-tab { flex-shrink: 0; padding: 8px 18px; border: 1px solid #e2e8f0; background: #f8fafc; color: #475569; border-radius: 999px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; white-space: nowrap; }
+.ee-tab:hover { background: #f1f5f9; border-color: #cbd5e1; transform: translateY(-1px); }
+.ee-tab--active { background: #0f766e; color: #fff; border-color: #0f766e; box-shadow: 0 2px 8px rgba(15,118,110,0.25); }
+.ee-tab--active:hover { background: #115e59; border-color: #115e59; }
+
+.ee-content { min-height: 400px; }
+.ee-section { display: none; }
+.ee-section--active { display: block; animation: ee-fade 0.2s ease; }
+@keyframes ee-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.ee-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 28px; margin-bottom: 24px; }
+.ee-panel--danger { border-color: #fecaca; }
+.ee-panel__header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
+.ee-panel__title { font-size: 20px; font-weight: 600; margin: 0 0 20px; color: #0f172a; }
+.ee-panel__header .ee-panel__title { margin: 0; }
+.ee-panel__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.ee-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.ee-field { display: flex; flex-direction: column; gap: 6px; }
+.ee-field--full { grid-column: 1 / -1; }
+.ee-field--check { flex-direction: row; align-items: center; gap: 10px; }
+.ee-field__label { font-size: 14px; font-weight: 500; color: #334155; }
+.ee-input { padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; background: #fff; color: #0f172a; transition: border-color 0.15s, box-shadow 0.15s; }
+.ee-input:focus { outline: none; border-color: #0f766e; box-shadow: 0 0 0 3px rgba(15,118,110,0.12); }
+.ee-input--search { max-width: 360px; margin-bottom: 20px; }
+.ee-input--hex { flex: 1; font-family: monospace; }
+.ee-textarea { padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; font-family: monospace; resize: vertical; background: #fff; color: #0f172a; }
+.ee-textarea:focus { outline: none; border-color: #0f766e; box-shadow: 0 0 0 3px rgba(15,118,110,0.12); }
+.ee-color-row { display: flex; gap: 8px; align-items: center; }
+.ee-color-input { width: 44px; height: 44px; border: 1px solid #cbd5e1; border-radius: 10px; cursor: pointer; padding: 2px; background: #fff; }
+
+.ee-actions { display: flex; gap: 12px; margin-top: 24px; flex-wrap: wrap; }
+
+.ee-table-wrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 12px; }
+.ee-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ee-table th { text-align: left; padding: 12px 16px; background: #f8fafc; color: #475569; font-weight: 600; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+.ee-table td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; color: #0f172a; }
+.ee-table tr:last-child td { border-bottom: none; }
+.ee-table__actions { display: flex; gap: 8px; white-space: nowrap; }
+
+.ee-empty { padding: 32px 0; text-align: center; color: #94a3b8; font-size: 15px; }
+
+.ee-modal-form { display: flex; flex-direction: column; gap: 16px; }
+
+/* venue layout */
+.ee-dropzone { border: 2px dashed #cbd5e1; border-radius: 16px; padding: 48px 24px; text-align: center; cursor: pointer; transition: all 0.2s ease; background: #f8fafc; }
+.ee-dropzone:hover { border-color: #0f766e; background: #f0fdf4; }
+.ee-dropzone--over { border-color: #0f766e; background: #ecfdf5; transform: scale(1.01); }
+.ee-dropzone__icon { font-size: 48px; margin-bottom: 12px; }
+.ee-dropzone__text { font-size: 18px; font-weight: 600; color: #0f172a; margin: 0 0 8px; }
+.ee-dropzone__subtext { font-size: 14px; color: #94a3b8; margin: 0 0 16px; }
+.ee-dropzone__formats { font-size: 12px; color: #94a3b8; margin: 16px 0 0; }
+
+.ee-venue-preview { text-align: center; }
+.ee-venue-preview__image-wrap { border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; max-width: 600px; margin: 0 auto 20px; background: #f8fafc; }
+.ee-venue-preview__img { width: 100%; height: auto; display: block; }
+.ee-venue-preview__actions { display: flex; gap: 12px; justify-content: center; }
+
+/* invitation */
+.ee-invite-toggle { margin-bottom: 20px; }
+.ee-invite-status { display: inline-block; padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 500; margin-bottom: 24px; }
+.ee-invite-status--on { background: #dcfce7; color: #166534; }
+.ee-invite-status--off { background: #fee2e2; color: #991b1b; }
+.ee-invite-links { display: flex; flex-direction: column; gap: 12px; }
+.ee-invite-link-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #f8fafc; border-radius: 10px; }
+.ee-invite-link-row__label { font-weight: 600; color: #334155; min-width: 140px; font-size: 14px; }
+.ee-invite-link { color: #0f766e; text-decoration: none; font-family: monospace; font-size: 14px; }
+.ee-invite-link:hover { text-decoration: underline; }
+
+/* settings */
+.ee-settings-grid { display: grid; grid-template-columns: 1fr 420px; gap: 24px; align-items: start; }
+.ee-settings-editor { min-width: 0; }
+
+.ee-presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.ee-preset { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 10px; border: 2px solid #e2e8f0; border-radius: 12px; background: #fff; cursor: pointer; transition: all 0.15s ease; }
+.ee-preset:hover { border-color: #94a3b8; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+.ee-preset--active { border-color: #0f766e; background: #f0fdf4; }
+.ee-preset__swatches { display: flex; gap: 4px; }
+.ee-preset__swatch { width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.08); }
+.ee-preset__name { font-size: 13px; font-weight: 500; color: #334155; }
+
+.ee-danger-text { font-size: 14px; color: #64748b; margin: 0 0 16px; line-height: 1.5; }
+
+/* live preview */
+.ee-preview-wrap { position: sticky; top: 140px; }
+.ee-preview-toolbar { display: flex; gap: 4px; padding: 4px; background: #f1f5f9; border-radius: 10px; margin-bottom: 16px; width: fit-content; }
+.ee-preview-toggle { padding: 6px 16px; border: none; background: transparent; border-radius: 8px; font-size: 13px; font-weight: 500; color: #475569; cursor: pointer; transition: all 0.15s; }
+.ee-preview-toggle--active { background: #fff; color: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.ee-preview-scroll { max-height: calc(100vh - 220px); overflow-y: auto; }
+.ee-preview { transition: width 0.25s ease; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+.ee-preview__banner { position: relative; display: flex; align-items: flex-end; justify-content: center; padding-bottom: -32px; }
+.ee-preview__logo { margin-bottom: -32px; position: relative; z-index: 1; }
+
+@media (max-width: 900px) {
+  .ee-settings-grid { grid-template-columns: 1fr; }
+  .ee-preview-wrap { position: static; }
+  .ee-form-grid { grid-template-columns: 1fr; }
+  .ee-presets { grid-template-columns: repeat(2, 1fr); }
+}
+`;
+  const el = document.createElement('style');
+  el.id = STYLE_ID;
+  el.textContent = css;
+  document.head.appendChild(el);
+}
+
+// Inject on module load (guarded for SSR)
+if (typeof window !== 'undefined') {
+  // run after DOM ready if needed
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', injectStyles);
+  } else {
+    injectStyles();
   }
 }

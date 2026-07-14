@@ -3,21 +3,6 @@ import { useEvent } from '@/hooks/use-events';
 import { useTables } from '@/hooks/use-tables';
 import { useGuests } from '@/hooks/use-guests';
 
-function formatDate(dateStr: string): string {
-  if (!dateStr) return 'Date TBD';
-  try {
-    const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString(undefined, {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  } catch {
-    return dateStr;
-  }
-}
-
 export function PrintSeatingChartPage() {
   const { eventId } = useParams<{ eventId: string }>();
   const { data: event, isLoading: eventLoading } = useEvent(eventId ?? '');
@@ -26,13 +11,14 @@ export function PrintSeatingChartPage() {
 
   const isLoading = eventLoading || tablesLoading || guestsLoading;
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   if (isLoading) {
     return (
       <div className="psc-page">
-        <div className="psc-loading">
-          <div className="psc-loading-spinner" aria-hidden="true" />
-          <p className="psc-loading-text">Loading seating chart…</p>
-        </div>
+        <div className="psc-loading">Loading seating chart...</div>
       </div>
     );
   }
@@ -42,98 +28,96 @@ export function PrintSeatingChartPage() {
       <div className="psc-page">
         <div className="psc-not-found">
           <h1 className="psc-not-found-title">Event Not Found</h1>
-          <p className="psc-not-found-text">
-            We couldn't find the event you're looking for.
-          </p>
-          <Link to="/" className="psc-not-found-link">
-            Go Home
+          <Link className="psc-link" to="/">
+            Return Home
           </Link>
         </div>
       </div>
     );
   }
 
-  const sortedTables = [...(tables ?? [])].sort(
-    (a, b) => a.number - b.number,
+  const tableList = tables ?? [];
+  const allGuests = guests ?? [];
+
+  // Group guests by table
+  const guestsByTable = tableList.map((table) => ({
+    table,
+    guests: allGuests.filter((g) => g.table_id === table.id),
+  }));
+
+  const unseatedGuests = allGuests.filter(
+    (g) => !g.table_id || !tableList.some((t) => t.id === g.table_id),
   );
-
-  const guestsByTable = (guests ?? []).reduce<
-    Record<string, typeof guests>
-  >((acc, guest) => {
-    if (!guest.table_id) return acc;
-    (acc[guest.table_id] ??= []).push(guest);
-    return acc;
-  }, {});
-
-  const unassignedGuests = (guests ?? []).filter((g) => !g.table_id);
 
   return (
     <div className="psc-page">
       <div className="psc-toolbar">
-        <Link to={`/events/${event.id}`} className="psc-back-link">
+        <Link className="psc-back-link" to={`/events/${event.id}`}>
           ← Back to Event
         </Link>
-        <button
-          type="button"
-          className="psc-print-button"
-          onClick={() => window.print()}
-        >
-          Print
+        <button className="psc-print-btn" onClick={handlePrint}>
+          Print Seating Chart
         </button>
       </div>
 
-      <div className="psc-header">
-        <h1 className="psc-event-name">{event.name}</h1>
-        <p className="psc-event-meta">
-          {formatDate(event.date)}
-          {event.venue ? ` • ${event.venue}` : ''}
-        </p>
+      <div className="psc-document">
+        <header className="psc-header">
+          <h1 className="psc-event-name">{event.name}</h1>
+          {event.date && (
+            <p className="psc-event-date">
+              {new Date(event.date).toLocaleDateString(undefined, {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })}
+              {event.time ? ` at ${event.time}` : ''}
+            </p>
+          )}
+          {event.venue && <p className="psc-event-venue">{event.venue}</p>}
+        </header>
+
         <h2 className="psc-section-title">Seating Chart</h2>
-      </div>
 
-      <div className="psc-tables">
-        {sortedTables.length === 0 && (
-          <p className="psc-empty">No tables have been created for this event.</p>
-        )}
-
-        {sortedTables.map((table) => {
-          const tableGuests = guestsByTable[table.id] ?? [];
-          return (
-            <div key={table.id} className="psc-table">
+        <div className="psc-tables-grid">
+          {guestsByTable.map(({ table, guests: tableGuests }) => (
+            <div className="psc-table-card" key={table.id}>
               <div className="psc-table-header">
-                <span className="psc-table-number">Table {table.number}</span>
-                <span className="psc-table-name">{table.name}</span>
-                <span className="psc-table-count">
-                  {tableGuests.length} / {table.capacity}
-                </span>
+                <h3 className="psc-table-name">
+                  {table.name || `Table ${table.number ?? ''}`}
+                </h3>
+                {table.number != null && (
+                  <span className="psc-table-number">#{table.number}</span>
+                )}
               </div>
               <ul className="psc-guest-list">
-                {tableGuests.length === 0 && (
+                {tableGuests.length === 0 ? (
                   <li className="psc-guest-empty">No guests assigned</li>
+                ) : (
+                  tableGuests.map((guest) => (
+                    <li className="psc-guest-item" key={guest.id}>
+                      {guest.name}
+                    </li>
+                  ))
                 )}
-                {tableGuests.map((guest) => (
-                  <li key={guest.id} className="psc-guest-item">
-                    {guest.name}
-                  </li>
-                ))}
               </ul>
             </div>
-          );
-        })}
-      </div>
-
-      {unassignedGuests.length > 0 && (
-        <div className="psc-unassigned">
-          <h3 className="psc-unassigned-title">Unassigned Guests</h3>
-          <ul className="psc-guest-list">
-            {unassignedGuests.map((guest) => (
-              <li key={guest.id} className="psc-guest-item">
-                {guest.name}
-              </li>
-            ))}
-          </ul>
+          ))}
         </div>
-      )}
+
+        {unseatedGuests.length > 0 && (
+          <div className="psc-unseated">
+            <h3 className="psc-unseated-title">Unseated Guests</h3>
+            <ul className="psc-guest-list">
+              {unseatedGuests.map((guest) => (
+                <li className="psc-guest-item" key={guest.id}>
+                  {guest.name}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

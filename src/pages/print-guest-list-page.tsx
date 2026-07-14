@@ -2,21 +2,6 @@ import { useParams, Link } from 'react-router-dom';
 import { useEvent } from '@/hooks/use-events';
 import { useGuests } from '@/hooks/use-guests';
 
-function formatDate(dateStr: string): string {
-  if (!dateStr) return 'Date TBD';
-  try {
-    const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString(undefined, {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  } catch {
-    return dateStr;
-  }
-}
-
 export function PrintGuestListPage() {
   const { eventId } = useParams<{ eventId: string }>();
   const { data: event, isLoading: eventLoading } = useEvent(eventId ?? '');
@@ -24,13 +9,14 @@ export function PrintGuestListPage() {
 
   const isLoading = eventLoading || guestsLoading;
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   if (isLoading) {
     return (
       <div className="pgl-page">
-        <div className="pgl-loading">
-          <div className="pgl-loading-spinner" aria-hidden="true" />
-          <p className="pgl-loading-text">Loading guest list…</p>
-        </div>
+        <div className="pgl-loading">Loading guest list...</div>
       </div>
     );
   }
@@ -40,79 +26,79 @@ export function PrintGuestListPage() {
       <div className="pgl-page">
         <div className="pgl-not-found">
           <h1 className="pgl-not-found-title">Event Not Found</h1>
-          <p className="pgl-not-found-text">
-            We couldn't find the event you're looking for.
-          </p>
-          <Link to="/" className="pgl-not-found-link">
-            Go Home
+          <Link className="pgl-link" to="/">
+            Return Home
           </Link>
         </div>
       </div>
     );
   }
 
-  const sortedGuests = [...(guests ?? [])].sort((a, b) =>
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
-  );
-
-  const assignedCount = sortedGuests.filter((g) => g.table).length;
-  const unassignedCount = sortedGuests.length - assignedCount;
+  const allGuests = guests ?? [];
 
   return (
     <div className="pgl-page">
       <div className="pgl-toolbar">
-        <Link to={`/events/${event.id}`} className="pgl-back-link">
+        <Link className="pgl-back-link" to={`/events/${event.id}`}>
           ← Back to Event
         </Link>
-        <button
-          type="button"
-          className="pgl-print-button"
-          onClick={() => window.print()}
-        >
-          Print
+        <button className="pgl-print-btn" onClick={handlePrint}>
+          Print Guest List
         </button>
       </div>
 
-      <div className="pgl-header">
-        <h1 className="pgl-event-name">{event.name}</h1>
-        <p className="pgl-event-meta">
-          {formatDate(event.date)}
-          {event.venue ? ` • ${event.venue}` : ''}
-        </p>
-        <h2 className="pgl-section-title">Guest List</h2>
-        <p className="pgl-summary">
-          {sortedGuests.length} guest{sortedGuests.length === 1 ? '' : 's'} •{' '}
-          {assignedCount} assigned • {unassignedCount} unassigned
-        </p>
-      </div>
-
-      <table className="pgl-table">
-        <thead>
-          <tr>
-            <th className="pgl-th pgl-th-name">Guest Name</th>
-            <th className="pgl-th pgl-th-table">Table</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sortedGuests.length === 0 && (
-            <tr>
-              <td className="pgl-empty" colSpan={2}>
-                No guests have been added to this event.
-              </td>
-            </tr>
+      <div className="pgl-document">
+        <header className="pgl-header">
+          <h1 className="pgl-event-name">{event.name}</h1>
+          {event.date && (
+            <p className="pgl-event-date">
+              {new Date(event.date).toLocaleDateString(undefined, {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })}
+              {event.time ? ` at ${event.time}` : ''}
+            </p>
           )}
-          {sortedGuests.map((guest) => (
-            <tr key={guest.id} className="pgl-row">
-              <td className="pgl-td pgl-td-name">{guest.name}</td>
-              <td className="pgl-td pgl-td-table">
-                {guest.table
-                  ? `Table ${guest.table.number} — ${guest.table.name}`
-                  : 'Unassigned'}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          {event.venue && <p className="pgl-event-venue">{event.venue}</p>}
+        </header>
+
+        <h2 className="pgl-section-title">
+          Guest List ({allGuests.length} {allGuests.length === 1 ? 'guest' : 'guests'})
+        </h2>
+
+        {allGuests.length === 0 ? (
+          <p className="pgl-empty">No guests have been added yet.</p>
+        ) : (
+          <table className="pgl-table">
+            <thead>
+              <tr>
+                <th className="pgl-th pgl-th--num">#</th>
+                <th className="pgl-th">Guest Name</th>
+                <th className="pgl-th">Table</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allGuests.map((guest, idx) => {
+                const table = guest.table;
+                const tableLabel = table
+                  ? table.name || `Table ${table.number ?? ''}`
+                  : 'Unassigned';
+                return (
+                  <tr className="pgl-row" key={guest.id}>
+                    <td className="pgl-td pgl-td--num">{idx + 1}</td>
+                    <td className="pgl-td pgl-td--name">{guest.name}</td>
+                    <td className="pgl-td pgl-td--table">
+                      {table ? tableLabel : <span className="pgl-unassigned">Unassigned</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }

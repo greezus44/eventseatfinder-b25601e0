@@ -3,89 +3,55 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/providers/auth-provider';
 import { useToast } from '@/providers/toast-provider';
 
-type AuthMode = 'signin' | 'signup';
-
 export function LoginPage() {
   const navigate = useNavigate();
   const { signIn, signUp } = useAuth();
   const { toast } = useToast();
 
-  const [mode, setMode] = useState<AuthMode>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const isSignUp = mode === 'signup';
-
-  const toggleMode = () => {
-    setMode((prev) => (prev === 'signin' ? 'signup' : 'signin'));
-    setEmail('');
-    setPassword('');
-  };
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!email.trim() || !password.trim()) {
       toast('Please enter both email and password.', 'error');
       return;
     }
-
-    setSubmitting(true);
+    setLoading(true);
     try {
-      if (isSignUp) {
+      if (mode === 'signin') {
+        await signIn(email.trim(), password);
+        toast('Welcome back to Seatly!', 'success');
+      } else {
         await signUp(email.trim(), password);
         toast('Account created. Welcome to Seatly!', 'success');
-      } else {
-        await signIn(email.trim(), password);
-        toast('Signed in successfully.', 'success');
       }
       navigate('/');
-    } catch (error) {
+    } catch (err) {
       const message =
-        error instanceof Error && error.message
-          ? error.message
-          : isSignUp
-            ? 'Could not create your account. Please try again.'
-            : 'Could not sign you in. Please check your credentials.';
+        err instanceof Error ? err.message : 'Something went wrong. Please try again.';
       toast(message, 'error');
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
   return (
     <div className="login-page">
       <div className="login-card">
-        <div className="login-brand">
-          <div className="login-logo" aria-hidden="true">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M4 18v-7a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v7" />
-              <path d="M4 18h16" />
-              <path d="M6 18v2" />
-              <path d="M18 18v2" />
-              <path d="M9 11h6" />
-            </svg>
-          </div>
-          <h1 className="login-title">Seatly</h1>
-          <p className="login-subtitle">
-            {isSignUp ? 'Create your account to reserve the perfect seat.' : 'Sign in to manage your seating.'}
-          </p>
+        <div className="login-logo" aria-label="Seatly logo">
+          <span className="login-logo-mark">S</span>
+          <span className="login-logo-text">Seatly</span>
         </div>
 
-        <div className="login-toggle" role="tablist" aria-label="Authentication mode">
+        <div className="login-tabs" role="tablist">
           <button
             type="button"
             role="tab"
-            aria-selected={!isSignUp}
-            className={`login-toggle-btn ${!isSignUp ? 'is-active' : ''}`}
+            aria-selected={mode === 'signin'}
+            className={`login-tab ${mode === 'signin' ? 'login-tab--active' : ''}`}
             onClick={() => setMode('signin')}
           >
             Sign In
@@ -93,25 +59,26 @@ export function LoginPage() {
           <button
             type="button"
             role="tab"
-            aria-selected={isSignUp}
-            className={`login-toggle-btn ${isSignUp ? 'is-active' : ''}`}
+            aria-selected={mode === 'signup'}
+            className={`login-tab ${mode === 'signup' ? 'login-tab--active' : ''}`}
             onClick={() => setMode('signup')}
           >
             Sign Up
           </button>
         </div>
 
-        <form className="login-form" onSubmit={handleSubmit} noValidate>
+        <form className="login-form" onSubmit={handleSubmit}>
           <label className="login-field">
             <span className="login-label">Email</span>
             <input
               type="email"
               className="login-input"
-              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
               autoComplete="email"
               required
+              disabled={loading}
             />
           </label>
 
@@ -120,27 +87,40 @@ export function LoginPage() {
             <input
               type="password"
               className="login-input"
-              placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoComplete={isSignUp ? 'new-password' : 'current-password'}
+              placeholder="••••••••"
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
               required
+              disabled={loading}
             />
           </label>
 
           <button
             type="submit"
             className="login-submit"
-            disabled={submitting}
+            disabled={loading}
           >
-            {submitting ? 'Please wait…' : isSignUp ? 'Create account' : 'Sign in'}
+            {loading ? (
+              <span className="login-spinner" aria-hidden="true" />
+            ) : mode === 'signin' ? (
+              'Sign In'
+            ) : (
+              'Create Account'
+            )}
           </button>
         </form>
 
-        <p className="login-switch">
-          {isSignUp ? 'Already have an account?' : 'New to Seatly?'}{' '}
-          <button type="button" className="login-switch-link" onClick={toggleMode}>
-            {isSignUp ? 'Sign in' : 'Create one'}
+        <p className="login-hint">
+          {mode === 'signin'
+            ? "Don't have an account? "
+            : 'Already have an account? '}
+          <button
+            type="button"
+            className="login-switch"
+            onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
+          >
+            {mode === 'signin' ? 'Sign up' : 'Sign in'}
           </button>
         </p>
       </div>

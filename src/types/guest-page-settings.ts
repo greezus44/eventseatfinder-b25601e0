@@ -91,7 +91,7 @@ export const DEFAULT_SETTINGS: GuestPageSettingsInput = {
   color_primary: '#0f766e', color_secondary: '#115e59', color_background: '#f8fafc',
   color_card: '#ffffff', color_text: '#0f172a', color_header: '#ffffff',
   color_button: '#0f766e', color_button_text: '#ffffff', color_link: '#0f766e',
-  color_footer: '#0f172a', font_heading: 'Inter', font_body: 'Inter', font_button: 'Inter',
+  color_footer: '#0f172a', font_heading: 'Playfair Display', font_body: 'Inter', font_button: 'Inter',
   font_heading_size: 48, font_body_size: 16, font_heading_weight: 700, font_body_weight: 400,
   font_heading_spacing: 0, font_body_spacing: 0, font_heading_line_height: 1.2, font_body_line_height: 1.5,
   border_radius: 16, background_overlay_opacity: 0, background_image: null, cover_image: null,
@@ -100,20 +100,68 @@ export const DEFAULT_SETTINGS: GuestPageSettingsInput = {
   schedule_items: [], gallery_images: [],
 };
 
+export interface ThemePreset {
+  name: string;
+  color_primary: string;
+  color_background: string;
+  color_card: string;
+  color_text: string;
+  color_button: string;
+  color_button_text: string;
+  color_link: string;
+  color_footer: string;
+  font_heading: string;
+  font_body: string;
+}
+
+export const THEME_PRESETS: ThemePreset[] = [
+  {
+    name: 'Elegant White',
+    color_primary: '#0f766e', color_background: '#ffffff', color_card: '#f8fafc',
+    color_text: '#1e293b', color_button: '#0f766e', color_button_text: '#ffffff',
+    color_link: '#0f766e', color_footer: '#1e293b',
+    font_heading: 'Playfair Display', font_body: 'Inter',
+  },
+  {
+    name: 'Modern Black',
+    color_primary: '#f59e0b', color_background: '#0a0a0a', color_card: '#1a1a1a',
+    color_text: '#f5f5f5', color_button: '#f59e0b', color_button_text: '#0a0a0a',
+    color_link: '#f59e0b', color_footer: '#0a0a0a',
+    font_heading: 'Outfit', font_body: 'Inter',
+  },
+  {
+    name: 'Minimal Grey',
+    color_primary: '#475569', color_background: '#f1f5f9', color_card: '#ffffff',
+    color_text: '#1e293b', color_button: '#475569', color_button_text: '#ffffff',
+    color_link: '#475569', color_footer: '#1e293b',
+    font_heading: 'Inter', font_body: 'Inter',
+  },
+  {
+    name: 'Emerald',
+    color_primary: '#059669', color_background: '#f0fdf4', color_card: '#ffffff',
+    color_text: '#064e3b', color_button: '#059669', color_button_text: '#ffffff',
+    color_link: '#059669', color_footer: '#064e3b',
+    font_heading: 'Cormorant Garamond', font_body: 'Inter',
+  },
+  {
+    name: 'Royal Blue',
+    color_primary: '#2563eb', color_background: '#eff6ff', color_card: '#ffffff',
+    color_text: '#1e3a8a', color_button: '#2563eb', color_button_text: '#ffffff',
+    color_link: '#2563eb', color_footer: '#1e3a8a',
+    font_heading: 'Montserrat', font_body: 'Source Sans 3',
+  },
+  {
+    name: 'Romantic Blush',
+    color_primary: '#be185d', color_background: '#fdf2f8', color_card: '#ffffff',
+    color_text: '#831843', color_button: '#be185d', color_button_text: '#ffffff',
+    color_link: '#be185d', color_footer: '#831843',
+    font_heading: 'Cormorant Garamond', font_body: 'Lora',
+  },
+];
+
 export const FONT_OPTIONS = [
   'Inter', 'Playfair Display', 'Cormorant Garamond', 'Montserrat', 'Lora',
   'Merriweather', 'Source Sans 3', 'Raleway', 'Cinzel', 'EB Garamond',
   'Nunito Sans', 'Bitter', 'DM Serif Display', 'Karla', 'Work Sans',
   'Manrope', 'Outfit', 'Libre Baskerville',
-];
-
-export const COLOR_PRESETS = [
-  { name: 'Teal', primary: '#0f766e', secondary: '#115e59', background: '#f8fafc', footer: '#0f172a' },
-  { name: 'Navy', primary: '#1e3a8a', secondary: '#1e40af', background: '#f8fafc', footer: '#0f172a' },
-  { name: 'Rose', primary: '#be123c', secondary: '#9f1239', background: '#fff1f2', footer: '#4c0519' },
-  { name: 'Forest', primary: '#166534', secondary: '#14532d', background: '#f0fdf4', footer: '#052e16' },
-  { name: 'Amber', primary: '#b45309', secondary: '#92400e', background: '#fffbeb', footer: '#451a03' },
-  { name: 'Slate', primary: '#334155', secondary: '#1e293b', background: '#f8fafc', footer: '#0f172a' },
-  { name: 'Plum', primary: '#7e22ce', secondary: '#6b21a8', background: '#faf5ff', footer: '#3b0764' },
-  { name: 'Ocean', primary: '#0369a1', secondary: '#075985', background: '#f0f9ff', footer: '#082f49' },
 ];
