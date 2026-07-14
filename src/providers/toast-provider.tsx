@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 type ToastType = 'success' | 'error' | 'info' | 'warning'
 interface Toast { id: number; message: string; type: ToastType }
 const ToastContext = createContext<{ toast: (m: string, t?: ToastType) => void } | undefined>(undefined)
-const STYLES: Record<ToastType, string> = { success: 'bg-emerald-600', error: 'bg-red-600', info: 'bg-slate-800', warning: 'bg-amber-500' }
+const STYLES: Record<ToastType, string> = { success: 'bg-slate-900', error: 'bg-red-700', info: 'bg-slate-800', warning: 'bg-amber-600' }
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const dismiss = useCallback((id: number) => setToasts((p) => p.filter((t) => t.id !== id)), [])

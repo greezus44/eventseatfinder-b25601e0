@@ -131,7 +131,10 @@ export function InvitationPage() {
   const logoUrl = settings.logo_url
   const venueImageUrl = settings.venue_image_url
 
-  const formatDate = () => { if (!event.date) return ''; return new Date(event.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }
+  const formatDate = () => {
+    if (!event.date) return ''
+    return new Date(event.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  }
 
   return (
     <div className="gp-page" style={{ background: bg, color: text }}>
