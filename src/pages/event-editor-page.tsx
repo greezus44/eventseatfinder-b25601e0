@@ -35,23 +35,18 @@ function TimeSelector({ value, onChange }: { value: string; onChange: (v: string
   )
 }
 
-/** Compact font dropdown — each option rendered in its own font style */
 function FontDropdown({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <select className="select font-dropdown" value={value} onChange={(e) => onChange(e.target.value)}>
-      {FONTS.map((f) => (
-        <option key={f.name} value={f.name} style={{ fontFamily: `'${f.cssName}', sans-serif` }}>{f.name}</option>
-      ))}
+      {FONTS.map((f) => <option key={f.name} value={f.name} style={{ fontFamily: `'${f.cssName}', sans-serif` }}>{f.name}</option>)}
     </select>
   )
 }
 
-/** Compact typography card: font dropdown + size slider + colour picker + live preview */
 function TypoCard({
   label, font, size, color, onFont, onSize, onColor, previewText, previewStyle,
 }: {
-  label: string
-  font: string; size: number; color: string
+  label: string; font: string; size: number; color: string
   onFont: (v: string) => void; onSize: (v: number) => void; onColor: (v: string) => void
   previewText: string; previewStyle: React.CSSProperties
 }) {
@@ -59,21 +54,9 @@ function TypoCard({
     <div className="typo-card">
       <div className="typo-card-header">{label}</div>
       <div className="typo-card-controls">
-        <div className="typo-card-field">
-          <span className="typo-card-label">Font</span>
-          <FontDropdown value={font} onChange={onFont} />
-        </div>
-        <div className="typo-card-field">
-          <span className="typo-card-label">Size</span>
-          <div className="typo-size-control">
-            <input type="range" className="range" min={10} max={72} value={size} onChange={(e) => onSize(Number(e.target.value))} />
-            <span className="typo-size-value">{size}px</span>
-          </div>
-        </div>
-        <div className="typo-card-field">
-          <span className="typo-card-label">Colour</span>
-          <input type="color" className="color-picker-sm" value={color} onChange={(e) => onColor(e.target.value)} />
-        </div>
+        <div className="typo-card-field"><span className="typo-card-label">Font</span><FontDropdown value={font} onChange={onFont} /></div>
+        <div className="typo-card-field"><span className="typo-card-label">Size</span><div className="typo-size-control"><input type="range" className="range" min={10} max={72} value={size} onChange={(e) => onSize(Number(e.target.value))} /><span className="typo-size-value">{size}px</span></div></div>
+        <div className="typo-card-field"><span className="typo-card-label">Colour</span><input type="color" className="color-picker-sm" value={color} onChange={(e) => onColor(e.target.value)} /></div>
       </div>
       <div className="typo-card-preview" style={previewStyle}>{previewText}</div>
     </div>
@@ -118,12 +101,14 @@ export function EventEditorPage() {
 
 function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toast }: any) {
   const [name, setName] = useState(event.name)
+  // NEW: Subtitle field — stored in guest_page_settings.event_subtitle
+  const [subtitle, setSubtitle] = useState(settings?.event_subtitle ?? '')
   const [date, setDate] = useState(event.date ?? '')
   const [time, setTime] = useState(event.time ?? '09:00')
   const [venue, setVenue] = useState(event.venue ?? '')
   const [detailsDirty, setDetailsDirty] = useState(false)
 
-  // Typography state — initialized from settings, synced when settings load
+  // Typography state — synced when settings arrive (fixes the editing bug)
   const [titleFont, setTitleFont] = useState('Inter')
   const [titleSize, setTitleSize] = useState(32)
   const [titleColor, setTitleColor] = useState('#0f172a')
@@ -138,11 +123,7 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
   const [venueColor, setVenueColor] = useState('#64748b')
   const [typoDirty, setTypoDirty] = useState(false)
 
-  // FIX: Sync typography state when settings data arrives from the server.
-  // Previously, state was initialized from `settings?.foo` at first render,
-  // but settings is null on the first render (still loading from Supabase).
-  // This meant all typography controls showed defaults and never updated
-  // when the real data arrived, making it impossible to edit existing values.
+  // FIX: Sync typography + subtitle state when settings data arrives from server
   useEffect(() => {
     if (!settings) return
     setTitleFont(settings.font_title_family ?? 'Inter')
@@ -157,14 +138,14 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
     setVenueFont(settings.font_venue_family ?? 'Inter')
     setVenueSize(settings.font_venue_size ?? 14)
     setVenueColor(settings.font_venue_color ?? '#64748b')
+    setSubtitle(settings.event_subtitle ?? '')
   }, [settings])
 
-  useEffect(() => { setDetailsDirty(name !== event.name || date !== (event.date ?? '') || time !== (event.time ?? '09:00') || venue !== (event.venue ?? '')) }, [name, date, time, venue, event])
+  useEffect(() => { setDetailsDirty(name !== event.name || subtitle !== (settings?.event_subtitle ?? '') || date !== (event.date ?? '') || time !== (event.time ?? '09:00') || venue !== (event.venue ?? '')) }, [name, subtitle, date, time, venue, event, settings])
 
   const allFonts = [titleFont, subtitleFont, datetimeFont, venueFont]
   useEffect(() => { loadGoogleFonts(allFonts) }, allFonts)
 
-  // Track typography dirty state
   useEffect(() => {
     if (!settings) { setTypoDirty(false); return }
     setTypoDirty(
@@ -175,9 +156,14 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
     )
   }, [titleFont, titleSize, titleColor, subtitleFont, subtitleSize, subtitleColor, datetimeFont, datetimeSize, datetimeColor, venueFont, venueSize, venueColor, settings])
 
+  // Save event details — includes subtitle via upsertSettings
   const handleSaveDetails = async () => {
-    try { await updateEvent.mutateAsync({ id: eventId, name, slug: event.slug, date: date || null, time: time || null, venue: venue || null }); toast('Event details saved'); setDetailsDirty(false) }
-    catch (err) { toast(err instanceof Error ? err.message : 'Failed to save', 'error') }
+    try {
+      await updateEvent.mutateAsync({ id: eventId, name, slug: event.slug, date: date || null, time: time || null, venue: venue || null })
+      // Save subtitle to guest_page_settings
+      await upsertSettings.mutateAsync({ event_id: eventId, event_subtitle: subtitle || null })
+      toast('Event details saved'); setDetailsDirty(false)
+    } catch (err) { toast(err instanceof Error ? err.message : 'Failed to save', 'error') }
   }
 
   const handleSaveTypography = async () => {
@@ -199,35 +185,26 @@ function DetailsTab({ event, settings, eventId, updateEvent, upsertSettings, toa
         <div className="card-header"><h3 className="card-title">Event Details</h3><p className="card-subtitle">Basic information about your event</p></div>
         <div className="form-row">
           <div className="form-group"><label className="form-label">Event Name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Wedding" /></div>
+          {/* NEW: Subtitle field directly below Event Name */}
+          <div className="form-group"><label className="form-label">Subtitle (optional)</label><input className="input" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="Together With Our Families" /></div>
+        </div>
+        <div className="form-row" style={{ marginTop: 'var(--space-4)' }}>
           <div className="form-group"><label className="form-label">Venue</label><input className="input" value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="Grand Hotel" /></div>
         </div>
         <div className="form-row" style={{ marginTop: 'var(--space-4)' }}>
           <div className="form-group"><label className="form-label">Date</label><input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
           <div className="form-group"><label className="form-label">Time</label><TimeSelector value={time} onChange={setTime} /></div>
         </div>
-        <div style={{ marginTop: 'var(--space-5)' }}><button className="btn btn-primary" onClick={handleSaveDetails} disabled={!detailsDirty || updateEvent.isPending}>{updateEvent.isPending ? 'Saving…' : 'Save Changes'}</button></div>
+        <div style={{ marginTop: 'var(--space-5)' }}><button className="btn btn-primary" onClick={handleSaveDetails} disabled={!detailsDirty || updateEvent.isPending || upsertSettings.isPending}>{updateEvent.isPending || upsertSettings.isPending ? 'Saving…' : 'Save Changes'}</button></div>
       </div>
 
-      {/* Compact Typography Panel */}
       <div className="card section">
         <div className="card-header"><h3 className="card-title">Typography</h3><p className="card-subtitle">Fonts, sizes, and colours for each text element. Preview updates live.</p></div>
         <div className="typo-cards">
-          <TypoCard label="Event Title" font={titleFont} size={titleSize} color={titleColor}
-            onFont={setTitleFont} onSize={setTitleSize} onColor={setTitleColor}
-            previewText={name || 'Event Name'}
-            previewStyle={{ fontFamily: getFontCss(titleFont), fontSize: `${titleSize}px`, color: titleColor }} />
-          <TypoCard label="Event Subtitle" font={subtitleFont} size={subtitleSize} color={subtitleColor}
-            onFont={setSubtitleFont} onSize={setSubtitleSize} onColor={setSubtitleColor}
-            previewText={settings?.event_subtitle || 'Event Subtitle'}
-            previewStyle={{ fontFamily: getFontCss(subtitleFont), fontSize: `${subtitleSize}px`, color: subtitleColor }} />
-          <TypoCard label="Date & Time" font={datetimeFont} size={datetimeSize} color={datetimeColor}
-            onFont={setDatetimeFont} onSize={setDatetimeSize} onColor={setDatetimeColor}
-            previewText={date && time ? `${new Date(date).toLocaleDateString()} at ${formatTime12(time)}` : 'Date & Time'}
-            previewStyle={{ fontFamily: getFontCss(datetimeFont), fontSize: `${datetimeSize}px`, color: datetimeColor }} />
-          <TypoCard label="Venue" font={venueFont} size={venueSize} color={venueColor}
-            onFont={setVenueFont} onSize={setVenueSize} onColor={setVenueColor}
-            previewText={venue || 'Venue Name'}
-            previewStyle={{ fontFamily: getFontCss(venueFont), fontSize: `${venueSize}px`, color: venueColor }} />
+          <TypoCard label="Event Title" font={titleFont} size={titleSize} color={titleColor} onFont={setTitleFont} onSize={setTitleSize} onColor={setTitleColor} previewText={name || 'Event Name'} previewStyle={{ fontFamily: getFontCss(titleFont), fontSize: `${titleSize}px`, color: titleColor }} />
+          <TypoCard label="Event Subtitle" font={subtitleFont} size={subtitleSize} color={subtitleColor} onFont={setSubtitleFont} onSize={setSubtitleSize} onColor={setSubtitleColor} previewText={subtitle || 'Event Subtitle'} previewStyle={{ fontFamily: getFontCss(subtitleFont), fontSize: `${subtitleSize}px`, color: subtitleColor }} />
+          <TypoCard label="Date & Time" font={datetimeFont} size={datetimeSize} color={datetimeColor} onFont={setDatetimeFont} onSize={setDatetimeSize} onColor={setDatetimeColor} previewText={date && time ? `${new Date(date).toLocaleDateString()} at ${formatTime12(time)}` : 'Date & Time'} previewStyle={{ fontFamily: getFontCss(datetimeFont), fontSize: `${datetimeSize}px`, color: datetimeColor }} />
+          <TypoCard label="Venue" font={venueFont} size={venueSize} color={venueColor} onFont={setVenueFont} onSize={setVenueSize} onColor={setVenueColor} previewText={venue || 'Venue Name'} previewStyle={{ fontFamily: getFontCss(venueFont), fontSize: `${venueSize}px`, color: venueColor }} />
         </div>
         <div style={{ marginTop: 'var(--space-5)' }}><button className="btn btn-primary" onClick={handleSaveTypography} disabled={!typoDirty || upsertSettings.isPending}>{upsertSettings.isPending ? 'Saving…' : 'Save Typography'}</button></div>
       </div>
@@ -253,9 +230,7 @@ function GuestsTab({ eventId, guests, tables, toast, confirm }: any) {
   const deleteGuest = useDeleteGuest()
   const bulkCreateGuests = useBulkCreateGuests()
   const tableMap: Map<string, { id: string; name: string }> = new Map(tables.map((t: any) => [t.id, t] as [string, { id: string; name: string }]))
-
   const filtered = guests.filter((g: any) => { if (search && !g.name.toLowerCase().includes(search.toLowerCase())) return false; if (filterTable && g.table_id !== filterTable) return false; return true }).sort((a: any, b: any) => { if (sortBy === 'name') return a.name.localeCompare(b.name); if (sortBy === 'table') return (tableMap.get(a.table_id ?? '')?.name ?? '').localeCompare(tableMap.get(b.table_id ?? '')?.name ?? ''); return new Date(b.created_at).getTime() - new Date(a.created_at).getTime() })
-
   const handleEdit = (g: any) => { setEditingId(g.id); setEditName(g.name); setEditTable(g.table_id ?? '') }
   const handleSaveEdit = async () => { if (!editingId || !editName.trim()) return; try { await updateGuest.mutateAsync({ id: editingId, event_id: eventId, name: editName.trim(), table_id: editTable || null }); toast('Guest updated'); setEditingId(null) } catch (err) { toast(err instanceof Error ? err.message : 'Failed to update guest', 'error') } }
   const handleDelete = async (id: string, name: string) => { const confirmed = await confirm({ title: 'Delete Guest', message: `Remove "${name}" from the guest list?`, confirmText: 'Delete' }); if (!confirmed) return; try { await deleteGuest.mutateAsync(id); toast('Guest removed') } catch (err) { toast(err instanceof Error ? err.message : 'Failed to delete guest', 'error') } }
@@ -264,7 +239,6 @@ function GuestsTab({ eventId, guests, tables, toast, confirm }: any) {
   const handleDrop = (e: React.DragEvent) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFileSelect(f) }
   const handleParsedGuestChange = (i: number, field: 'name' | 'tableName', value: string) => { const u = [...parsedGuests]; u[i][field] = value; setParsedGuests(u) }
   const handleConfirmImport = async () => { const valid = parsedGuests.filter((g) => g.name.trim()); if (valid.length === 0) return; setImporting(true); try { const guestsInput: GuestInput[] = valid.map((g) => ({ name: g.name.trim(), event_id: eventId, table_id: g.tableName.trim() ? matchTableByName(g.tableName, tables) : null })); await bulkCreateGuests.mutateAsync({ event_id: eventId, guests: guestsInput }); toast(`Imported ${valid.length} guests`); setParsedGuests([]); setImportFile(null) } catch (err) { toast(classifyError(err), 'error') } finally { setImporting(false) } }
-
   return (
     <div className="two-col">
       <div className="card">
@@ -286,12 +260,10 @@ function TablesTab({ eventId, tables, guests, toast, confirm }: any) {
   const [customRows, setCustomRows] = useState<{ name: string; capacity: number }[]>([{ name: '', capacity: 8 }])
   const bulkCreateTables = useBulkCreateTables(); const deleteTable = useDeleteTable()
   const guestCount = (tableId: string) => guests.filter((g: any) => g.table_id === tableId).length
-
   const handleSequentialCreate = async () => { const newTables = []; for (let i = 0; i < count; i++) { const num = startNum + i; newTables.push({ name: `${prefix} ${num}`, number: num, capacity: seats }) } try { await bulkCreateTables.mutateAsync({ event_id: eventId, tables: newTables }); toast(`Created ${count} tables`) } catch (err) { toast(err instanceof Error ? err.message : 'Failed to create tables', 'error') } }
   const handleCustomRowChange = (index: number, field: 'name' | 'capacity', value: string | number) => { const updated = [...customRows]; if (field === 'name') updated[index].name = value as string; else updated[index].capacity = value as number; setCustomRows(updated) }
   const handleCustomCreate = async () => { const valid = customRows.filter((r) => r.name.trim()); if (valid.length === 0) { toast('Enter at least one table name', 'error'); return } const names = valid.map((r) => r.name.trim()); const dupes = names.filter((n, i) => names.indexOf(n) !== i); if (dupes.length > 0) { toast(`Duplicate table names: ${dupes.join(', ')}`, 'error'); return } const existingNames = tables.map((t: any) => t.name.toLowerCase()); const conflicts = names.filter((n) => existingNames.includes(n.toLowerCase())); if (conflicts.length > 0) { toast(`Tables already exist: ${conflicts.join(', ')}`, 'error'); return } const newTables = valid.map((r, i) => ({ name: r.name.trim(), number: tables.length + i + 1, capacity: r.capacity })); try { await bulkCreateTables.mutateAsync({ event_id: eventId, tables: newTables }); toast(`Created ${valid.length} tables`); setCustomRows([{ name: '', capacity: 8 }]) } catch (err) { toast(err instanceof Error ? err.message : 'Failed to create tables', 'error') } }
   const handleDeleteTable = async (id: string, name: string) => { const confirmed = await confirm({ title: 'Delete Table', message: `Delete "${name}"? Guests at this table will be unassigned.`, confirmText: 'Delete' }); if (!confirmed) return; try { await deleteTable.mutateAsync(id); toast('Table deleted') } catch (err) { toast(err instanceof Error ? err.message : 'Failed to delete table', 'error') } }
-
   return (
     <div className="section">
       <div className="card section"><div className="card-header"><h3 className="card-title">Bulk Create Tables</h3><p className="card-subtitle">Create multiple tables at once</p></div><div className="mode-toggle"><button className={`btn btn-sm ${mode === 'sequential' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setMode('sequential')}>Sequential Numbering</button><button className={`btn btn-sm ${mode === 'custom' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setMode('custom')}>Custom Names</button></div>
