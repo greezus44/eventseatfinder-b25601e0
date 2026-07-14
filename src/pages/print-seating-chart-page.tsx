@@ -1,201 +1,110 @@
-import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useEvent } from '@/hooks/use-events';
-import { useGuests } from '@/hooks/use-guests';
 import { useTables } from '@/hooks/use-tables';
+import { useGuests } from '@/hooks/use-guests';
 import { LoadingScreen, ErrorScreen } from '@/components/ui/feedback';
 import type { GuestWithTable } from '@/types/guest';
-import type { Table } from '@/types/table';
+
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return 'Date TBD';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function formatGeneratedDate(): string {
+  return new Date().toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+}
 
 export function PrintSeatingChartPage() {
   const { eventId } = useParams<{ eventId: string }>();
-  const eid = eventId ?? '';
+  const id = eventId ?? '';
 
-  const { data: event, isLoading, error } = useEvent(eid);
-  const { data: tables } = useTables(eid);
-  const { data: guests } = useGuests(eid);
+  const { data: event, isLoading } = useEvent(id);
+  const { data: tables } = useTables(id);
+  const { data: guests } = useGuests(id);
 
-  const guestsByTable = useMemo(() => {
-    const map: Record<string, GuestWithTable[]> = {};
-    guests?.forEach((g) => {
-      if (g.table_id) {
-        if (!map[g.table_id]) map[g.table_id] = [];
-        map[g.table_id].push(g);
-      }
-    });
-    return map;
-  }, [guests]);
+  if (isLoading) return <LoadingScreen label="Loading seating chart…" />;
 
-  const unassignedGuests = useMemo(
-    () => guests?.filter((g) => !g.table_id) ?? [],
-    [guests],
-  );
+  if (!event) {
+    return (
+      <div className="print-page">
+        <ErrorScreen message="Event not found" />
+        <Link to="/" className="btn btn--secondary btn--sm">
+          Back to dashboard
+        </Link>
+      </div>
+    );
+  }
 
-  if (isLoading) return <LoadingScreen message="Loading seating chart..." />;
-  if (error) return <ErrorScreen message="Failed to load seating chart." />;
-  if (!event) return <ErrorScreen message="Event not found." />;
+  const tableList = tables ?? [];
+  const guestList = guests ?? [];
 
-  const formatDate = (d: string | null) => {
-    if (!d) return null;
-    try {
-      return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch {
-      return d;
+  const guestsByTable = new Map<string, GuestWithTable[]>();
+  const unassignedGuests: GuestWithTable[] = [];
+  for (const g of guestList) {
+    if (g.table_id) {
+      const arr = guestsByTable.get(g.table_id) ?? [];
+      arr.push(g);
+      guestsByTable.set(g.table_id, arr);
+    } else {
+      unassignedGuests.push(g);
     }
-  };
+  }
 
   return (
     <div className="print-page">
-      <div
-        className="print-toolbar"
-        style={{
-          display: 'flex',
-          gap: 'var(--space-2)',
-          padding: 'var(--space-3)',
-          borderBottom: '1px solid var(--border)',
-        }}
-      >
-        <button
-          className="btn btn--primary btn--sm"
-          onClick={() => window.print()}
-        >
-          🖨 Print
+      <div className="print-toolbar no-print">
+        <Link to={`/events/${id}/overview`} className="btn btn--secondary">
+          ← Back
+        </Link>
+        <button className="btn btn--primary" onClick={() => window.print()}>
+          Print
         </button>
-        <Link
-          to={`/events/${eid}/print/guests`}
-          className="btn btn--secondary btn--sm"
-        >
-          Guest List
-        </Link>
-        <Link
-          to={`/events/${eid}/seating`}
-          className="btn btn--secondary btn--sm"
-        >
-          ← Back to Seating
-        </Link>
       </div>
 
-      <div className="print-document" style={{ padding: 'var(--space-6)' }}>
-        <div
-          className="print-header"
-          style={{ textAlign: 'center', marginBottom: 'var(--space-6)' }}
-        >
-          <h1
-            className="print-title"
-            style={{
-              fontSize: '2rem',
-              fontWeight: 700,
-              marginBottom: 'var(--space-1)',
-            }}
-          >
-            {event.name}
-          </h1>
-          {event.venue && (
-            <p
-              className="print-venue"
-              style={{ fontSize: '1.1rem', color: '#555' }}
-            >
-              {event.venue}
-            </p>
-          )}
-          {formatDate(event.date) && (
-            <p className="print-date" style={{ color: '#666' }}>
-              {formatDate(event.date)}
-              {event.time ? ` at ${event.time}` : ''}
-            </p>
-          )}
+      <div className="print-document">
+        <div className="print-header">
+          <h1 className="print-title">{event.name}</h1>
+          {event.venue && <div className="print-venue">{event.venue}</div>}
+          <div className="print-date">{formatDate(event.date)}</div>
         </div>
 
-        <h2
-          className="print-section-title"
-          style={{
-            fontSize: '1.25rem',
-            fontWeight: 600,
-            marginBottom: 'var(--space-4)',
-            borderBottom: '2px solid #ddd',
-            paddingBottom: 'var(--space-2)',
-          }}
-        >
-          Seating Chart
-        </h2>
+        <h2 className="print-section-title">Seating Chart</h2>
 
-        {tables && tables.length === 0 ? (
-          <p
-            className="print-empty"
-            style={{
-              textAlign: 'center',
-              color: '#999',
-              padding: 'var(--space-6)',
-            }}
-          >
-            No tables have been created yet.
-          </p>
+        {tableList.length === 0 ? (
+          <p className="text-secondary">No tables assigned yet.</p>
         ) : (
-          <div
-            className="print-tables-grid"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-              gap: 'var(--space-4)',
-            }}
-          >
-            {tables?.map((table: Table) => {
-              const tableGuests = guestsByTable[table.id] ?? [];
+          <div className="print-tables-grid">
+            {tableList.map((table) => {
+              const tableGuests = guestsByTable.get(table.id) ?? [];
               return (
-                <div
-                  key={table.id}
-                  className="print-table-card"
-                  style={{
-                    border: '1px solid #ddd',
-                    borderRadius: 8,
-                    padding: 'var(--space-3)',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'baseline',
-                      marginBottom: 'var(--space-2)',
-                    }}
-                  >
-                    <h3 style={{ fontWeight: 600, fontSize: '1rem' }}>
-                      {table.name}
-                    </h3>
-                    <span style={{ fontSize: '0.875rem', color: '#666' }}>
+                <div key={table.id} className="print-table-card">
+                  <div className="print-table-card__header">
+                    <span className="print-table-card__name">{table.name}</span>
+                    <span className="print-table-card__number">
                       #{table.number}
                     </span>
                   </div>
-                  <div
-                    style={{
-                      fontSize: '0.875rem',
-                      color: '#666',
-                      marginBottom: 'var(--space-2)',
-                    }}
-                  >
-                    {tableGuests.length} guest
-                    {tableGuests.length !== 1 ? 's' : ''} · Cap {table.capacity}
+                  <div className="print-table-card__count">
+                    {tableGuests.length} / {table.capacity} guests
                   </div>
-                  <div>
+                  <div className="print-table-card__guests">
                     {tableGuests.length === 0 ? (
-                      <span
-                        className="print-empty"
-                        style={{ fontSize: '0.875rem', color: '#999' }}
-                      >
+                      <span className="print-guest-name--empty">
                         No guests assigned
                       </span>
                     ) : (
                       tableGuests.map((g) => (
-                        <div
-                          key={g.id}
-                          className="print-guest-name"
-                          style={{ padding: '2px 0', fontSize: '0.9rem' }}
-                        >
+                        <div key={g.id} className="print-guest-name">
                           {g.name}
                         </div>
                       ))
@@ -208,35 +117,11 @@ export function PrintSeatingChartPage() {
         )}
 
         {unassignedGuests.length > 0 && (
-          <div
-            className="print-unassigned"
-            style={{ marginTop: 'var(--space-6)' }}
-          >
-            <h2
-              className="print-section-title"
-              style={{
-                fontSize: '1.25rem',
-                fontWeight: 600,
-                marginBottom: 'var(--space-4)',
-                borderBottom: '2px solid #ddd',
-                paddingBottom: 'var(--space-2)',
-              }}
-            >
-              Unassigned Guests ({unassignedGuests.length})
-            </h2>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-                gap: 'var(--space-2)',
-              }}
-            >
+          <div className="print-unassigned">
+            <h2 className="print-section-title">Unassigned Guests</h2>
+            <div className="print-unassigned-list">
               {unassignedGuests.map((g) => (
-                <div
-                  key={g.id}
-                  className="print-guest-name"
-                  style={{ padding: '2px 0', fontSize: '0.9rem' }}
-                >
+                <div key={g.id} className="print-guest-name">
                   {g.name}
                 </div>
               ))}
@@ -244,17 +129,7 @@ export function PrintSeatingChartPage() {
           </div>
         )}
 
-        <div
-          className="print-footer"
-          style={{
-            marginTop: 'var(--space-6)',
-            textAlign: 'center',
-            fontSize: '0.8rem',
-            color: '#999',
-          }}
-        >
-          Generated by Seatly · {new Date().toLocaleDateString()}
-        </div>
+        <div className="print-footer">Generated {formatGeneratedDate()}</div>
       </div>
     </div>
   );

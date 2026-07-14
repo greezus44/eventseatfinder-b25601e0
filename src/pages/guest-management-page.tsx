@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   useGuests,
@@ -9,541 +9,368 @@ import {
 } from '@/hooks/use-guests';
 import { useTables, useCreateTable, useDeleteTable } from '@/hooks/use-tables';
 import { useToast } from '@/providers/toast-provider';
-import { Spinner, LoadingScreen, ErrorScreen } from '@/components/ui/feedback';
+import { LoadingScreen } from '@/components/ui/feedback';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import type { GuestWithTable } from '@/types/guest';
-import type { Table } from '@/types/table';
 
 export function GuestManagementPage() {
   const { eventId } = useParams<{ eventId: string }>();
-  const eid = eventId ?? '';
+  const id = eventId ?? '';
 
-  const { data: guests, isLoading, error } = useGuests(eid);
-  const { data: tables } = useTables(eid);
-  const createGuest = useCreateGuest(eid);
-  const bulkCreateGuests = useBulkCreateGuests(eid);
-  const updateGuest = useUpdateGuest(eid);
-  const deleteGuest = useDeleteGuest(eid);
-  const createTable = useCreateTable(eid);
-  const deleteTable = useDeleteTable(eid);
+  const { data: guests, isLoading } = useGuests(id);
+  const { data: tables } = useTables(id);
+  const createGuest = useCreateGuest(id);
+  const bulkCreateGuests = useBulkCreateGuests(id);
+  const updateGuest = useUpdateGuest(id);
+  const deleteGuest = useDeleteGuest(id);
+  const createTable = useCreateTable(id);
+  const deleteTable = useDeleteTable(id);
   const { toast } = useToast();
 
-  const [search, setSearch] = useState('');
   const [newGuestName, setNewGuestName] = useState('');
+  const [newGuestTable, setNewGuestTable] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
-  const [editTableId, setEditTableId] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<GuestWithTable | null>(null);
-  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [editTable, setEditTable] = useState('');
+  const [showBulkImport, setShowBulkImport] = useState(false);
   const [bulkText, setBulkText] = useState('');
-  const [showTableModal, setShowTableModal] = useState(false);
-  const [tableName, setTableName] = useState('');
-  const [tableNumber, setTableNumber] = useState('');
-  const [tableCapacity, setTableCapacity] = useState('8');
-  const [deleteTableTarget, setDeleteTableTarget] = useState<Table | null>(
-    null,
-  );
+  const [newTableName, setNewTableName] = useState('');
+  const [newTableNumber, setNewTableNumber] = useState('');
+  const [newTableCapacity, setNewTableCapacity] = useState('');
+  const [deleteTableId, setDeleteTableId] = useState<string | null>(null);
 
-  const filteredGuests = useMemo(() => {
-    if (!search.trim()) return guests ?? [];
-    const q = search.toLowerCase();
-    return (guests ?? []).filter((g) => g.name.toLowerCase().includes(q));
-  }, [guests, search]);
+  function guestCountForTable(tableId: string): number {
+    return (guests ?? []).filter((g) => g.table_id === tableId).length;
+  }
 
-  const handleAddGuest = async (e: React.FormEvent) => {
+  async function handleAddGuest(e: React.FormEvent) {
     e.preventDefault();
-    if (!newGuestName.trim()) return;
+    const name = newGuestName.trim();
+    if (!name) return;
     try {
-      await createGuest.mutateAsync(newGuestName.trim());
-      setNewGuestName('');
-      toast('Guest added', 'success');
-    } catch {
-      toast('Failed to add guest', 'error');
-    }
-  };
-
-  const startEdit = (guest: GuestWithTable) => {
-    setEditingId(guest.id);
-    setEditName(guest.name);
-    setEditTableId(guest.table_id);
-  };
-
-  const handleSaveEdit = async (guestId: string) => {
-    try {
-      await updateGuest.mutateAsync({
-        id: guestId,
-        name: editName.trim(),
-        table_id: editTableId,
+      await createGuest.mutateAsync({
+        name,
+        table_id: newGuestTable || null,
       });
-      setEditingId(null);
-      toast('Guest updated', 'success');
+      toast('Guest added', 'success');
+      setNewGuestName('');
+      setNewGuestTable('');
     } catch {
-      toast('Failed to update guest', 'error');
+      toast('Could not add guest', 'error');
     }
-  };
+  }
 
-  const handleDeleteGuest = async () => {
-    if (!deleteTarget) return;
-    try {
-      await deleteGuest.mutateAsync(deleteTarget.id);
-      toast('Guest removed', 'success');
-      setDeleteTarget(null);
-    } catch {
-      toast('Failed to remove guest', 'error');
-    }
-  };
-
-  const handleBulkImport = async (e: React.FormEvent) => {
+  async function handleBulkImport(e: React.FormEvent) {
     e.preventDefault();
     const names = bulkText
       .split('\n')
       .map((n) => n.trim())
       .filter(Boolean);
-    if (names.length === 0) {
-      toast('Please enter at least one name', 'error');
-      return;
-    }
+    if (names.length === 0) return;
     try {
       await bulkCreateGuests.mutateAsync(names);
       toast(
-        `${names.length} guest${names.length > 1 ? 's' : ''} added`,
+        `${names.length} guest${names.length === 1 ? '' : 's'} imported`,
         'success',
       );
       setBulkText('');
-      setShowBulkModal(false);
+      setShowBulkImport(false);
     } catch {
-      toast('Failed to import guests', 'error');
+      toast('Could not import guests', 'error');
     }
-  };
+  }
 
-  const handleCreateTable = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tableName.trim() || !tableNumber.trim()) {
-      toast('Table name and number are required', 'error');
-      return;
+  function startEdit(guest: GuestWithTable) {
+    setEditingId(guest.id);
+    setEditName(guest.name);
+    setEditTable(guest.table_id ?? '');
+  }
+
+  async function handleSaveEdit(guestId: string) {
+    try {
+      await updateGuest.mutateAsync({
+        id: guestId,
+        name: editName.trim(),
+        table_id: editTable || null,
+      });
+      toast('Guest updated', 'success');
+      setEditingId(null);
+    } catch {
+      toast('Could not update guest', 'error');
     }
+  }
+
+  async function handleDeleteGuest(guestId: string) {
+    try {
+      await deleteGuest.mutateAsync(guestId);
+      toast('Guest deleted', 'success');
+    } catch {
+      toast('Could not delete guest', 'error');
+    }
+  }
+
+  async function handleAddTable(e: React.FormEvent) {
+    e.preventDefault();
+    const name = newTableName.trim();
+    const number = Number(newTableNumber);
+    if (!name || !number) return;
     try {
       await createTable.mutateAsync({
-        name: tableName.trim(),
-        number: parseInt(tableNumber, 10),
-        capacity: tableCapacity ? parseInt(tableCapacity, 10) : 8,
+        name,
+        number,
+        capacity: newTableCapacity ? Number(newTableCapacity) : undefined,
       });
       toast('Table added', 'success');
-      setTableName('');
-      setTableNumber('');
-      setTableCapacity('8');
-      setShowTableModal(false);
+      setNewTableName('');
+      setNewTableNumber('');
+      setNewTableCapacity('');
     } catch {
-      toast('Failed to add table', 'error');
+      toast('Could not add table', 'error');
     }
-  };
+  }
 
-  const handleDeleteTable = async () => {
-    if (!deleteTableTarget) return;
+  async function confirmDeleteTable() {
+    if (!deleteTableId) return;
     try {
-      await deleteTable.mutateAsync(deleteTableTarget.id);
-      toast('Table removed', 'success');
-      setDeleteTableTarget(null);
+      await deleteTable.mutateAsync(deleteTableId);
+      toast('Table deleted', 'success');
     } catch {
-      toast('Failed to remove table', 'error');
+      toast('Could not delete table', 'error');
+    } finally {
+      setDeleteTableId(null);
     }
-  };
+  }
 
-  if (isLoading) return <LoadingScreen message="Loading guests..." />;
-  if (error) return <ErrorScreen message="Failed to load guests." />;
+  if (isLoading) return <LoadingScreen label="Loading guests…" />;
 
   return (
     <div className="page">
       <div className="page__header">
-        <Link
-          to={`/events/${eid}`}
-          className="text-secondary"
-          style={{
-            fontSize: '0.875rem',
-            marginBottom: 'var(--space-2)',
-            display: 'inline-block',
-          }}
-        >
-          ← Back to Event Settings
-        </Link>
-        <div
-          className="flex"
-          style={{ alignItems: 'center', justifyContent: 'space-between' }}
-        >
-          <h1>Manage Guests</h1>
-          <div className="flex gap-2">
-            <Link
-              to={`/events/${eid}/seating`}
-              className="btn btn--secondary btn--sm"
-            >
-              Seating
-            </Link>
-            <Link
-              to={`/events/${eid}/check-in`}
-              className="btn btn--secondary btn--sm"
-            >
-              Check-in
-            </Link>
-          </div>
+        <div>
+          <h1>Guests</h1>
+          <Link to={`/events/${id}`} className="btn btn--ghost btn--sm">
+            ← Back to event
+          </Link>
         </div>
-      </div>
-      <div className="page__body">
-        <div className="guest-mgmt__layout">
-          <div className="guest-mgmt__main">
-            <div
-              className="flex gap-2"
-              style={{ marginBottom: 'var(--space-4)' }}
-            >
-              <input
-                className="input"
-                placeholder="Search guests..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{ flex: 1 }}
-              />
-              <button
-                className="btn btn--secondary"
-                onClick={() => setShowBulkModal(true)}
-              >
-                Bulk Import
-              </button>
-            </div>
-
-            <form
-              className="guest-add-row"
-              onSubmit={handleAddGuest}
-              style={{ marginBottom: 'var(--space-4)' }}
-            >
-              <input
-                className="input"
-                placeholder="Add a guest by name..."
-                value={newGuestName}
-                onChange={(e) => setNewGuestName(e.target.value)}
-                style={{ flex: 1 }}
-              />
-              <button
-                type="submit"
-                className="btn btn--primary"
-                disabled={createGuest.isPending}
-              >
-                {createGuest.isPending ? <Spinner size={18} /> : 'Add'}
-              </button>
-            </form>
-
-            <div className="guest-list">
-              {filteredGuests.length === 0 ? (
-                <p
-                  className="text-muted"
-                  style={{ textAlign: 'center', padding: 'var(--space-4)' }}
-                >
-                  {search
-                    ? 'No guests match your search.'
-                    : 'No guests yet. Add one above.'}
-                </p>
-              ) : (
-                filteredGuests.map((guest) => (
-                  <div
-                    key={guest.id}
-                    className="guest-row"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 'var(--space-2)',
-                      padding: 'var(--space-2) 0',
-                      borderBottom: '1px solid var(--border)',
-                    }}
-                  >
-                    {editingId === guest.id ? (
-                      <>
-                        <input
-                          className="input"
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          style={{ flex: 1 }}
-                        />
-                        <select
-                          className="input"
-                          value={editTableId ?? ''}
-                          onChange={(e) =>
-                            setEditTableId(e.target.value || null)
-                          }
-                          style={{ width: 140 }}
-                        >
-                          <option value="">No table</option>
-                          {tables?.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name} (#{t.number})
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          className="btn btn--primary btn--sm"
-                          onClick={() => handleSaveEdit(guest.id)}
-                          disabled={updateGuest.isPending}
-                        >
-                          Save
-                        </button>
-                        <button
-                          className="btn btn--ghost btn--sm"
-                          onClick={() => setEditingId(null)}
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <span style={{ flex: 1 }}>{guest.name}</span>
-                        {guest.table ? (
-                          <span
-                            className="badge"
-                            style={{
-                              background: 'var(--primary)',
-                              color: '#fff',
-                            }}
-                          >
-                            {guest.table.name} #{guest.table.number}
-                          </span>
-                        ) : (
-                          <span
-                            className="text-muted"
-                            style={{ fontSize: '0.875rem' }}
-                          >
-                            Unassigned
-                          </span>
-                        )}
-                        <button
-                          className="btn btn--ghost btn--sm"
-                          onClick={() => startEdit(guest)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="btn btn--ghost btn--sm"
-                          onClick={() => setDeleteTarget(guest)}
-                          style={{ color: 'var(--error)' }}
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="guest-mgmt__sidebar">
-            <div className="card" style={{ padding: 'var(--space-4)' }}>
-              <div
-                className="flex"
-                style={{
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: 'var(--space-3)',
-                }}
-              >
-                <h3>Tables</h3>
-                <button
-                  className="btn btn--secondary btn--sm"
-                  onClick={() => setShowTableModal(true)}
-                >
-                  + Add
-                </button>
-              </div>
-              {tables && tables.length === 0 ? (
-                <p className="text-muted" style={{ fontSize: '0.875rem' }}>
-                  No tables yet.
-                </p>
-              ) : (
-                <div>
-                  {tables?.map((t) => {
-                    const count =
-                      guests?.filter((g) => g.table_id === t.id).length ?? 0;
-                    return (
-                      <div
-                        key={t.id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: 'var(--space-2) 0',
-                          borderBottom: '1px solid var(--border)',
-                        }}
-                      >
-                        <div>
-                          <span style={{ fontWeight: 500 }}>{t.name}</span>
-                          <span
-                            className="text-muted"
-                            style={{
-                              fontSize: '0.875rem',
-                              marginLeft: 'var(--space-1)',
-                            }}
-                          >
-                            #{t.number} · {count}/{t.capacity}
-                          </span>
-                        </div>
-                        <button
-                          className="btn btn--ghost btn--sm"
-                          onClick={() => setDeleteTableTarget(t)}
-                          style={{ color: 'var(--error)' }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <button
+          className="btn btn--secondary"
+          onClick={() => setShowBulkImport((prev) => !prev)}
+        >
+          {showBulkImport ? 'Cancel import' : 'Bulk import'}
+        </button>
       </div>
 
-      {showBulkModal && (
-        <div className="modal-overlay" onClick={() => setShowBulkModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ marginBottom: 'var(--space-3)' }}>
-              Bulk Import Guests
-            </h2>
-            <p
-              className="text-secondary"
-              style={{ marginBottom: 'var(--space-3)' }}
-            >
-              Enter one guest name per line.
-            </p>
-            <form onSubmit={handleBulkImport}>
-              <textarea
-                className="input w-full"
-                rows={10}
-                value={bulkText}
-                onChange={(e) => setBulkText(e.target.value)}
-                placeholder={'Alice Smith\nBob Jones\nCarol White'}
-                style={{
-                  marginBottom: 'var(--space-4)',
-                  resize: 'vertical',
-                  fontFamily: 'inherit',
-                }}
-              />
-              <div
-                className="flex gap-3"
-                style={{ justifyContent: 'flex-end' }}
-              >
-                <button
-                  type="button"
-                  className="btn btn--secondary"
-                  onClick={() => setShowBulkModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn--primary"
-                  disabled={bulkCreateGuests.isPending}
-                >
-                  {bulkCreateGuests.isPending ? (
-                    <Spinner size={18} />
-                  ) : (
-                    'Import Guests'
-                  )}
-                </button>
-              </div>
-            </form>
+      {showBulkImport && (
+        <form
+          className="card"
+          onSubmit={handleBulkImport}
+          style={{ marginBottom: 'var(--space-5)' }}
+        >
+          <div className="form-field">
+            <label className="form-field__label" htmlFor="bulk-text">
+              Paste guest names (one per line)
+            </label>
+            <textarea
+              id="bulk-text"
+              className="input"
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+              rows={6}
+              placeholder={'Alice Smith\nBob Jones\nCarol White'}
+            />
           </div>
-        </div>
+          <button
+            className="btn btn--primary"
+            type="submit"
+            disabled={bulkCreateGuests.isPending}
+          >
+            {bulkCreateGuests.isPending ? 'Importing…' : 'Import guests'}
+          </button>
+        </form>
       )}
 
-      {showTableModal && (
-        <div className="modal-overlay" onClick={() => setShowTableModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ marginBottom: 'var(--space-4)' }}>Add Table</h2>
+      <div className="guest-mgmt__layout">
+        <div className="guest-mgmt__main">
+          <form className="guest-add-row" onSubmit={handleAddGuest}>
+            <input
+              className="input"
+              type="text"
+              value={newGuestName}
+              onChange={(e) => setNewGuestName(e.target.value)}
+              placeholder="Guest name"
+            />
+            <select
+              className="input"
+              value={newGuestTable}
+              onChange={(e) => setNewGuestTable(e.target.value)}
+            >
+              <option value="">Unassigned</option>
+              {tables?.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} (#{t.number})
+                </option>
+              ))}
+            </select>
+            <button
+              className="btn btn--primary"
+              type="submit"
+              disabled={createGuest.isPending}
+            >
+              Add
+            </button>
+          </form>
+
+          <div className="guest-list">
+            {guests?.map((guest) => (
+              <div key={guest.id} className="guest-row">
+                {editingId === guest.id ? (
+                  <>
+                    <input
+                      className="input guest-row__edit-name"
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                    />
+                    <select
+                      className="input guest-row__edit-table"
+                      value={editTable}
+                      onChange={(e) => setEditTable(e.target.value)}
+                    >
+                      <option value="">Unassigned</option>
+                      {tables?.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} (#{t.number})
+                        </option>
+                      ))}
+                    </select>
+                    <div className="guest-row__actions">
+                      <button
+                        className="btn btn--primary btn--sm"
+                        onClick={() => handleSaveEdit(guest.id)}
+                        disabled={updateGuest.isPending}
+                      >
+                        Save
+                      </button>
+                      <button
+                        className="btn btn--ghost btn--sm"
+                        onClick={() => setEditingId(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="guest-row__name">{guest.name}</span>
+                    {guest.table ? (
+                      <span className="badge">
+                        {guest.table.name} (#{guest.table.number})
+                      </span>
+                    ) : (
+                      <span className="guest-row__unassigned">Unassigned</span>
+                    )}
+                    <div className="guest-row__actions">
+                      <button
+                        className="btn btn--ghost btn--sm"
+                        onClick={() => startEdit(guest)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn--ghost btn--sm guest-row__delete"
+                        onClick={() => handleDeleteGuest(guest.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+            {guests && guests.length === 0 && (
+              <p className="text-secondary">No guests yet. Add one above.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="guest-mgmt__sidebar">
+          <div className="card">
+            <h2 style={{ marginBottom: 'var(--space-3)' }}>Tables</h2>
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleCreateTable(e);
+              onSubmit={handleAddTable}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--space-2)',
+                marginBottom: 'var(--space-4)',
               }}
             >
-              <div
-                className="form-field"
-                style={{ marginBottom: 'var(--space-3)' }}
+              <input
+                className="input"
+                type="text"
+                value={newTableName}
+                onChange={(e) => setNewTableName(e.target.value)}
+                placeholder="Table name"
+              />
+              <input
+                className="input"
+                type="number"
+                value={newTableNumber}
+                onChange={(e) => setNewTableNumber(e.target.value)}
+                placeholder="Table number"
+                min={1}
+              />
+              <input
+                className="input"
+                type="number"
+                value={newTableCapacity}
+                onChange={(e) => setNewTableCapacity(e.target.value)}
+                placeholder="Capacity (optional)"
+                min={1}
+              />
+              <button
+                className="btn btn--primary"
+                type="submit"
+                disabled={createTable.isPending}
               >
-                <label className="form-field__label">Table Name</label>
-                <input
-                  className="input w-full"
-                  value={tableName}
-                  onChange={(e) => setTableName(e.target.value)}
-                  placeholder="Head Table"
-                  autoFocus
-                />
-              </div>
-              <div className="form-row">
-                <div
-                  className="form-field"
-                  style={{ marginBottom: 'var(--space-3)' }}
-                >
-                  <label className="form-field__label">Number</label>
-                  <input
-                    type="number"
-                    className="input w-full"
-                    value={tableNumber}
-                    onChange={(e) => setTableNumber(e.target.value)}
-                    min={1}
-                  />
-                </div>
-                <div
-                  className="form-field"
-                  style={{ marginBottom: 'var(--space-4)' }}
-                >
-                  <label className="form-field__label">Capacity</label>
-                  <input
-                    type="number"
-                    className="input w-full"
-                    value={tableCapacity}
-                    onChange={(e) => setTableCapacity(e.target.value)}
-                    min={1}
-                  />
-                </div>
-              </div>
-              <div
-                className="flex gap-3"
-                style={{ justifyContent: 'flex-end' }}
-              >
-                <button
-                  type="button"
-                  className="btn btn--secondary"
-                  onClick={() => setShowTableModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn--primary"
-                  disabled={createTable.isPending}
-                >
-                  {createTable.isPending ? <Spinner size={18} /> : 'Add Table'}
-                </button>
-              </div>
+                Add table
+              </button>
             </form>
+
+            <div className="table-list">
+              {tables?.map((table) => (
+                <div key={table.id} className="table-row">
+                  <div className="table-row__info">
+                    <span className="table-row__name">{table.name}</span>
+                    <span className="table-row__meta">
+                      #{table.number} · {guestCountForTable(table.id)} guest
+                      {guestCountForTable(table.id) === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <button
+                    className="btn btn--ghost btn--sm table-row__delete"
+                    onClick={() => setDeleteTableId(table.id)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+              {tables && tables.length === 0 && (
+                <p className="text-secondary">No tables yet.</p>
+              )}
+            </div>
           </div>
         </div>
-      )}
+      </div>
 
-      {deleteTarget && (
+      {deleteTableId && (
         <ConfirmDialog
-          title="Remove Guest"
-          message={`Are you sure you want to remove ${deleteTarget.name}?`}
-          confirmLabel="Remove"
-          onConfirm={handleDeleteGuest}
-          onCancel={() => setDeleteTarget(null)}
-        />
-      )}
-
-      {deleteTableTarget && (
-        <ConfirmDialog
-          title="Delete Table"
-          message={`Delete ${deleteTableTarget.name} (#${deleteTableTarget.number})? Guests at this table will become unassigned.`}
+          title="Delete table"
+          message="Guests assigned to this table will become unassigned. Continue?"
           confirmLabel="Delete"
-          onConfirm={handleDeleteTable}
-          onCancel={() => setDeleteTableTarget(null)}
+          cancelLabel="Cancel"
+          onConfirm={confirmDeleteTable}
+          onCancel={() => setDeleteTableId(null)}
         />
       )}
     </div>

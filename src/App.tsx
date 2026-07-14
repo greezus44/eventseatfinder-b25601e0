@@ -1,17 +1,16 @@
-import { RouterProvider } from 'react-router-dom';
-import { router } from '@/routes/router';
+import { Router } from '@/routes/router';
 import { AuthProvider } from '@/providers/auth-provider';
 import { QueryProvider } from '@/providers/query-provider';
 import { ToastProvider } from '@/providers/toast-provider';
 
-export function App() {
+export default function App() {
   return (
-    <AuthProvider>
-      <QueryProvider>
+    <QueryProvider>
+      <AuthProvider>
         <ToastProvider>
-          <RouterProvider router={router} />
+          <Router />
         </ToastProvider>
-      </QueryProvider>
-    </AuthProvider>
+      </AuthProvider>
+    </QueryProvider>
   );
 }

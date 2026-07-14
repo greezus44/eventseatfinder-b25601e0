@@ -1,7 +1,8 @@
 interface ConfirmDialogProps {
   title: string;
   message: string;
-  confirmLabel: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -9,7 +10,8 @@ interface ConfirmDialogProps {
 export function ConfirmDialog({
   title,
   message,
-  confirmLabel,
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -19,24 +21,21 @@ export function ConfirmDialog({
         <h2 style={{ marginBottom: 'var(--space-3)' }}>{title}</h2>
         <p
           className="text-secondary"
-          style={{ marginBottom: 'var(--space-5)' }}
+          style={{ marginBottom: 'var(--space-6)' }}
         >
           {message}
         </p>
-        <div className="flex gap-3" style={{ justifyContent: 'flex-end' }}>
-          <button
-            type="button"
-            className="btn btn--secondary"
-            onClick={onCancel}
-          >
-            Cancel
+        <div
+          style={{
+            display: 'flex',
+            gap: 'var(--space-3)',
+            justifyContent: 'flex-end',
+          }}
+        >
+          <button className="btn btn--secondary" onClick={onCancel}>
+            {cancelLabel}
           </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={onConfirm}
-            style={{ background: 'var(--error)' }}
-          >
+          <button className="btn btn--primary" onClick={onConfirm}>
             {confirmLabel}
           </button>
         </div>

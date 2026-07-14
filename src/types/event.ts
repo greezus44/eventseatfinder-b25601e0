@@ -16,6 +16,7 @@ export interface Event {
 
 export interface EventInput {
   name: string;
+  slug: string;
   date?: string | null;
   time?: string | null;
   venue?: string | null;

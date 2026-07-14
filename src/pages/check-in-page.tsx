@@ -3,172 +3,167 @@ import { Link, useParams } from 'react-router-dom';
 import { useEvent } from '@/hooks/use-events';
 import { useGuests } from '@/hooks/use-guests';
 import { useRSVPs } from '@/hooks/use-rsvps';
+import { useCheckIns } from '@/hooks/use-check-ins';
 import {
-  useCheckIns,
   useToggleCheckIn,
   useUpdateCheckInPlusOnes,
 } from '@/hooks/use-check-ins';
 import { useToast } from '@/providers/toast-provider';
 import { LoadingScreen, ErrorScreen } from '@/components/ui/feedback';
-import type { GuestWithTable } from '@/types/guest';
+import type { CheckIn } from '@/types/check-in';
+import type { RSVP } from '@/types/rsvp';
+
+type FilterTab = 'all' | 'checked-in' | 'pending';
+
+function formatTime(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function rsvpBadgeClass(status: RSVP['status']): string {
+  return `checkin__rsvp-badge checkin__rsvp-badge--${status}`;
+}
+
+function rsvpLabel(status: RSVP['status']): string {
+  switch (status) {
+    case 'attending':
+      return 'Attending';
+    case 'not_attending':
+      return 'Not Attending';
+    case 'maybe':
+      return 'Maybe';
+    default:
+      return status;
+  }
+}
 
 export function CheckInPage() {
   const { eventId } = useParams<{ eventId: string }>();
-  const { data: event, isLoading: eventLoading } = useEvent(eventId ?? '');
-  const { data: guests, isLoading: guestsLoading } = useGuests(eventId ?? '');
-  const { data: rsvps, isLoading: rsvpsLoading } = useRSVPs(eventId ?? '');
-  const { data: checkIns, isLoading: checkInsLoading } = useCheckIns(
-    eventId ?? '',
-  );
-  const toggleCheckIn = useToggleCheckIn(eventId ?? '');
-  const updatePlusOnes = useUpdateCheckInPlusOnes(eventId ?? '');
+  const id = eventId ?? '';
+
+  const { data: event, isLoading } = useEvent(id);
+  const { data: guests } = useGuests(id);
+  const { data: rsvps } = useRSVPs(id);
+  const { data: checkIns } = useCheckIns(id);
+  const toggleCheckIn = useToggleCheckIn(id);
+  const updatePlusOnes = useUpdateCheckInPlusOnes(id);
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'checked-in' | 'pending'>('all');
+  const [filter, setFilter] = useState<FilterTab>('all');
 
-  const checkInMap = useMemo(() => {
-    const map = new Map<
-      string,
-      { checked_in_at: string; plus_ones_actual: number }
-    >();
+  const checkInByGuest = useMemo(() => {
+    const map = new Map<string, CheckIn>();
     for (const c of checkIns ?? []) {
-      map.set(c.guest_id, {
-        checked_in_at: c.checked_in_at,
-        plus_ones_actual: c.plus_ones_actual,
-      });
+      map.set(c.guest_id, c);
     }
     return map;
   }, [checkIns]);
 
-  const rsvpMap = useMemo(() => {
-    const map = new Map<string, string>();
+  const rsvpByGuest = useMemo(() => {
+    const map = new Map<string, RSVP>();
     for (const r of rsvps ?? []) {
-      map.set(r.guest_id, r.status);
+      map.set(r.guest_id, r);
     }
     return map;
   }, [rsvps]);
 
-  const stats = useMemo(() => {
-    const total = guests?.length ?? 0;
-    const checkedIn = checkIns?.length ?? 0;
-    const pending = total - checkedIn;
-    const totalPlusOnesActual =
-      checkIns?.reduce((sum, c) => sum + c.plus_ones_actual, 0) ?? 0;
-    const totalExpected =
-      (rsvps ?? [])
-        .filter((r) => r.status === 'attending')
-        .reduce((sum, r) => sum + 1 + r.plus_ones, 0) ?? 0;
-    return {
-      total,
-      checkedIn,
-      pending,
-      totalPlusOnesActual,
-      totalExpected,
-      percentage: total > 0 ? Math.round((checkedIn / total) * 100) : 0,
-    };
-  }, [guests, checkIns, rsvps]);
+  if (isLoading) return <LoadingScreen label="Loading check-in…" />;
 
-  const filteredGuests = useMemo(() => {
-    let result = guests ?? [];
-    if (filter === 'checked-in') {
-      result = result.filter((g) => checkInMap.has(g.id));
-    } else if (filter === 'pending') {
-      result = result.filter((g) => !checkInMap.has(g.id));
-    }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      result = result.filter((g) => g.name.toLowerCase().includes(q));
-    }
-    return result;
-  }, [guests, filter, search, checkInMap]);
+  if (!event) {
+    return (
+      <div className="page">
+        <ErrorScreen message="Event not found" />
+        <Link to="/" className="btn btn--secondary btn--sm">
+          Back to dashboard
+        </Link>
+      </div>
+    );
+  }
 
-  if (eventLoading || guestsLoading || rsvpsLoading || checkInsLoading)
-    return <LoadingScreen message="Loading check-in…" />;
-  if (!event) return <ErrorScreen message="Event not found." />;
+  const guestList = guests ?? [];
+  const checkedInCount = (checkIns ?? []).length;
+  const pendingCount = guestList.length - checkedInCount;
+  const completionPct =
+    guestList.length > 0
+      ? Math.round((checkedInCount / guestList.length) * 100)
+      : 0;
 
-  const handleToggle = (guest: GuestWithTable) => {
-    const isCheckedIn = checkInMap.has(guest.id);
-    const expectedPlusOnes =
-      rsvps?.find((r) => r.guest_id === guest.id)?.plus_ones ?? 0;
+  const plusOnesActualTotal = (checkIns ?? []).reduce(
+    (sum, c) => sum + (c.plus_ones_actual ?? 0),
+    0,
+  );
+  const attendingCount = (rsvps ?? []).filter(
+    (r) => r.status === 'attending',
+  ).length;
+  const plusOnesExpected = (rsvps ?? []).reduce(
+    (sum, r) => sum + r.plus_ones,
+    0,
+  );
+  const expectedAttendees = attendingCount + plusOnesExpected;
 
+  const filteredGuests = guestList.filter((g) => {
+    const isMatch = g.name.toLowerCase().includes(search.toLowerCase());
+    if (!isMatch) return false;
+    const isCheckedIn = checkInByGuest.has(g.id);
+    if (filter === 'checked-in') return isCheckedIn;
+    if (filter === 'pending') return !isCheckedIn;
+    return true;
+  });
+
+  function handleToggle(guestId: string, isCheckedIn: boolean) {
     toggleCheckIn.mutate(
+      { guest_id: guestId, check_in: !isCheckedIn },
       {
-        guest_id: guest.id,
-        check_in: !isCheckedIn,
-        plus_ones_actual: isCheckedIn ? 0 : expectedPlusOnes,
-      },
-      {
-        onSuccess: () => {
-          toast(
-            !isCheckedIn
-              ? `${guest.name} checked in`
-              : `${guest.name} checked out`,
-            'success',
-          );
-        },
-        onError: () => toast('Failed to toggle check-in', 'error'),
+        onError: () => toast('Could not update check-in', 'error'),
       },
     );
-  };
+  }
 
-  const handlePlusOnesChange = (guestId: string, value: number) => {
+  function handlePlusOnesChange(guestId: string, value: number) {
     updatePlusOnes.mutate(
       { guest_id: guestId, plus_ones_actual: value },
       {
-        onError: () => toast('Failed to update plus ones', 'error'),
+        onError: () => toast('Could not update plus ones', 'error'),
       },
     );
-  };
+  }
 
   return (
     <div className="page">
       <div className="page__header">
         <div>
-          <Link
-            to={`/events/${eventId}`}
-            className="text-secondary"
-            style={{ fontSize: '0.875rem' }}
-          >
-            ← Event settings
-          </Link>
-          <h1 style={{ marginTop: 'var(--space-2)' }}>Guest Check-in</h1>
+          <h1>Check-in</h1>
           <p className="text-secondary">{event.name}</p>
         </div>
-        <div className="flex gap-3">
-          <Link
-            to={`/events/${eventId}/overview`}
-            className="btn btn--secondary"
-          >
-            Overview
-          </Link>
-          <Link to={`/events/${eventId}/guests`} className="btn btn--secondary">
-            Guests
-          </Link>
-        </div>
+        <Link to={`/events/${id}/overview`} className="btn btn--ghost btn--sm">
+          ← Back to overview
+        </Link>
       </div>
 
       <div className="checkin__stats">
-        <div className="checkin__stat">
-          <div className="checkin__stat__value">{stats.checkedIn}</div>
+        <div className="checkin__stat checkin__stat--success">
+          <div className="checkin__stat__value">{checkedInCount}</div>
           <div className="checkin__stat__label">Checked In</div>
         </div>
         <div className="checkin__stat checkin__stat--warning">
-          <div className="checkin__stat__value">{stats.pending}</div>
+          <div className="checkin__stat__value">{pendingCount}</div>
           <div className="checkin__stat__label">Pending</div>
         </div>
         <div className="checkin__stat">
-          <div className="checkin__stat__value">{stats.percentage}%</div>
-          <div className="checkin__stat__label">Completion</div>
-        </div>
-        <div className="checkin__stat checkin__stat--success">
-          <div className="checkin__stat__value">
-            {stats.totalPlusOnesActual}
-          </div>
-          <div className="checkin__stat__label">Plus Ones (Actual)</div>
+          <div className="checkin__stat__value">{completionPct}%</div>
+          <div className="checkin__stat__label">Complete</div>
         </div>
         <div className="checkin__stat">
-          <div className="checkin__stat__value">{stats.totalExpected}</div>
+          <div className="checkin__stat__value">{plusOnesActualTotal}</div>
+          <div className="checkin__stat__label">Plus Ones (actual)</div>
+        </div>
+        <div className="checkin__stat">
+          <div className="checkin__stat__value">{expectedAttendees}</div>
           <div className="checkin__stat__label">Expected Attendees</div>
         </div>
       </div>
@@ -176,140 +171,114 @@ export function CheckInPage() {
       <div className="checkin__progress-bar">
         <div
           className="checkin__progress-fill"
-          style={{ width: `${stats.percentage}%` }}
+          style={{ width: `${completionPct}%` }}
         />
       </div>
 
       <div className="checkin__controls">
         <input
-          type="text"
           className="input checkin__search"
-          placeholder="Search guests…"
+          type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          autoFocus
+          placeholder="Search guests…"
         />
         <div className="checkin__filters">
           <button
-            className={`btn btn--sm ${
-              filter === 'all' ? 'btn--primary' : 'btn--secondary'
-            }`}
+            className={`btn btn--sm ${filter === 'all' ? 'btn--primary' : 'btn--secondary'}`}
             onClick={() => setFilter('all')}
           >
-            All ({stats.total})
+            All
           </button>
           <button
-            className={`btn btn--sm ${
-              filter === 'checked-in' ? 'btn--primary' : 'btn--secondary'
-            }`}
+            className={`btn btn--sm ${filter === 'checked-in' ? 'btn--primary' : 'btn--secondary'}`}
             onClick={() => setFilter('checked-in')}
           >
-            Checked In ({stats.checkedIn})
+            Checked In
           </button>
           <button
-            className={`btn btn--sm ${
-              filter === 'pending' ? 'btn--primary' : 'btn--secondary'
-            }`}
+            className={`btn btn--sm ${filter === 'pending' ? 'btn--primary' : 'btn--secondary'}`}
             onClick={() => setFilter('pending')}
           >
-            Pending ({stats.pending})
+            Pending
           </button>
         </div>
       </div>
 
-      <div className="card checkin__list-card">
+      <div className="checkin__list-card card">
         {filteredGuests.length === 0 ? (
-          <div className="checkin__empty">
-            {search.trim()
-              ? 'No guests match your search.'
-              : filter === 'checked-in'
-                ? 'No guests have checked in yet.'
-                : filter === 'pending'
-                  ? 'All guests have checked in!'
-                  : 'No guests have been added to this event yet.'}
-          </div>
+          <p className="checkin__empty text-secondary">
+            {guestList.length === 0
+              ? 'No guests yet.'
+              : 'No guests match your search.'}
+          </p>
         ) : (
           <div className="checkin__list">
-            {filteredGuests.map((guest) => {
-              const checkIn = checkInMap.get(guest.id);
+            {filteredGuests.map((g) => {
+              const checkIn = checkInByGuest.get(g.id);
               const isCheckedIn = !!checkIn;
-              const rsvp = rsvpMap.get(guest.id);
-
+              const rsvp = rsvpByGuest.get(g.id);
+              const rowClass = isCheckedIn ? 'checkin__row--checked' : '';
+              const toggleClass = isCheckedIn
+                ? 'checkin__toggle--checked'
+                : 'checkin__toggle--unchecked';
               return (
-                <div
-                  key={guest.id}
-                  className={`checkin__row ${
-                    isCheckedIn ? 'checkin__row--checked' : ''
-                  }`}
-                >
+                <div key={g.id} className={`checkin__row ${rowClass}`.trim()}>
                   <button
-                    className={`checkin__toggle ${
-                      isCheckedIn
-                        ? 'checkin__toggle--checked'
-                        : 'checkin__toggle--unchecked'
-                    }`}
-                    onClick={() => handleToggle(guest)}
+                    className={`checkin__toggle ${toggleClass}`.trim()}
+                    onClick={() => handleToggle(g.id, isCheckedIn)}
                     disabled={toggleCheckIn.isPending}
-                    aria-label={isCheckedIn ? 'Check out' : 'Check in'}
+                    aria-label={
+                      isCheckedIn ? 'Undo check-in' : 'Check in guest'
+                    }
                   >
                     {isCheckedIn ? '✓' : ''}
                   </button>
                   <div className="checkin__guest-info">
-                    <span className="checkin__guest-name">{guest.name}</span>
+                    <div className="checkin__guest-name">{g.name}</div>
                     <div className="checkin__guest-meta">
-                      {guest.table && (
-                        <span className="checkin__table-badge">
-                          Table {guest.table.number}
+                      {g.table ? (
+                        <span className="badge checkin__table-badge">
+                          {g.table.name} (#{g.table.number})
                         </span>
-                      )}
-                      {!guest.table && (
-                        <span className="checkin__table-badge checkin__table-badge--unassigned">
+                      ) : (
+                        <span className="badge checkin__table-badge--unassigned">
                           Unassigned
                         </span>
                       )}
-                      {rsvp && (
-                        <span
-                          className={`checkin__rsvp-badge checkin__rsvp-badge--${rsvp}`}
-                        >
-                          {rsvp === 'attending'
-                            ? 'Attending'
-                            : rsvp === 'not_attending'
-                              ? 'Declined'
-                              : 'Maybe'}
+                      {rsvp ? (
+                        <span className={rsvpBadgeClass(rsvp.status)}>
+                          {rsvpLabel(rsvp.status)}
                         </span>
-                      )}
-                      {!rsvp && (
+                      ) : (
                         <span className="checkin__rsvp-badge checkin__rsvp-badge--pending">
-                          No RSVP
+                          Pending
                         </span>
                       )}
                     </div>
                   </div>
-                  {isCheckedIn && (
-                    <div className="checkin__plus-ones">
-                      <label className="checkin__plus-ones-label">+1s</label>
-                      <input
-                        type="number"
-                        className="input checkin__plus-ones-input"
-                        value={checkIn?.plus_ones_actual ?? 0}
-                        min={0}
-                        max={10}
-                        onChange={(e) =>
-                          handlePlusOnesChange(
-                            guest.id,
-                            parseInt(e.target.value, 10) || 0,
-                          )
-                        }
-                      />
-                    </div>
-                  )}
                   {isCheckedIn && checkIn && (
-                    <span className="checkin__time">
-                      {new Date(checkIn.checked_in_at).toLocaleTimeString(
-                        'en-US',
-                        { hour: 'numeric', minute: '2-digit' },
-                      )}
-                    </span>
+                    <>
+                      <div className="checkin__plus-ones">
+                        <label className="checkin__plus-ones-label">+1s</label>
+                        <input
+                          className="input checkin__plus-ones-input"
+                          type="number"
+                          min={0}
+                          value={checkIn.plus_ones_actual ?? 0}
+                          onChange={(e) =>
+                            handlePlusOnesChange(
+                              g.id,
+                              Math.max(0, Number(e.target.value)),
+                            )
+                          }
+                          disabled={updatePlusOnes.isPending}
+                        />
+                      </div>
+                      <div className="checkin__time">
+                        {formatTime(checkIn.checked_in_at)}
+                      </div>
+                    </>
                   )}
                 </div>
               );

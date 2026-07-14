@@ -2,34 +2,26 @@ export function Spinner({ size = 24 }: { size?: number }) {
   return (
     <span
       className="spinner"
-      style={{
-        width: size,
-        height: size,
-        borderWidth: Math.max(2, Math.floor(size / 10)),
-      }}
+      style={{ width: size, height: size, borderWidth: 2 }}
     />
   );
 }
 
-export function LoadingScreen({ message }: { message?: string }) {
+export function LoadingScreen({ label = 'Loading...' }: { label?: string }) {
   return (
     <div className="loading-screen">
       <Spinner size={32} />
-      {message && <p className="text-secondary">{message}</p>}
+      <p className="text-secondary">{label}</p>
     </div>
   );
 }
 
-export function ErrorScreen({ message }: { message: string }) {
+export function ErrorScreen({ message }: { message?: string }) {
   return (
     <div className="loading-screen">
-      <div
-        className="card"
-        style={{ padding: 'var(--space-8)', textAlign: 'center' }}
-      >
-        <h2 style={{ marginBottom: 'var(--space-2)' }}>Something went wrong</h2>
-        <p className="text-secondary">{message}</p>
-      </div>
+      <p style={{ color: 'var(--error)', fontWeight: 500 }}>
+        {message ?? 'Something went wrong'}
+      </p>
     </div>
   );
 }

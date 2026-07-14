@@ -1,408 +1,270 @@
-import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useEvent } from '@/hooks/use-events';
 import { useGuests } from '@/hooks/use-guests';
 import { useTables } from '@/hooks/use-tables';
 import { useRSVPs } from '@/hooks/use-rsvps';
+import { useCheckIns } from '@/hooks/use-check-ins';
 import { LoadingScreen, ErrorScreen } from '@/components/ui/feedback';
-import type { Table } from '@/types/table';
 import type { GuestWithTable } from '@/types/guest';
+
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return 'Date TBD';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 export function EventOverviewPage() {
   const { eventId } = useParams<{ eventId: string }>();
-  const eid = eventId ?? '';
+  const id = eventId ?? '';
 
-  const { data: event, isLoading, error } = useEvent(eid);
-  const { data: guests } = useGuests(eid);
-  const { data: tables } = useTables(eid);
-  const { data: rsvps } = useRSVPs(eid);
+  const { data: event, isLoading } = useEvent(id);
+  const { data: guests } = useGuests(id);
+  const { data: tables } = useTables(id);
+  const { data: rsvps } = useRSVPs(id);
+  const { data: checkIns } = useCheckIns(id);
 
-  const stats = useMemo(() => {
-    const totalGuests = guests?.length ?? 0;
-    const totalTables = tables?.length ?? 0;
-    const attending =
-      rsvps?.filter((r) => r.status === 'attending').length ?? 0;
-    const declined =
-      rsvps?.filter((r) => r.status === 'not_attending').length ?? 0;
-    const pending = totalGuests - attending - declined;
-    const unassigned = guests?.filter((g) => !g.table_id).length ?? 0;
-    return {
-      totalGuests,
-      totalTables,
-      attending,
-      declined,
-      pending,
-      unassigned,
-    };
-  }, [guests, tables, rsvps]);
+  if (isLoading) return <LoadingScreen label="Loading overview…" />;
 
+  if (!event) {
+    return (
+      <div className="page">
+        <ErrorScreen message="Event not found" />
+        <Link to="/" className="btn btn--secondary btn--sm">
+          Back to dashboard
+        </Link>
+      </div>
+    );
+  }
+
+  const guestList = guests ?? [];
+  const tableList = tables ?? [];
+  const rsvpList = rsvps ?? [];
+  const checkInList = checkIns ?? [];
+
+  const totalGuests = guestList.length;
+  const totalTables = tableList.length;
+  const totalCapacity = tableList.reduce((sum, t) => sum + t.capacity, 0);
+  const attendingCount = rsvpList.filter(
+    (r) => r.status === 'attending',
+  ).length;
+  const checkedInCount = checkInList.length;
+  const respondedCount = rsvpList.length;
+  const pendingCount = totalGuests - respondedCount;
+
+  const assignedGuests = guestList.filter((g) => g.table_id !== null).length;
   const seatingPct =
-    stats.totalGuests > 0
-      ? Math.round(
-          ((stats.totalGuests - stats.unassigned) / stats.totalGuests) * 100,
-        )
-      : 0;
+    totalGuests > 0 ? Math.round((assignedGuests / totalGuests) * 100) : 0;
+  const rsvpPct =
+    totalGuests > 0 ? Math.round((respondedCount / totalGuests) * 100) : 0;
+  const checkInPct =
+    totalGuests > 0 ? Math.round((checkedInCount / totalGuests) * 100) : 0;
 
-  const rsvpResponsePct =
-    stats.totalGuests > 0
-      ? Math.round(
-          ((stats.attending + stats.declined) / stats.totalGuests) * 100,
-        )
-      : 0;
+  const guestsByTable = new Map<string, GuestWithTable[]>();
+  for (const g of guestList) {
+    if (!g.table_id) continue;
+    const arr = guestsByTable.get(g.table_id) ?? [];
+    arr.push(g);
+    guestsByTable.set(g.table_id, arr);
+  }
 
-  const totalCapacity = tables?.reduce((sum, t) => sum + t.capacity, 0) ?? 0;
-  const capacityPct =
-    totalCapacity > 0 ? Math.round((stats.attending / totalCapacity) * 100) : 0;
-
-  if (isLoading) return <LoadingScreen message="Loading overview..." />;
-  if (error) return <ErrorScreen message="Failed to load overview." />;
-  if (!event) return <ErrorScreen message="Event not found." />;
-
-  const barColor = (pct: number) => {
-    if (pct >= 90) return 'var(--error, #dc2626)';
-    if (pct >= 75) return 'var(--warning, #f59e0b)';
-    return 'var(--success, #16a34a)';
-  };
+  const quickActions = [
+    { label: 'Edit Settings', to: `/events/${id}`, icon: '⚙' },
+    { label: 'Manage Guests', to: `/events/${id}/guests`, icon: '👥' },
+    { label: 'Arrange Seating', to: `/events/${id}/seating`, icon: '🪑' },
+    { label: 'Check-in', to: `/events/${id}/check-in`, icon: '✓' },
+    { label: 'Analytics', to: `/events/${id}/analytics`, icon: '📊' },
+    { label: 'Print Chart', to: `/events/${id}/print`, icon: '🖨' },
+    { label: 'Print Guest List', to: `/events/${id}/print/guests`, icon: '📋' },
+  ];
 
   return (
     <div className="page">
       <div className="page__header">
-        <Link
-          to={`/events/${eid}`}
-          className="text-secondary"
-          style={{
-            fontSize: '0.875rem',
-            marginBottom: 'var(--space-2)',
-            display: 'inline-block',
-          }}
-        >
-          ← Back to Event Settings
+        <div>
+          <h1>Overview</h1>
+          <p className="text-secondary">
+            {event.name} · {formatDate(event.date)}
+            {event.venue ? ` · ${event.venue}` : ''}
+          </p>
+        </div>
+        <Link to="/" className="btn btn--ghost btn--sm">
+          Back
         </Link>
-        <h1>Overview · {event.name}</h1>
       </div>
-      <div className="page__body">
-        <div className="overview__layout">
-          <div className="overview__stats-grid">
-            <div
-              className="overview__stat card"
-              style={{ padding: 'var(--space-4)' }}
-            >
-              <div
-                className="text-muted"
-                style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}
-              >
-                Total Guests
-              </div>
-              <div style={{ fontSize: '2rem', fontWeight: 700 }}>
-                {stats.totalGuests}
-              </div>
-            </div>
-            <div
-              className="overview__stat card"
-              style={{ padding: 'var(--space-4)' }}
-            >
-              <div
-                className="text-muted"
-                style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}
-              >
-                Tables
-              </div>
-              <div style={{ fontSize: '2rem', fontWeight: 700 }}>
-                {stats.totalTables}
-              </div>
-            </div>
-            <div
-              className="overview__stat card"
-              style={{ padding: 'var(--space-4)' }}
-            >
-              <div
-                className="text-muted"
-                style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}
-              >
-                Attending
-              </div>
-              <div
-                style={{
-                  fontSize: '2rem',
-                  fontWeight: 700,
-                  color: 'var(--success, #16a34a)',
-                }}
-              >
-                {stats.attending}
-              </div>
-            </div>
-            <div
-              className="overview__stat card"
-              style={{ padding: 'var(--space-4)' }}
-            >
-              <div
-                className="text-muted"
-                style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}
-              >
-                Declined
-              </div>
-              <div
-                style={{
-                  fontSize: '2rem',
-                  fontWeight: 700,
-                  color: 'var(--error, #dc2626)',
-                }}
-              >
-                {stats.declined}
-              </div>
-            </div>
-            <div
-              className="overview__stat card"
-              style={{ padding: 'var(--space-4)' }}
-            >
-              <div
-                className="text-muted"
-                style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}
-              >
-                Pending RSVP
-              </div>
-              <div style={{ fontSize: '2rem', fontWeight: 700 }}>
-                {stats.pending}
-              </div>
-            </div>
-            <div
-              className="overview__stat card"
-              style={{ padding: 'var(--space-4)' }}
-            >
-              <div
-                className="text-muted"
-                style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}
-              >
-                Unassigned
-              </div>
-              <div
-                style={{
-                  fontSize: '2rem',
-                  fontWeight: 700,
-                  color: 'var(--warning, #f59e0b)',
-                }}
-              >
-                {stats.unassigned}
-              </div>
+
+      <div className="overview__layout">
+        <div className="overview__stats-grid">
+          <div className="overview__stat card">
+            <div className="overview__stat__icon">👥</div>
+            <div className="overview__stat__value">{totalGuests}</div>
+            <div className="overview__stat__label">Total Guests</div>
+            <div className="overview__stat__sublabel">
+              {assignedGuests} seated
             </div>
           </div>
-
-          <div
-            className="overview__progress-card card"
-            style={{ padding: 'var(--space-5)' }}
-          >
-            <h3 style={{ marginBottom: 'var(--space-4)' }}>Progress</h3>
-            <ProgressBar
-              label="Seating"
-              pct={seatingPct}
-              color="var(--primary)"
-            />
-            <ProgressBar
-              label="RSVP Response"
-              pct={rsvpResponsePct}
-              color="var(--primary)"
-            />
-            <ProgressBar
-              label="Capacity Utilization"
-              pct={capacityPct}
-              color={barColor(capacityPct)}
-            />
+          <div className="overview__stat card">
+            <div className="overview__stat__icon">🪑</div>
+            <div className="overview__stat__value">{totalTables}</div>
+            <div className="overview__stat__label">Tables</div>
+            <div className="overview__stat__sublabel">
+              {totalCapacity} capacity
+            </div>
           </div>
+          <div className="overview__stat card">
+            <div className="overview__stat__icon">🏛</div>
+            <div className="overview__stat__value">{totalCapacity}</div>
+            <div className="overview__stat__label">Total Capacity</div>
+            <div className="overview__stat__sublabel">
+              {totalGuests > 0
+                ? totalCapacity >= totalGuests
+                  ? 'Fits all guests'
+                  : `${totalCapacity - totalGuests} short`
+                : '—'}
+            </div>
+          </div>
+          <div className="overview__stat overview__stat--success card">
+            <div className="overview__stat__icon">✓</div>
+            <div className="overview__stat__value">{attendingCount}</div>
+            <div className="overview__stat__label">Attending</div>
+            <div className="overview__stat__sublabel">RSVP confirmed</div>
+          </div>
+          <div className="overview__stat overview__stat--success card">
+            <div className="overview__stat__icon">🎟</div>
+            <div className="overview__stat__value">{checkedInCount}</div>
+            <div className="overview__stat__label">Checked In</div>
+            <div className="overview__stat__sublabel">
+              {totalGuests > 0 ? `${checkInPct}% of guests` : '—'}
+            </div>
+          </div>
+          <div className="overview__stat overview__stat--warning card">
+            <div className="overview__stat__icon">⏳</div>
+            <div className="overview__stat__value">{pendingCount}</div>
+            <div className="overview__stat__label">RSVP Pending</div>
+            <div className="overview__stat__sublabel">
+              {totalGuests > 0 ? `${rsvpPct}% responded` : '—'}
+            </div>
+          </div>
+        </div>
 
-          <div
-            className="overview__tables-card card"
-            style={{ padding: 'var(--space-5)' }}
-          >
-            <h3 style={{ marginBottom: 'var(--space-4)' }}>Table Occupancy</h3>
-            {tables && tables.length === 0 ? (
-              <p className="text-muted">No tables yet.</p>
-            ) : (
-              <div className="overview__tables-grid">
-                {tables?.map((table) => (
-                  <TableOccupancyItem
+        <div className="overview__progress-card card">
+          <h2>Progress</h2>
+          <div className="overview__progress">
+            <div className="overview__progress__header">
+              <span className="overview__progress__label">Seating</span>
+              <span className="overview__progress__value">{seatingPct}%</span>
+            </div>
+            <div className="overview__progress__bar">
+              <div
+                className="overview__progress__fill"
+                style={{ width: `${seatingPct}%` }}
+              />
+            </div>
+            <div className="overview__progress__detail">
+              {assignedGuests} of {totalGuests} guests assigned
+            </div>
+          </div>
+          <div className="overview__progress">
+            <div className="overview__progress__header">
+              <span className="overview__progress__label">RSVP Response</span>
+              <span className="overview__progress__value">{rsvpPct}%</span>
+            </div>
+            <div className="overview__progress__bar">
+              <div
+                className="overview__progress__fill"
+                style={{ width: `${rsvpPct}%` }}
+              />
+            </div>
+            <div className="overview__progress__detail">
+              {respondedCount} of {totalGuests} responded
+            </div>
+          </div>
+          <div className="overview__progress">
+            <div className="overview__progress__header">
+              <span className="overview__progress__label">Check-in</span>
+              <span className="overview__progress__value">{checkInPct}%</span>
+            </div>
+            <div className="overview__progress__bar">
+              <div
+                className="overview__progress__fill"
+                style={{ width: `${checkInPct}%` }}
+              />
+            </div>
+            <div className="overview__progress__detail">
+              {checkedInCount} of {totalGuests} checked in
+            </div>
+          </div>
+        </div>
+
+        <div className="overview__tables-card card">
+          <h2>Table Occupancy</h2>
+          {tableList.length === 0 ? (
+            <p className="text-secondary">No tables yet.</p>
+          ) : (
+            <div className="overview__tables-grid">
+              {tableList.map((table) => {
+                const count = (guestsByTable.get(table.id) ?? []).length;
+                const pct =
+                  table.capacity > 0
+                    ? Math.round((count / table.capacity) * 100)
+                    : 0;
+                const isOver = count > table.capacity;
+                const isFull = count === table.capacity;
+                const itemClass = isOver
+                  ? 'overview__table-item--over'
+                  : isFull
+                    ? 'overview__table-item--full'
+                    : '';
+                return (
+                  <div
                     key={table.id}
-                    table={table}
-                    guests={guests ?? []}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div
-            className="overview__actions-card card"
-            style={{ padding: 'var(--space-5)' }}
-          >
-            <h3 style={{ marginBottom: 'var(--space-4)' }}>Quick Actions</h3>
-            <div className="overview__actions-grid">
-              <Link
-                to={`/events/${eid}/guests`}
-                className="overview__action btn btn--secondary"
-              >
-                Manage Guests
-              </Link>
-              <Link
-                to={`/events/${eid}/seating`}
-                className="overview__action btn btn--secondary"
-              >
-                Seating
-              </Link>
-              <Link
-                to={`/events/${eid}`}
-                className="overview__action btn btn--secondary"
-              >
-                Settings
-              </Link>
-              <Link
-                to={`/e/${event.slug}`}
-                className="overview__action btn btn--secondary"
-              >
-                Find Seat
-              </Link>
-              {event.invitation_enabled && (
-                <Link
-                  to={`/invite/${event.slug}`}
-                  className="overview__action btn btn--secondary"
-                >
-                  Invitation
-                </Link>
-              )}
-              <Link
-                to={`/events/${eid}/check-in`}
-                className="overview__action btn btn--secondary"
-              >
-                Check-in
-              </Link>
+                    className={`overview__table-item ${itemClass}`.trim()}
+                  >
+                    <div className="overview__table-item__header">
+                      <span className="overview__table-item__name">
+                        {table.name}
+                      </span>
+                      <span className="overview__table-item__number">
+                        #{table.number}
+                      </span>
+                    </div>
+                    <div className="overview__table-item__bar">
+                      <div
+                        className="overview__table-item__bar-fill"
+                        style={{ width: `${Math.min(pct, 100)}%` }}
+                      />
+                    </div>
+                    <div className="overview__table-item__count">
+                      {count} / {table.capacity}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+          )}
+        </div>
+
+        <div className="overview__actions-card card">
+          <h2>Quick Actions</h2>
+          <div className="overview__actions-grid">
+            {quickActions.map((action) => (
+              <Link
+                key={action.label}
+                to={action.to}
+                className="overview__action"
+              >
+                <span className="overview__action__icon">{action.icon}</span>
+                <span className="overview__action__label">{action.label}</span>
+              </Link>
+            ))}
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function ProgressBar({
-  label,
-  pct,
-  color,
-}: {
-  label: string;
-  pct: number;
-  color: string;
-}) {
-  return (
-    <div
-      className="overview__progress"
-      style={{ marginBottom: 'var(--space-3)' }}
-    >
-      <div
-        className="flex"
-        style={{
-          justifyContent: 'space-between',
-          marginBottom: 'var(--space-1)',
-        }}
-      >
-        <span className="text-secondary" style={{ fontSize: '0.875rem' }}>
-          {label}
-        </span>
-        <span className="text-muted" style={{ fontSize: '0.875rem' }}>
-          {pct}%
-        </span>
-      </div>
-      <div
-        style={{
-          height: 8,
-          background: 'var(--border)',
-          borderRadius: 4,
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            width: `${pct}%`,
-            height: '100%',
-            background: color,
-            borderRadius: 4,
-            transition: 'width 0.3s ease',
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function TableOccupancyItem({
-  table,
-  guests,
-}: {
-  table: Table;
-  guests: GuestWithTable[];
-}) {
-  const count = guests.filter((g) => g.table_id === table.id).length;
-  const pct =
-    table.capacity > 0 ? Math.round((count / table.capacity) * 100) : 0;
-  const overCapacity = count > table.capacity;
-
-  return (
-    <div
-      className="overview__table-item"
-      style={{
-        padding: 'var(--space-3)',
-        border: '1px solid var(--border)',
-        borderRadius: 8,
-      }}
-    >
-      <div
-        className="flex"
-        style={{
-          justifyContent: 'space-between',
-          marginBottom: 'var(--space-1)',
-        }}
-      >
-        <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>
-          {table.name} #{table.number}
-        </span>
-        <span
-          className="text-muted"
-          style={{
-            fontSize: '0.875rem',
-            color: overCapacity ? 'var(--error, #dc2626)' : undefined,
-            fontWeight: overCapacity ? 600 : undefined,
-          }}
-        >
-          {count}/{table.capacity}
-        </span>
-      </div>
-      <div
-        style={{
-          height: 6,
-          background: 'var(--border)',
-          borderRadius: 3,
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            width: `${Math.min(pct, 100)}%`,
-            height: '100%',
-            background: overCapacity
-              ? 'var(--error, #dc2626)'
-              : 'var(--primary)',
-            borderRadius: 3,
-          }}
-        />
-      </div>
-      {overCapacity && (
-        <div
-          style={{
-            fontSize: '0.75rem',
-            color: 'var(--error, #dc2626)',
-            marginTop: 'var(--space-1)',
-          }}
-        >
-          ⚠ Over capacity
-        </div>
-      )}
     </div>
   );
 }

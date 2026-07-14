@@ -1,12 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { Table } from '@/types/table';
-
-const QK = 'tables';
+import type { Table, TableInput } from '@/types/table';
 
 export function useTables(eventId: string) {
   return useQuery({
-    queryKey: [QK, eventId],
+    queryKey: ['tables', eventId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tables')
@@ -23,22 +21,17 @@ export function useTables(eventId: string) {
 export function useCreateTable(eventId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: {
-      name: string;
-      number: number;
-      capacity?: number;
-    }) => {
+    mutationFn: async (input: TableInput) => {
       const { data, error } = await supabase
         .from('tables')
-        .insert({ event_id: eventId, ...input })
+        .insert({ ...input, event_id: eventId })
         .select()
         .single();
       if (error) throw error;
       return data as Table;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [QK, eventId] });
-      qc.invalidateQueries({ queryKey: ['guests', eventId] });
+      qc.invalidateQueries({ queryKey: ['tables', eventId] });
     },
   });
 }
@@ -46,15 +39,7 @@ export function useCreateTable(eventId: string) {
 export function useUpdateTable(eventId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      id,
-      ...input
-    }: {
-      id: string;
-      name?: string;
-      number?: number;
-      capacity?: number;
-    }) => {
+    mutationFn: async ({ id, ...input }: TableInput & { id: string }) => {
       const { data, error } = await supabase
         .from('tables')
         .update(input)
@@ -65,8 +50,7 @@ export function useUpdateTable(eventId: string) {
       return data as Table;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [QK, eventId] });
-      qc.invalidateQueries({ queryKey: ['guests', eventId] });
+      qc.invalidateQueries({ queryKey: ['tables', eventId] });
     },
   });
 }
@@ -89,7 +73,9 @@ export function useUpdateTablePosition(eventId: string) {
         .eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [QK, eventId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tables', eventId] });
+    },
   });
 }
 
@@ -101,8 +87,7 @@ export function useDeleteTable(eventId: string) {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [QK, eventId] });
-      qc.invalidateQueries({ queryKey: ['guests', eventId] });
+      qc.invalidateQueries({ queryKey: ['tables', eventId] });
     },
   });
 }

@@ -1,3 +1,5 @@
+import type { Guest } from './guest';
+
 export type RSVPStatus = 'attending' | 'not_attending' | 'maybe';
 
 export interface RSVP {
@@ -12,5 +14,5 @@ export interface RSVP {
 }
 
 export interface RSVPWithGuest extends RSVP {
-  guest: { id: string; name: string };
+  guest: Pick<Guest, 'id' | 'name'>;
 }

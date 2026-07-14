@@ -1,15 +1,11 @@
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/providers/auth-provider';
-import { Spinner } from '@/components/ui/feedback';
+import { LoadingScreen } from '@/components/ui/feedback';
 
-export function ProtectedLayout() {
+export function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  if (loading)
-    return (
-      <div className="loading-screen">
-        <Spinner size={32} />
-      </div>
-    );
+
+  if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
-  return <Outlet />;
+  return <>{children}</>;
 }
