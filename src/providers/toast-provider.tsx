@@ -2,33 +2,52 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 
 type ToastType = 'success' | 'error' | 'info'
 
-interface Toast { id: number; message: string; type: ToastType }
+interface Toast {
+  id: number
+  message: string
+  type: ToastType
+}
 
-const ToastContext = createContext<{ toast: (m: string, t?: ToastType) => void } | null>(null)
+type ToastFn = (message: string, type?: ToastType) => void
+
+const ToastContext = createContext<ToastFn | undefined>(undefined)
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
-  const toast = useCallback((message: string, type: ToastType = 'success') => {
+  const toast: ToastFn = useCallback((message: string, type: ToastType = 'info') => {
     const id = Date.now() + Math.random()
-    setToasts((p) => [...p, { id, message, type }])
-    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 4000)
+    setToasts((prev) => [...prev, { id, message, type }])
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id))
+    }, 4000)
   }, [])
 
+  const colors: Record<ToastType, string> = {
+    success: 'bg-green-600',
+    error: 'bg-red-600',
+    info: 'bg-slate-800',
+  }
+
   return (
-    <ToastContext.Provider value={{ toast }}>
+    <ToastContext.Provider value={toast}>
       {children}
-      <div className="toast-container">
+      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
         {toasts.map((t) => (
-          <div key={t.id} className={`toast toast-${t.type}`}>{t.message}</div>
+          <div
+            key={t.id}
+            className={`${colors[t.type]} text-white px-4 py-3 rounded-lg shadow-lg max-w-sm`}
+          >
+            {t.message}
+          </div>
         ))}
       </div>
     </ToastContext.Provider>
   )
 }
 
-export function useToast() {
+export function useToast(): ToastFn {
   const ctx = useContext(ToastContext)
-  if (!ctx) throw new Error('useToast must be used within ToastProvider')
-  return ctx.toast
+  if (!ctx) throw new Error('useToast must be used within a ToastProvider')
+  return ctx
 }

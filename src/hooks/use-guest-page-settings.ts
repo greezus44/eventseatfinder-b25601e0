@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { GuestPageSettings, GuestPageSettingsInput } from '@/types'
 
@@ -18,9 +18,13 @@ export function useGuestPageSettingsBySlug(slug: string) {
   return useQuery({
     queryKey: ['guest-page-settings-slug', slug],
     queryFn: async () => {
-      const { data, error } = await supabase.from('guest_page_settings').select('*, events!inner(*)').eq('events.slug', slug).maybeSingle()
+      const { data: eventData, error: eventError } = await supabase.from('events').select('id, name, date, time, venue, logo_url').eq('slug', slug).maybeSingle()
+      if (eventError) throw eventError
+      if (!eventData) return null
+      const { data, error } = await supabase.from('guest_page_settings').select('*').eq('event_id', eventData.id).maybeSingle()
       if (error) throw error
-      return data as (GuestPageSettings & { events: { name: string; date: string | null; time: string | null; venue: string | null; logo_url: string | null } }) | null
+      if (!data) return null
+      return { ...data, events: eventData } as GuestPageSettings & { events: { name: string; date: string | null; time: string | null; venue: string | null; logo_url: string | null } }
     },
     enabled: !!slug,
   })

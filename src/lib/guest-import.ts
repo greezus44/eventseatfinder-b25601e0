@@ -32,17 +32,30 @@ export function classifyError(error: unknown): string {
   return 'An unexpected error occurred. Please try again.'
 }
 
+function extractGuestsFromRows(rows: Record<string, string>[]): ParsedGuest[] {
+  const guests: ParsedGuest[] = []
+  for (const row of rows) {
+    const keys = Object.keys(row).map((k) => k.toLowerCase().trim())
+    const nameKey = keys.find((k) => k === 'name' || k === 'guest' || k === 'guest name' || k.includes('name'))
+    const tableKey = keys.find((k) => k === 'table' || k === 'table name' || k.includes('table'))
+    const originalKeys = Object.keys(row)
+    const name = nameKey ? (row[originalKeys.find((k) => k.toLowerCase().trim() === nameKey)!] ?? '') : ''
+    const tableName = tableKey ? (row[originalKeys.find((k) => k.toLowerCase().trim() === tableKey)!] ?? '') : ''
+    if (name && name.trim()) {
+      guests.push({ name: name.trim(), tableName: tableName.trim() })
+    }
+  }
+  return guests
+}
+
 function extractNamesFromText(text: string): ParsedGuest[] {
   const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0)
   const guests: ParsedGuest[] = []
-
   for (const line of lines) {
     const trimmed = line.trim()
     if (!trimmed) continue
-
     const separators = ['\t', ',', ' - ', ' | ', ';']
     let parsed = false
-
     for (const sep of separators) {
       if (trimmed.includes(sep)) {
         const parts = trimmed.split(sep).map((p) => p.trim()).filter(Boolean)
@@ -57,68 +70,54 @@ function extractNamesFromText(text: string): ParsedGuest[] {
         }
       }
     }
-
     if (!parsed && trimmed.length > 0 && trimmed.length < 200) {
       guests.push({ name: trimmed, tableName: '' })
     }
   }
-
   return guests
 }
 
-export async function parseFile(file: File): Promise<ImportResult> {
-  const ext = file.name.toLowerCase().split('.').pop() ?? ''
-
-  if (ext === 'csv') return parseCSV(file)
-  if (ext === 'xlsx' || ext === 'xls') return parseExcel(file)
-  if (ext === 'pdf') return parsePDF(file)
-  return parseCSV(file)
-}
-
-async function parseCSV(file: File): Promise<ImportResult> {
+async function parseCsv(file: File): Promise<ImportResult> {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
-      header: false,
+      header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        const guests: ParsedGuest[] = []
-        for (const row of results.data) {
-          const cells = (row as string[]).map((c) => (c ?? '').trim()).filter(Boolean)
-          if (cells.length === 0) continue
-          const name = cells[0]
-          const tableName = cells.length > 1 ? cells[1] : ''
-          if (name) guests.push({ name, tableName })
-        }
+        const rows = results.data as Record<string, string>[]
+        if (rows.length === 0) { reject(new ImportError('No guests found in the CSV file.')); return }
+        const guests = extractGuestsFromRows(rows)
+        if (guests.length === 0) { reject(new ImportError('No valid guest data found. Ensure columns include name and table.')); return }
         resolve({ guests, totalFound: guests.length, format: 'CSV' })
       },
-      error: (err) => reject(new ImportError(`CSV parse error: ${err.message}`)),
+      error: (err) => reject(new ImportError(err.message)),
     })
   })
 }
 
-async function parseExcel(file: File): Promise<ImportResult> {
+async function parseXlsx(file: File): Promise<ImportResult> {
   try {
-    const buf = await file.arrayBuffer()
-    const wb = XLSX.read(buf, { type: 'array' })
-    const sheet = wb.Sheets[wb.SheetNames[0]]
-    const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, blankrows: false })
-
-    const guests: ParsedGuest[] = []
-    for (const row of rows) {
-      const cells = (row ?? []).map((c) => String(c ?? '').trim()).filter(Boolean)
-      if (cells.length === 0) continue
-      const name = cells[0]
-      const tableName = cells.length > 1 ? cells[1] : ''
-      if (name) guests.push({ name, tableName })
-    }
-
-    return { guests, totalFound: guests.length, format: 'Excel' }
-  } catch {
+    const buffer = await file.arrayBuffer()
+    const workbook = XLSX.read(buffer, { type: 'array' })
+    const sheetName = workbook.SheetNames[0]
+    if (!sheetName) throw new ImportError('The spreadsheet has no sheets.')
+    const sheet = workbook.Sheets[sheetName]
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
+    if (rows.length === 0) throw new ImportError('No guests found in the spreadsheet.')
+    const normalized = rows.map((r) => {
+      const obj: Record<string, string> = {}
+      for (const k of Object.keys(r)) obj[k] = String(r[k] ?? '')
+      return obj
+    })
+    const guests = extractGuestsFromRows(normalized)
+    if (guests.length === 0) throw new ImportError('No valid guest data found. Ensure columns include name and table.')
+    return { guests, totalFound: guests.length, format: 'XLSX' }
+  } catch (e) {
+    if (e instanceof ImportError) throw e
     throw new ImportError('Could not read the Excel file. Make sure it is a valid .xlsx or .xls file.')
   }
 }
 
-async function parsePDF(file: File): Promise<ImportResult> {
+async function parsePdf(file: File): Promise<ImportResult> {
   try {
     const buf = await file.arrayBuffer()
     const bytes = new Uint8Array(buf)
@@ -172,12 +171,19 @@ async function parsePDF(file: File): Promise<ImportResult> {
   }
 }
 
+export async function parseFile(file: File): Promise<ImportResult> {
+  const name = file.name.toLowerCase()
+  if (name.endsWith('.csv')) return parseCsv(file)
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) return parseXlsx(file)
+  if (name.endsWith('.pdf')) return parsePdf(file)
+  return parseCsv(file)
+}
+
 export function matchTableByName(
   tableName: string,
   tables: { id: string; name: string; number: number }[]
 ): string | null {
   if (!tableName || !tableName.trim()) return null
-
   const normalized = tableName.trim().toLowerCase()
 
   const exact = tables.find((t) => t.name.trim().toLowerCase() === normalized)

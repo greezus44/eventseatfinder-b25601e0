@@ -1,43 +1,58 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { AppHeader } from '@/components/app-header'
 import { useEvents, useCreateEvent, useDeleteEvent } from '@/hooks/use-events'
 import { useToast } from '@/providers/toast-provider'
 import { useConfirmDialog } from '@/providers/confirm-dialog'
-import { AppHeader } from '@/components/app-header'
-import type { EventInput } from '@/types'
+import type { Event } from '@/types'
 
 export function DashboardPage() {
+  const navigate = useNavigate()
   const { data: events, isLoading } = useEvents()
   const createEvent = useCreateEvent()
   const deleteEvent = useDeleteEvent()
   const toast = useToast()
   const { confirm, dialog } = useConfirmDialog()
-  const navigate = useNavigate()
-  const [showCreate, setShowCreate] = useState(false)
+
+  const [showCreateForm, setShowCreateForm] = useState(false)
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
-
-  const generateSlug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30)
+  const [creating, setCreating] = useState(false)
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) return
-    const finalSlug = slug.trim() || generateSlug(name)
+    if (!name.trim() || !slug.trim()) return
+    setCreating(true)
     try {
-      const event = await createEvent.mutateAsync({ name: name.trim(), slug: finalSlug })
-      toast('Event created successfully')
-      setShowCreate(false); setName(''); setSlug('')
-      navigate(`/events/${event.id}`)
+      await createEvent.mutateAsync({ name: name.trim(), slug: slug.trim() })
+      toast('Event created', 'success')
+      setName('')
+      setSlug('')
+      setShowCreateForm(false)
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to create event', 'error')
+    } finally {
+      setCreating(false)
     }
   }
 
-  const handleDelete = async (id: string, name: string) => {
-    const confirmed = await confirm({ title: 'Delete Event', message: `Are you sure you want to delete "${name}"? This cannot be undone.`, confirmText: 'Delete' })
-    if (!confirmed) return
-    try { await deleteEvent.mutateAsync(id); toast('Event deleted') }
-    catch (err) { toast(err instanceof Error ? err.message : 'Failed to delete event', 'error') }
+  const handleDelete = async (event: Event) => {
+    const ok = await confirm({
+      title: 'Delete event',
+      message: `Delete "${event.name}"? This cannot be undone.`,
+      confirmText: 'Delete',
+    })
+    if (!ok) return
+    try {
+      await deleteEvent.mutateAsync(event.id)
+      toast('Event deleted', 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to delete event', 'error')
+    }
+  }
+
+  const openEvent = (event: Event) => {
+    navigate(`/events/${event.id}`)
   }
 
   return (
@@ -46,58 +61,127 @@ export function DashboardPage() {
       <div className="page">
         <div className="page-header">
           <h1 className="page-title">Your Events</h1>
-          <p className="page-subtitle">Create and manage your seating arrangements</p>
+          <p className="page-subtitle">Manage seating for your events</p>
         </div>
+
         <div className="section">
           <div className="dashboard-actions">
-            <button className="btn btn-primary" onClick={() => setShowCreate(!showCreate)}>{showCreate ? 'Cancel' : 'Create New Event'}</button>
+            <button
+              className="btn btn-primary"
+              onClick={() => setShowCreateForm((v) => !v)}
+            >
+              {showCreateForm ? 'Cancel' : 'Create New Event'}
+            </button>
           </div>
-          {showCreate && (
-            <div className="card section" style={{ marginTop: 'var(--space-5)' }}>
-              <h3 className="section-title">New Event</h3>
-              <form onSubmit={handleCreate} className="dashboard-create-form">
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Event Name</label>
-                    <input className="input" value={name} onChange={(e) => { setName(e.target.value); if (!slug || slug === generateSlug(name)) setSlug(generateSlug(e.target.value)) }} placeholder="My Wedding" required autoFocus />
+
+          {showCreateForm && (
+            <form className="dashboard-create-form" onSubmit={handleCreate}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label" htmlFor="event-name">
+                    Event Name
+                  </label>
+                  <input
+                    id="event-name"
+                    className="input"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="event-slug">
+                    URL Slug
+                  </label>
+                  <input
+                    id="event-slug"
+                    className="input"
+                    value={slug}
+                    onChange={(e) => setSlug(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="dashboard-create-actions">
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={creating}
+                >
+                  {creating ? 'Creating…' : 'Create Event'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setShowCreateForm(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+
+        <div className="section">
+          <h2 className="section-title">Events</h2>
+
+          {isLoading ? (
+            <div className="spinner-container">
+              <div className="spinner spinner-lg" />
+            </div>
+          ) : events && events.length > 0 ? (
+            <div className="grid grid-3">
+              {events.map((event) => (
+                <div
+                  key={event.id}
+                  className="card card-sm event-card"
+                  onClick={() => openEvent(event)}
+                >
+                  <div className="event-card-header">
+                    <h3 className="event-card-name">{event.name}</h3>
+                    {event.date && <span className="badge">{event.date}</span>}
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">URL Slug</label>
-                    <input className="input" value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="my-wedding" required />
+                  {event.venue && (
+                    <p className="event-card-venue">{event.venue}</p>
+                  )}
+                  <div className="event-card-actions">
+                    <button
+                      className="btn btn-sm btn-primary"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openEvent(event)
+                      }}
+                    >
+                      Manage
+                    </button>
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openEvent(event)
+                      }}
+                    >
+                      View
+                    </button>
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDelete(event)
+                      }}
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
-                <div className="dashboard-create-actions">
-                  <button type="submit" className="btn btn-primary" disabled={createEvent.isPending}>{createEvent.isPending ? 'Creating…' : 'Create Event'}</button>
-                </div>
-              </form>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <p>No events yet. Create your first event to get started.</p>
             </div>
           )}
         </div>
-        {isLoading ? (
-          <div className="spinner-container"><div className="spinner spinner-lg" /></div>
-        ) : events && events.length > 0 ? (
-          <div className="grid grid-3">
-            {events.map((event) => (
-              <div key={event.id} className="card card-sm event-card" onClick={() => navigate(`/events/${event.id}`)}>
-                <div className="event-card-header">
-                  <h3 className="event-card-name">{event.name}</h3>
-                  {event.date && <span className="badge">{new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
-                </div>
-                {event.venue && <p className="event-card-venue">{event.venue}</p>}
-                <div className="event-card-actions">
-                  <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); navigate(`/events/${event.id}`) }}>Manage</button>
-                  <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); window.open(`/e/${event.slug}`, '_blank') }}>View</button>
-                  <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); handleDelete(event.id, event.name) }}>Delete</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state">
-            <h3>No events yet</h3>
-            <p>Click "Create New Event" to get started with your first seating arrangement.</p>
-          </div>
-        )}
       </div>
       {dialog}
     </>

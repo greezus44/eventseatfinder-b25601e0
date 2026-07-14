@@ -1,40 +1,77 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
 
-interface ConfirmOptions { title: string; message: string; confirmText?: string; cancelText?: string }
+interface ConfirmOptions {
+  title?: string
+  message: string
+  confirmText?: string
+  cancelText?: string
+}
 
-const ConfirmContext = createContext<{ confirm: (o: ConfirmOptions) => Promise<boolean>; dialog: ReactNode } | null>(null)
+interface ConfirmDialogContextValue {
+  confirm: (opts: ConfirmOptions) => Promise<boolean>
+  dialog: ReactNode
+}
+
+const ConfirmDialogContext = createContext<ConfirmDialogContextValue | undefined>(undefined)
 
 export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<{ opts: ConfirmOptions; resolve: (v: boolean) => void } | null>(null)
+  const [open, setOpen] = useState(false)
+  const [options, setOptions] = useState<ConfirmOptions | null>(null)
+  const [resolver, setResolver] = useState<((value: boolean) => void) | null>(null)
 
-  const confirm = useCallback((opts: ConfirmOptions) => new Promise<boolean>((resolve) => setState({ opts, resolve })), [])
+  const confirm = useCallback((opts: ConfirmOptions): Promise<boolean> => {
+    setOptions(opts)
+    setOpen(true)
+    return new Promise<boolean>((resolve) => {
+      setResolver(() => resolve)
+    })
+  }, [])
 
-  const handleConfirm = () => { state?.resolve(true); setState(null) }
-  const handleCancel = () => { state?.resolve(false); setState(null) }
+  const handleConfirm = () => {
+    setOpen(false)
+    resolver?.(true)
+    setResolver(null)
+  }
 
-  const dialog: ReactNode = state ? (
-    <div className="confirm-overlay" onClick={handleCancel}>
-      <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-        <h3 className="confirm-title">{state.opts.title}</h3>
-        <p className="confirm-message">{state.opts.message}</p>
-        <div className="confirm-actions">
-          <button className="btn btn-ghost" onClick={handleCancel}>{state.opts.cancelText ?? 'Cancel'}</button>
-          <button className="btn btn-danger" onClick={handleConfirm}>{state.opts.confirmText ?? 'Confirm'}</button>
+  const handleCancel = () => {
+    setOpen(false)
+    resolver?.(false)
+    setResolver(null)
+  }
+
+  const dialog: ReactNode = open && options ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
+        {options.title && <h2 className="text-lg font-semibold mb-2">{options.title}</h2>}
+        <p className="text-slate-600 mb-6">{options.message}</p>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={handleCancel}
+            className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200"
+          >
+            {options.cancelText || 'Cancel'}
+          </button>
+          <button
+            onClick={handleConfirm}
+            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+          >
+            {options.confirmText || 'Confirm'}
+          </button>
         </div>
       </div>
     </div>
   ) : null
 
   return (
-    <ConfirmContext.Provider value={{ confirm, dialog }}>
+    <ConfirmDialogContext.Provider value={{ confirm, dialog }}>
       {children}
       {dialog}
-    </ConfirmContext.Provider>
+    </ConfirmDialogContext.Provider>
   )
 }
 
-export function useConfirmDialog() {
-  const ctx = useContext(ConfirmContext)
-  if (!ctx) throw new Error('useConfirmDialog must be used within ConfirmDialogProvider')
+export function useConfirmDialog(): ConfirmDialogContextValue {
+  const ctx = useContext(ConfirmDialogContext)
+  if (!ctx) throw new Error('useConfirmDialog must be used within a ConfirmDialogProvider')
   return ctx
 }

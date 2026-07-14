@@ -10,7 +10,7 @@ interface AuthContextValue {
   signOut: () => Promise<void>
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null)
+const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -21,19 +21,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(data.session)
       setLoading(false)
     })
-    const { data: listener } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
-    return () => listener.subscription.unsubscribe()
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession)
+    })
+
+    return () => {
+      listener.subscription.unsubscribe()
+    }
   }, [])
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
   }
+
   const signUp = async (email: string, password: string) => {
     const { error } = await supabase.auth.signUp({ email, password })
     if (error) throw error
   }
-  const signOut = async () => { await supabase.auth.signOut() }
+
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
+  }
 
   return (
     <AuthContext.Provider value={{ session, loading, signIn, signUp, signOut }}>
@@ -42,8 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 }
 
-export function useAuthContext() {
+export function useAuthContext(): AuthContextValue {
   const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuthContext must be used within AuthProvider')
+  if (!ctx) throw new Error('useAuthContext must be used within an AuthProvider')
   return ctx
 }
