@@ -1,62 +1,61 @@
-export interface FontOption { name: string; cssName: string }
+export interface FontOption {
+  name: string
+  googleName?: string
+}
 
 export const FONTS: FontOption[] = [
-  { name: 'Inter', cssName: 'Inter' },
-  { name: 'Playfair Display', cssName: 'Playfair Display' },
-  { name: 'Montserrat', cssName: 'Montserrat' },
-  { name: 'Lora', cssName: 'Lora' },
-  { name: 'Cormorant Garamond', cssName: 'Cormorant Garamond' },
-  { name: 'Poppins', cssName: 'Poppins' },
-  { name: 'Crimson Text', cssName: 'Crimson Text' },
-  { name: 'Raleway', cssName: 'Raleway' },
-  { name: 'Source Sans 3', cssName: 'Source Sans 3' },
-  { name: 'Nunito Sans', cssName: 'Nunito Sans' },
-  { name: 'Work Sans', cssName: 'Work Sans' },
-  { name: 'DM Serif Display', cssName: 'DM Serif Display' },
-  { name: 'Imperial Script', cssName: 'Imperial Script' },
-  { name: 'Sans Serif', cssName: 'Sans Serif' },
+  { name: 'Inter' },
+  { name: 'Playfair Display', googleName: 'Playfair+Display' },
+  { name: 'Cormorant Garamond', googleName: 'Cormorant+Garamond' },
+  { name: 'Lato', googleName: 'Lato' },
+  { name: 'Montserrat', googleName: 'Montserrat' },
+  { name: 'Raleway', googleName: 'Raleway' },
+  { name: 'Josefin Sans', googleName: 'Josefin+Sans' },
+  { name: 'EB Garamond', googleName: 'EB+Garamond' },
+  { name: 'Libre Baskerville', googleName: 'Libre+Baskerville' },
+  { name: 'Merriweather', googleName: 'Merriweather' },
+  { name: 'Nunito', googleName: 'Nunito' },
+  { name: 'Open Sans', googleName: 'Open+Sans' },
+  { name: 'Poppins', googleName: 'Poppins' },
+  { name: 'Roboto', googleName: 'Roboto' },
+  { name: 'Source Serif 4', googleName: 'Source+Serif+4' },
+  { name: 'Spectral', googleName: 'Spectral' },
+  { name: 'Crimson Text', googleName: 'Crimson+Text' },
+  { name: 'Cinzel', googleName: 'Cinzel' },
+  { name: 'Great Vibes', googleName: 'Great+Vibes' },
+  { name: 'Sacramento', googleName: 'Sacramento' },
+  { name: 'Dancing Script', googleName: 'Dancing+Script' },
+  { name: 'Pacifico', googleName: 'Pacifico' },
+  { name: 'Satisfy', googleName: 'Satisfy' },
 ]
 
 export function getFontCss(name: string): string {
-  const font = FONTS.find((f) => f.name === name)
-  if (!font) return "'Inter', sans-serif"
-  if (font.name === 'Sans Serif') return 'sans-serif'
-  return `'${font.cssName}', sans-serif`
+  return `"${name}", system-ui, -apple-system, sans-serif`
 }
 
-export function loadGoogleFonts(fontNames: string[]): void {
-  const wanted = Array.from(new Set(fontNames.filter(Boolean)))
-  if (wanted.length === 0) return
-  const head = document.head
-  const existing = new Set<string>()
-  head.querySelectorAll<HTMLLinkElement>('link[data-google-font]').forEach((link) => {
-    const family = link.getAttribute('data-google-font')
-    if (family) existing.add(family)
+const loadedFonts = new Set<string>()
+export function loadGoogleFonts(names: string[]): void {
+  const toLoad = names.filter((n) => {
+    const font = FONTS.find((f) => f.name === n)
+    return font?.googleName && !loadedFonts.has(n)
   })
-  for (const name of wanted) {
-    if (existing.has(name)) continue
-    const font = FONTS.find((f) => f.name === name)
-    if (!font) continue
-    if (name === 'Sans Serif') continue
-    const cssName = font.cssName
-    const href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(cssName).replace(/%20/g, '+')}:wght@400;500;600;700&display=swap`
-    const link = document.createElement('link')
-    link.rel = 'stylesheet'
-    link.href = href
-    link.setAttribute('data-google-font', name)
-    head.appendChild(link)
-    existing.add(name)
-  }
+  if (toLoad.length === 0) return
+  toLoad.forEach((n) => loadedFonts.add(n))
+  const families = toLoad
+    .map((n) => FONTS.find((f) => f.name === n)?.googleName)
+    .filter(Boolean)
+    .map((g) => `family=${g}:ital,wght@0,400;0,600;0,700;1,400`)
+    .join('&')
+  const link = document.createElement('link')
+  link.rel = 'stylesheet'
+  link.href = `https://fonts.googleapis.com/css2?${families}&display=swap`
+  document.head.appendChild(link)
 }
 
-export function formatTime12(time: string | null | undefined): string {
-  if (!time) return ''
-  const match = /^(\d{2}):(\d{2})/.exec(time)
-  if (!match) return ''
-  let hour = parseInt(match[1], 10)
-  const minute = match[2]
-  const period = hour >= 12 ? 'PM' : 'AM'
-  hour = hour % 12
-  if (hour === 0) hour = 12
-  return `${hour}:${minute} ${period}`
+export function formatTime12(time24: string): string {
+  const [h, m] = time24.split(':').map(Number)
+  if (isNaN(h) || isNaN(m)) return time24
+  const period = h >= 12 ? 'PM' : 'AM'
+  const hour = h === 0 ? 12 : h > 12 ? h - 12 : h
+  return `${hour}:${String(m).padStart(2, '0')} ${period}`
 }

@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { supabase } from './supabase'
 
 export async function uploadEventImage(eventId: string, file: File, folder: string): Promise<string> {
   const ext = file.name.split('.').pop() || 'png'

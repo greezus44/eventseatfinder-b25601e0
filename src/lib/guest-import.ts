@@ -1,85 +1,89 @@
-import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 
-export interface ParsedGuest { name: string; tableName: string }
-export interface ParseResult { guests: ParsedGuest[]; format: string }
+export interface ParsedGuest {
+  name: string
+  tableName: string
+}
+
+export interface ParseResult {
+  guests: ParsedGuest[]
+  format: string
+}
 
 export function classifyError(err: unknown): string {
-  if (err instanceof Error) return err.message
+  if (err instanceof Error) {
+    if (err.message.includes('unique') || err.message.includes('duplicate')) return 'Some guest names already exist'
+    if (err.message.includes('network') || err.message.includes('fetch')) return 'Network error — please try again'
+    return err.message
+  }
   return 'An unexpected error occurred'
 }
 
 export function matchTableByName(tableName: string, tables: { id: string; name: string }[]): string | null {
-  const norm = tableName.toLowerCase().trim()
+  const norm = tableName.trim().toLowerCase()
   const match = tables.find((t) => t.name.toLowerCase() === norm)
-  if (match) return match.id
-  const partial = tables.find((t) => t.name.toLowerCase().includes(norm) || norm.includes(t.name.toLowerCase()))
-  return partial?.id ?? null
+  return match?.id ?? null
 }
 
-export async function parseFile(file: File): Promise<ParseResult> {
-  const ext = file.name.split('.').pop()?.toLowerCase()
-  if (ext === 'csv') return parseCSV(file)
-  if (ext === 'xlsx' || ext === 'xls') return parseXLSX(file)
-  if (ext === 'pdf') return parsePDF(file)
-  throw new Error(`Unsupported file format: .${ext}`)
+function rowToGuest(row: Record<string, unknown>): ParsedGuest | null {
+  const nameKey = Object.keys(row).find((k) => ['name', 'guest', 'guest name', 'full name', 'fullname', 'guestname'].includes(k.toLowerCase()))
+  const tableKey = Object.keys(row).find((k) => ['table', 'table name', 'tablename', 'table number', 'tablenumber', 'seat', 'seating'].includes(k.toLowerCase()))
+  const name = nameKey ? String(row[nameKey] ?? '').trim() : ''
+  if (!name) return null
+  const tableName = tableKey ? String(row[tableKey] ?? '').trim() : ''
+  return { name, tableName }
 }
 
-async function parseCSV(file: File): Promise<ParseResult> {
-  return new Promise((resolve, reject) => {
-    Papa.parse(file, {
-      header: true, skipEmptyLines: true,
-      complete: (result) => {
-        const guests: ParsedGuest[] = []
-        for (const row of result.data as Record<string, string>[]) {
-          const name = (row.Name || row.name || row.Guest || row.guest || '').trim()
-          if (name) guests.push({ name, tableName: (row.Table || row.table || '').trim() })
-        }
-        resolve({ guests, format: 'CSV' })
-      },
-      error: (err) => reject(err),
-    })
-  })
+async function parseCsv(file: File): Promise<ParseResult> {
+  const text = await file.text()
+  const wb = XLSX.read(text, { type: 'string' })
+  const ws = wb.Sheets[wb.SheetNames[0]]
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws)
+  const guests = rows.map(rowToGuest).filter((g): g is ParsedGuest => g !== null)
+  if (guests.length === 0) {
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    const firstIsHeader = /name|guest|table/i.test(lines[0] ?? '')
+    const data = firstIsHeader ? lines.slice(1) : lines
+    return { guests: data.filter(Boolean).map((l) => ({ name: l.split(',')[0].trim(), tableName: l.split(',')[1]?.trim() ?? '' })), format: 'CSV' }
+  }
+  return { guests, format: 'CSV' }
 }
 
-async function parseXLSX(file: File): Promise<ParseResult> {
+async function parseExcel(file: File): Promise<ParseResult> {
   const buf = await file.arrayBuffer()
   const wb = XLSX.read(buf, { type: 'array' })
   const ws = wb.Sheets[wb.SheetNames[0]]
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws)
-  const guests: ParsedGuest[] = []
-  for (const row of rows) {
-    const name = String(row.Name || row.name || row.Guest || row.guest || '').trim()
-    if (name) guests.push({ name, tableName: String(row.Table || row.table || '').trim() })
-  }
+  const guests = rows.map(rowToGuest).filter((g): g is ParsedGuest => g !== null)
   return { guests, format: 'Excel' }
 }
 
-async function parsePDF(file: File): Promise<ParseResult> {
+async function parsePdf(file: File): Promise<ParseResult> {
+  const pdfjsLib = await import('pdfjs-dist')
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
   const buf = await file.arrayBuffer()
-  const text = await extractPdfText(buf)
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-  const guests: ParsedGuest[] = []
-  for (const line of lines) {
-    const parts = line.split(/\t+|\s{2,}/)
-    const name = parts[0]?.trim()
-    if (name) guests.push({ name, tableName: parts[1]?.trim() ?? '' })
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise
+  const lines: string[] = []
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i)
+    const content = await page.getTextContent()
+    const pageLines = content.items
+      .filter((item): item is typeof item & { str: string } => 'str' in item)
+      .map((item) => item.str.trim())
+      .filter(Boolean)
+    lines.push(...pageLines)
   }
+  const guests = lines.filter((l) => l.length > 1 && !/^\d+$/.test(l) && !/^(name|guest|table|no\.?|#)/i.test(l)).map((l) => {
+    const parts = l.split(/\t|  +/)
+    return { name: parts[0].trim(), tableName: parts[1]?.trim() ?? '' }
+  })
   return { guests, format: 'PDF' }
 }
 
-async function extractPdfText(buf: ArrayBuffer): Promise<string> {
-  try {
-    const pdfjsLib = await import('pdfjs-dist')
-    const pdf = await pdfjsLib.getDocument({ data: buf }).promise
-    let text = ''
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i)
-      const content = await page.getTextContent()
-      text += content.items.map((item) => 'str' in item ? item.str ?? '' : '').join('\n') + '\n'
-    }
-    return text
-  } catch {
-    return ''
-  }
+export async function parseFile(file: File): Promise<ParseResult> {
+  const ext = file.name.split('.').pop()?.toLowerCase()
+  if (ext === 'csv' || file.type === 'text/csv') return parseCsv(file)
+  if (ext === 'xlsx' || ext === 'xls') return parseExcel(file)
+  if (ext === 'pdf' || file.type === 'application/pdf') return parsePdf(file)
+  throw new Error('Unsupported file type. Please use CSV, Excel, or PDF.')
 }

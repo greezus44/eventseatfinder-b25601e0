@@ -1,26 +1,47 @@
-export function normalizeName(name: string): string {
-  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim()
+export interface GuestSearchResult {
+  id: string
+  name: string
+  table_id: string | null
+  table_name: string
 }
-export function nameMatches(search: string, guestName: string): boolean {
-  const ns = normalizeName(search), ng = normalizeName(guestName)
-  if (!ns || !ng) return false
-  if (ng.includes(ns)) return true
-  const st = ns.split(' ').filter(Boolean), gt = ng.split(' ').filter(Boolean)
-  if (st.length === 0) return false
-  if (st.every((s) => gt.some((g) => g.startsWith(s)))) return true
-  if (gt.join('').includes(ns.replace(/\s+/g, ''))) return true
-  return false
+
+interface GuestLike {
+  id: string
+  name: string
+  table_id: string | null
+  tables: { name: string; number: number }[] | null
 }
-export interface GuestSearchResult { id: string; name: string; table_name: string; table_number: number }
-interface GuestWithTableLike { id: string; name: string; table_id: string | null; tables?: { name: string; number: number } | { name: string; number: number }[] | null }
-export function searchGuests(guests: GuestWithTableLike[], query: string, limit = 50): GuestSearchResult[] {
-  const results: GuestSearchResult[] = []
+
+function normalize(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+}
+
+export function searchGuests(guests: GuestLike[], query: string, limit = 50): GuestSearchResult[] {
+  const q = normalize(query)
+  if (!q) return []
+  const scored: { result: GuestSearchResult; score: number }[] = []
   for (const g of guests) {
-    if (nameMatches(query, g.name)) {
-      const table = Array.isArray(g.tables) ? g.tables[0] : g.tables
-      results.push({ id: g.id, name: g.name, table_name: table?.name ?? 'Unassigned', table_number: table?.number ?? 0 })
-      if (results.length >= limit) break
+    const name = normalize(g.name)
+    let score = 0
+    if (name === q) score = 100
+    else if (name.startsWith(q)) score = 80
+    else if (name.includes(q)) score = 60
+    else {
+      const words = name.split(/\s+/)
+      if (words.some((w) => w.startsWith(q))) score = 40
+      else if (words.some((w) => w.includes(q))) score = 20
+      else continue
     }
+    const tableRow = Array.isArray(g.tables) ? g.tables[0] : g.tables
+    scored.push({
+      result: {
+        id: g.id,
+        name: g.name,
+        table_id: g.table_id,
+        table_name: tableRow?.name ?? 'Unassigned',
+      },
+      score,
+    })
   }
-  return results
+  return scored.sort((a, b) => b.score - a.score || a.result.name.localeCompare(b.result.name)).slice(0, limit).map((s) => s.result)
 }

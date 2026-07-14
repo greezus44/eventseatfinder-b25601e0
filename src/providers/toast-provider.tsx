@@ -1,16 +1,26 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
-type ToastType = 'success' | 'error' | 'info' | 'warning'
+import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+
+type ToastType = 'success' | 'error'
 interface Toast { id: number; message: string; type: ToastType }
-const ToastContext = createContext<{ toast: (m: string, t?: ToastType) => void } | undefined>(undefined)
-const STYLES: Record<ToastType, string> = { success: 'bg-slate-900', error: 'bg-red-700', info: 'bg-slate-800', warning: 'bg-amber-600' }
+
+type ToastFn = (message: string, type?: ToastType) => void
+
+const ToastContext = createContext<ToastFn>(() => {})
+export function useToast() { return useContext(ToastContext) }
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
-  const dismiss = useCallback((id: number) => setToasts((p) => p.filter((t) => t.id !== id)), [])
-  const toast = useCallback((message: string, type: ToastType = 'info') => {
-    const id = Date.now() + Math.random()
-    setToasts((p) => [...p, { id, message, type }])
-    setTimeout(() => dismiss(id), 4000)
-  }, [dismiss])
-  return <ToastContext.Provider value={{ toast }}>{children}<div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">{toasts.map((t) => <div key={t.id} className={`${STYLES[t.type]} cursor-pointer rounded-lg px-4 py-3 text-sm font-medium text-white shadow-lg`} onClick={() => dismiss(t.id)}>{t.message}</div>)}</div></ToastContext.Provider>
+  const addToast = useCallback((message: string, type: ToastType = 'success') => {
+    const id = Date.now()
+    setToasts((prev) => [...prev, { id, message, type }])
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3500)
+  }, [])
+  return (
+    <ToastContext.Provider value={addToast}>
+      {children}
+      <div className="toast-container">
+        {toasts.map((t) => <div key={t.id} className={`toast toast-${t.type}`}>{t.message}</div>)}
+      </div>
+    </ToastContext.Provider>
+  )
 }
-export function useToast() { const c = useContext(ToastContext); if (!c) throw new Error('useToast must be used within ToastProvider'); return c.toast }

@@ -1,21 +1,59 @@
-import { useState, FormEvent } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuthContext } from '@/providers/auth-provider'
-type Mode = 'signin' | 'signup'
+import { supabase } from '@/lib/supabase'
+
 export default function LoginPage() {
-  const navigate = useNavigate()
-  const { signIn, signUp } = useAuthContext()
-  const [mode, setMode] = useState<Mode>('signin')
+  const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault(); setError(null); setSubmitting(true)
-    try { if (mode === 'signin') await signIn(email, password); else await signUp(email, password); navigate('/dashboard') }
-    catch (err) { setError(err instanceof Error ? err.message : 'Something went wrong.') }
-    finally { setSubmitting(false) }
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const navigate = useNavigate()
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      if (mode === 'login') {
+        const { error } = await supabase.auth.signInWithPassword({ email, password })
+        if (error) throw error
+      } else {
+        const { error } = await supabase.auth.signUp({ email, password })
+        if (error) throw error
+      }
+      navigate('/')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setLoading(false)
+    }
   }
-  const isSignIn = mode === 'signin'
-  return <div className="auth-page"><div className="auth-card"><div className="auth-logo">Seatly</div><p className="auth-tagline">Event seating made simple</p><form className="auth-form" onSubmit={handleSubmit}><div className="form-group"><label className="form-label" htmlFor="email">Email</label><input id="email" className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required autoComplete="email" /></div><div className="form-group"><label className="form-label" htmlFor="password">Password</label><input id="password" className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required autoComplete={isSignIn ? 'current-password' : 'new-password'} /></div>{error && <div className="auth-error">{error}</div>}<button type="submit" className="btn btn-primary btn-block" disabled={submitting}>{submitting ? 'Please wait…' : isSignIn ? 'Sign In' : 'Sign Up'}</button></form><button className="auth-toggle" type="button" onClick={() => setMode((p) => p === 'signin' ? 'signup' : 'signin')}>{isSignIn ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}</button></div></div>
+
+  return (
+    <div className="auth-page">
+      <div className="card auth-card">
+        <div className="auth-header">
+          <div className="auth-logo">Seatly</div>
+          <h1 className="auth-title">{mode === 'login' ? 'Welcome back' : 'Create account'}</h1>
+          <p className="auth-subtitle">{mode === 'login' ? 'Sign in to manage your events' : 'Set up your event seating'}</p>
+        </div>
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Email</label>
+            <input type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Password</label>
+            <input type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
+          </div>
+          {error && <div className="auth-error">{error}</div>}
+          <button type="submit" className="btn btn-primary btn-block" disabled={loading}>{loading ? 'Please wait…' : mode === 'login' ? 'Sign In' : 'Create Account'}</button>
+        </form>
+        <div className="auth-switch">
+          {mode === 'login' ? <>No account? <button onClick={() => { setMode('signup'); setError('') }}>Sign up</button></> : <>Already have an account? <button onClick={() => { setMode('login'); setError('') }}>Sign in</button></>}
+        </div>
+      </div>
+    </div>
+  )
 }

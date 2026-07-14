@@ -851,7 +851,7 @@ function ThemeTab({ eventId, settings, upsertSettings, toast }: any) {
   )
 }
 
-function ShareTab({ event, eventId, settings, upsertSettings, toast }: any) {
+function ShareTab({ event, eventId, upsertSettings, toast }: any) {
   const [slug, setSlug] = useState(event.slug)
   const [slugCheck, setSlugCheck] = useState('')
   const [qrUrl, setQrUrl] = useState('')
