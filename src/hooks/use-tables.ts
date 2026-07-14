@@ -71,6 +71,30 @@ export function useUpdateTable(eventId: string) {
   });
 }
 
+export function useUpdateTablePosition(eventId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      position_x,
+      position_y,
+    }: {
+      id: string;
+      position_x: number;
+      position_y: number;
+    }) => {
+      const { error } = await supabase
+        .from('tables')
+        .update({ position_x, position_y })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [QUERY_KEY, eventId] });
+    },
+  });
+}
+
 export function useDeleteTable(eventId: string) {
   const qc = useQueryClient();
   return useMutation({

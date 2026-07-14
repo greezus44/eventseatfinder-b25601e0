@@ -4,8 +4,10 @@ import { ProtectedLayout } from '@/components/layout/protected-layout';
 import { DashboardPage } from '@/pages/dashboard-page';
 import { EventSettingsPage } from '@/pages/event-settings-page';
 import { GuestManagementPage } from '@/pages/guest-management-page';
+import { SeatingArrangementPage } from '@/pages/seating-arrangement-page';
 import { LoginPage } from '@/pages/login-page';
 import { FindYourSeatPage } from '@/pages/find-your-seat-page';
+import { InvitationPage } from '@/pages/invitation-page';
 
 export const routes: RouteObject[] = [
   {
@@ -15,6 +17,10 @@ export const routes: RouteObject[] = [
   {
     path: '/e/:eventSlug',
     element: <FindYourSeatPage />,
+  },
+  {
+    path: '/invite/:eventSlug',
+    element: <InvitationPage />,
   },
   {
     element: <ProtectedLayout />,
@@ -34,6 +40,10 @@ export const routes: RouteObject[] = [
           {
             path: '/events/:eventId/guests',
             element: <GuestManagementPage />,
+          },
+          {
+            path: '/events/:eventId/seating',
+            element: <SeatingArrangementPage />,
           },
         ],
       },

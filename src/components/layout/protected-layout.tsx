@@ -1,17 +1,20 @@
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/providers/auth-provider';
-import { LoadingScreen } from '@/components/ui/feedback';
+import { Spinner } from '@/components/ui/feedback';
 
 export function ProtectedLayout() {
-  const { loading, session } = useAuth();
-  const location = useLocation();
+  const { user, loading } = useAuth();
 
   if (loading) {
-    return <LoadingScreen message="Checking your session…" />;
+    return (
+      <div className="loading-screen">
+        <Spinner size={32} />
+      </div>
+    );
   }
 
-  if (!session) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+  if (!user) {
+    return <Navigate to="/login" replace />;
   }
 
   return <Outlet />;

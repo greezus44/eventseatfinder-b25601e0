@@ -1,245 +1,221 @@
-import { useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
 import { useParams } from 'react-router-dom';
 import { useEventBySlug } from '@/hooks/use-events';
 import { useGuestSearch, useGuestById } from '@/hooks/use-guests';
+import { ErrorScreen, LoadingScreen, Spinner } from '@/components/ui/feedback';
 import type { GuestWithTable } from '@/types/guest';
-import { Spinner } from '@/components/ui/feedback';
 
 export function FindYourSeatPage() {
   const { eventSlug } = useParams<{ eventSlug: string }>();
   const { data: event, isLoading, error } = useEventBySlug(eventSlug ?? '');
 
   const [query, setQuery] = useState('');
-  const [selectedGuest, setSelectedGuest] = useState<GuestWithTable | null>(
-    null,
-  );
-
-  if (isLoading) {
-    return (
-      <div className="fys-loading">
-        <Spinner size={32} />
-      </div>
-    );
-  }
-
-  if (error || !event) {
-    return (
-      <div className="fys-container">
-        <div className="fys-card fys-card--error">
-          <h1>Event Not Found</h1>
-          <p>
-            We couldn't find this event. Please check your link and try again.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (selectedGuest) {
-    return (
-      <SeatDisplay
-        event={event}
-        guest={selectedGuest}
-        onBack={() => {
-          setSelectedGuest(null);
-          setQuery('');
-        }}
-      />
-    );
-  }
-
-  return (
-    <SearchView
-      event={event}
-      query={query}
-      setQuery={setQuery}
-      onSelect={setSelectedGuest}
-    />
-  );
-}
-
-interface EventData {
-  id: string;
-  name: string;
-  date: string | null;
-  time: string | null;
-  venue: string | null;
-  slug: string;
-}
-
-function SearchView({
-  event,
-  query,
-  setQuery,
-  onSelect,
-}: {
-  event: EventData;
-  query: string;
-  setQuery: (q: string) => void;
-  onSelect: (guest: GuestWithTable) => void;
-}) {
-  const { data: results, isLoading: searching } = useGuestSearch(
-    event.id,
-    query,
-  );
-  const inputRef = useRef<HTMLInputElement>(null);
   const [highlightIndex, setHighlightIndex] = useState(0);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  const search = useGuestSearch(event?.id ?? '', query);
+  const { data: selectedGuest, isLoading: guestLoading } = useGuestById(
+    event?.id ?? '',
+    selectedGuestId,
+  );
+
+  const suggestions = search.data ?? [];
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setHighlightIndex(0);
   }, [query]);
 
-  const formattedDate = event.date
-    ? new Date(event.date).toLocaleDateString('en-US', {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    : null;
+  useEffect(() => {
+    if (event) inputRef.current?.focus();
+  }, [event]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!results || results.length === 0) return;
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selectGuest = useCallback((guest: GuestWithTable) => {
+    setSelectedGuestId(guest.id);
+    setQuery(guest.name);
+    setShowSuggestions(false);
+  }, []);
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || suggestions.length === 0) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setHighlightIndex((i) => Math.min(i + 1, results.length - 1));
+      setHighlightIndex((i) => Math.min(i + 1, suggestions.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setHighlightIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const guest = results[highlightIndex];
-      if (guest) onSelect(guest);
+      const guest = suggestions[highlightIndex];
+      if (guest) selectGuest(guest);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
     }
   };
 
-  return (
-    <div className="fys-container">
-      <div className="fys-header">
-        {event.venue && <p className="fys-venue">{event.venue}</p>}
-        <h1 className="fys-title">{event.name}</h1>
-        {formattedDate && <p className="fys-date">{formattedDate}</p>}
-      </div>
+  if (isLoading) return <LoadingScreen message="Loading event…" />;
+  if (error)
+    return <ErrorScreen message={error.message || 'Failed to load event'} />;
+  if (!event) return <ErrorScreen message="Event not found" />;
 
-      <div className="fys-search">
-        <div className="fys-search__input-wrap">
-          <span className="fys-search__icon">🔍</span>
-          <input
-            ref={inputRef}
-            type="text"
-            className="fys-search__input"
-            placeholder="Type your name…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          {searching && (
-            <span className="fys-search__spinner">
-              <Spinner size={18} />
-            </span>
+  const accent = event.accent_color ?? '#4f46e5';
+
+  return (
+    <div className="find-seat-page" style={{ ['--accent' as string]: accent }}>
+      <div className="find-seat__container">
+        <header className="find-seat__header">
+          <h1 className="find-seat__title">{event.name}</h1>
+          {(event.date || event.venue) && (
+            <p className="find-seat__meta text-secondary">
+              {event.date && <span>{formatDate(event.date)}</span>}
+              {event.date && event.venue && <span> · </span>}
+              {event.venue && <span>{event.venue}</span>}
+            </p>
+          )}
+        </header>
+
+        <div className="find-seat__search" ref={containerRef}>
+          <label className="find-seat__search-label">Find your seat</label>
+          <div className="search-input-wrap">
+            <span className="search-input-wrap__icon">🔍</span>
+            <input
+              ref={inputRef}
+              className="input search-input"
+              type="text"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setShowSuggestions(true);
+                setSelectedGuestId(null);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type your name…"
+              autoComplete="off"
+            />
+            {search.isFetching && (
+              <span className="search-input-wrap__spinner">
+                <Spinner size={18} />
+              </span>
+            )}
+          </div>
+
+          {showSuggestions && query.trim() && (
+            <div className="suggestions">
+              {suggestions.length === 0 && !search.isFetching ? (
+                <div className="suggestions__empty">
+                  No guests found for &ldquo;{query}&rdquo;
+                </div>
+              ) : (
+                suggestions.map((guest, i) => (
+                  <button
+                    key={guest.id}
+                    className={`suggestion ${
+                      i === highlightIndex ? 'suggestion--active' : ''
+                    }`}
+                    onMouseEnter={() => setHighlightIndex(i)}
+                    onClick={() => selectGuest(guest)}
+                  >
+                    <span className="suggestion__name">{guest.name}</span>
+                    {guest.table ? (
+                      <span className="suggestion__table">
+                        Table {guest.table.number}
+                      </span>
+                    ) : (
+                      <span className="suggestion__table text-muted">
+                        Unassigned
+                      </span>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
           )}
         </div>
 
-        {query.trim() && results && results.length > 0 && (
-          <ul className="fys-suggestions">
-            {results.map((guest, i) => (
-              <li
-                key={guest.id}
-                className={`fys-suggestion ${
-                  i === highlightIndex ? 'fys-suggestion--active' : ''
-                }`}
-                onClick={() => onSelect(guest)}
-                onMouseEnter={() => setHighlightIndex(i)}
-              >
-                <span className="fys-suggestion__name">{guest.name}</span>
-                {guest.table ? (
-                  <span className="fys-suggestion__table">
-                    Table {guest.table.number}
-                  </span>
-                ) : (
-                  <span className="fys-suggestion__table fys-suggestion__table--unassigned">
-                    Unassigned
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {query.trim() && results && results.length === 0 && !searching && (
-          <div className="fys-no-results">
-            <p>No matches found.</p>
-            <p className="text-muted" style={{ fontSize: '0.8125rem' }}>
-              Try searching with just your first or last name.
-            </p>
-          </div>
+        {selectedGuestId && (
+          <SeatDisplay guest={selectedGuest} loading={guestLoading} />
         )}
       </div>
-
-      <p className="fys-footer">Find your seat in seconds</p>
     </div>
   );
 }
 
 function SeatDisplay({
-  event,
   guest,
-  onBack,
+  loading,
 }: {
-  event: EventData;
-  guest: GuestWithTable;
-  onBack: () => void;
+  guest: GuestWithTable | null | undefined;
+  loading: boolean;
 }) {
-  const { data: freshGuest } = useGuestById(event.id, guest.id);
-  const current = freshGuest ?? guest;
+  if (loading || !guest) {
+    return (
+      <div className="card seat-card seat-card--loading">
+        <Spinner size={28} />
+      </div>
+    );
+  }
 
-  const formattedDate = event.date
-    ? new Date(event.date).toLocaleDateString('en-US', {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    : null;
+  const assigned = !!guest.table;
 
   return (
-    <div className="fys-container">
-      <div className="fys-header">
-        {event.venue && <p className="fys-venue">{event.venue}</p>}
-        <h1 className="fys-title">{event.name}</h1>
-        {formattedDate && <p className="fys-date">{formattedDate}</p>}
-      </div>
-
-      <div className="fys-result">
-        <p className="fys-result__greeting">Welcome</p>
-        <h2 className="fys-result__name">{current.name}</h2>
-
-        {current.table ? (
-          <div className="fys-table-card">
-            <p className="fys-table-card__label">Your Table</p>
-            <p className="fys-table-card__number">{current.table.number}</p>
-            <p className="fys-table-card__name">{current.table.name}</p>
+    <div
+      className={`card seat-card ${assigned ? '' : 'seat-card--unassigned'}`}
+    >
+      <p className="seat-card__greeting">
+        Welcome, <strong>{guest.name}</strong>
+      </p>
+      {assigned ? (
+        <>
+          <p className="seat-card__label text-secondary">You are seated at</p>
+          <div className="seat-card__table-number">{guest.table!.number}</div>
+          <p className="seat-card__table-name">{guest.table!.name}</p>
+        </>
+      ) : (
+        <>
+          <p className="seat-card__label text-secondary">
+            Your seat hasn&apos;t been assigned yet
+          </p>
+          <div className="seat-card__table-number seat-card__table-number--none">
+            —
           </div>
-        ) : (
-          <div className="fys-table-card fys-table-card--unassigned">
-            <p className="fys-table-card__label">Your Table</p>
-            <p className="fys-table-card__number">—</p>
-            <p className="fys-table-card__name">
-              Not yet assigned. Please ask the host.
-            </p>
-          </div>
-        )}
-      </div>
-
-      <button className="btn btn--secondary fys-back-btn" onClick={onBack}>
-        ← Search again
-      </button>
+          <p className="seat-card__table-name text-muted">
+            Please check with the host
+          </p>
+        </>
+      )}
     </div>
   );
+}
+
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }

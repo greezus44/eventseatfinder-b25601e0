@@ -1,56 +1,35 @@
-import type { ReactNode } from 'react';
-
 export function Spinner({ size = 24 }: { size?: number }) {
   return (
-    <div
+    <span
       className="spinner"
-      style={{ width: size, height: size }}
-      role="status"
-      aria-label="Loading"
+      style={{
+        width: size,
+        height: size,
+        borderWidth: Math.max(2, Math.floor(size / 10)),
+      }}
     />
   );
 }
 
-export function LoadingScreen({ message = 'Loading…' }: { message?: string }) {
+export function LoadingScreen({ message }: { message?: string }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 'var(--space-4)',
-        minHeight: '60vh',
-      }}
-    >
+    <div className="loading-screen">
       <Spinner size={32} />
-      <p className="text-secondary">{message}</p>
+      {message && <p className="text-secondary">{message}</p>}
     </div>
   );
 }
 
-export function ErrorScreen({
-  message = 'Something went wrong.',
-  children,
-}: {
-  message?: string;
-  children?: ReactNode;
-}) {
+export function ErrorScreen({ message }: { message: string }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 'var(--space-4)',
-        minHeight: '60vh',
-        textAlign: 'center',
-      }}
-    >
-      <h2>Oops</h2>
-      <p className="text-secondary">{message}</p>
-      {children}
+    <div className="loading-screen">
+      <div
+        className="card"
+        style={{ padding: 'var(--space-8)', textAlign: 'center' }}
+      >
+        <h2 style={{ marginBottom: 'var(--space-2)' }}>Something went wrong</h2>
+        <p className="text-secondary">{message}</p>
+      </div>
     </div>
   );
 }

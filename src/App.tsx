@@ -1,20 +1,17 @@
 import { RouterProvider } from 'react-router-dom';
 import { router } from '@/routes/router';
-import { ThemeProvider } from '@/providers/theme-provider';
-import { ToastProvider } from '@/providers/toast-provider';
-import { QueryProvider } from '@/providers/query-provider';
 import { AuthProvider } from '@/providers/auth-provider';
+import { QueryProvider } from '@/providers/query-provider';
+import { ToastProvider } from '@/providers/toast-provider';
 
-export default function App() {
+export function App() {
   return (
-    <ThemeProvider>
-      <ToastProvider>
-        <QueryProvider>
-          <AuthProvider>
-            <RouterProvider router={router} />
-          </AuthProvider>
-        </QueryProvider>
-      </ToastProvider>
-    </ThemeProvider>
+    <AuthProvider>
+      <QueryProvider>
+        <ToastProvider>
+          <RouterProvider router={router} />
+        </ToastProvider>
+      </QueryProvider>
+    </AuthProvider>
   );
 }
