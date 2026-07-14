@@ -6,11 +6,7 @@ export function useTables(eventId: string) {
   return useQuery({
     queryKey: ['tables', eventId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tables')
-        .select('*')
-        .eq('event_id', eventId)
-        .order('number', { ascending: true })
+      const { data, error } = await supabase.from('tables').select('*').eq('event_id', eventId).order('number', { ascending: true })
       if (error) throw error
       return data as Table[]
     },
@@ -26,9 +22,7 @@ export function useCreateTable() {
       if (error) throw error
       return data as Table
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tables'] })
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tables'] }),
   })
 }
 
@@ -40,9 +34,7 @@ export function useUpdateTable() {
       if (error) throw error
       return data as Table
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tables'] })
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tables'] }),
   })
 }
 
@@ -53,9 +45,7 @@ export function useDeleteTable() {
       const { error } = await supabase.from('tables').delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tables'] })
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tables'] }),
   })
 }
 
@@ -67,8 +57,6 @@ export function useBulkCreateTables() {
       if (error) throw error
       return data
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tables'] })
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tables'] }),
   })
 }

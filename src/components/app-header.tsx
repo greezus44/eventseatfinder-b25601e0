@@ -4,12 +4,6 @@ import { useAuthContext } from '@/providers/auth-provider'
 export function AppHeader() {
   const { session, signOut } = useAuthContext()
   const navigate = useNavigate()
-
-  const handleSignOut = async () => {
-    await signOut()
-    navigate('/login')
-  }
-
   return (
     <header className="app-header">
       <Link to="/dashboard" className="app-header-logo">Seatly</Link>
@@ -21,9 +15,7 @@ export function AppHeader() {
       <div className="app-header-spacer" />
       {session && (
         <div className="app-header-actions">
-          <button className="btn btn-ghost btn-sm" onClick={handleSignOut}>
-            Sign Out
-          </button>
+          <button className="btn btn-ghost btn-sm" onClick={async () => { await signOut(); navigate('/login') }}>Sign Out</button>
         </div>
       )}
     </header>

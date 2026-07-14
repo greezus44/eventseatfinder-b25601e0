@@ -2,27 +2,17 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 
 type ToastType = 'success' | 'error' | 'info'
 
-interface Toast {
-  id: number
-  message: string
-  type: ToastType
-}
+interface Toast { id: number; message: string; type: ToastType }
 
-interface ToastContextValue {
-  toast: (message: string, type?: ToastType) => void
-}
-
-const ToastContext = createContext<ToastContextValue | null>(null)
+const ToastContext = createContext<{ toast: (m: string, t?: ToastType) => void } | null>(null)
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
   const toast = useCallback((message: string, type: ToastType = 'success') => {
     const id = Date.now() + Math.random()
-    setToasts((prev) => [...prev, { id, message, type }])
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id))
-    }, 4000)
+    setToasts((p) => [...p, { id, message, type }])
+    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 4000)
   }, [])
 
   return (
@@ -30,9 +20,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="toast-container">
         {toasts.map((t) => (
-          <div key={t.id} className={`toast toast-${t.type}`}>
-            {t.message}
-          </div>
+          <div key={t.id} className={`toast toast-${t.type}`}>{t.message}</div>
         ))}
       </div>
     </ToastContext.Provider>

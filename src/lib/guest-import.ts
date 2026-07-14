@@ -40,7 +40,6 @@ function extractNamesFromText(text: string): ParsedGuest[] {
     const trimmed = line.trim()
     if (!trimmed) continue
 
-    // Try to detect "Name - Table N" or "Name, Table N" or "Name\tTable N" patterns
     const separators = ['\t', ',', ' - ', ' | ', ';']
     let parsed = false
 
@@ -70,17 +69,9 @@ function extractNamesFromText(text: string): ParsedGuest[] {
 export async function parseFile(file: File): Promise<ImportResult> {
   const ext = file.name.toLowerCase().split('.').pop() ?? ''
 
-  if (ext === 'csv') {
-    return parseCSV(file)
-  }
-  if (ext === 'xlsx' || ext === 'xls') {
-    return parseExcel(file)
-  }
-  if (ext === 'pdf') {
-    return parsePDF(file)
-  }
-
-  // Try CSV as fallback
+  if (ext === 'csv') return parseCSV(file)
+  if (ext === 'xlsx' || ext === 'xls') return parseExcel(file)
+  if (ext === 'pdf') return parsePDF(file)
   return parseCSV(file)
 }
 
@@ -131,13 +122,9 @@ async function parsePDF(file: File): Promise<ImportResult> {
   try {
     const buf = await file.arrayBuffer()
     const bytes = new Uint8Array(buf)
-    let text = ''
-
-    // Basic PDF text extraction from content streams
     const decoder = new TextDecoder('latin1')
     const raw = decoder.decode(bytes)
 
-    // Extract text between BT and ET markers
     const regex = /\(([^)]*)\)\s*Tj/g
     let match: RegExpExecArray | null
     const lines: string[] = []
@@ -155,10 +142,9 @@ async function parsePDF(file: File): Promise<ImportResult> {
     }
     if (currentLine) lines.push(currentLine)
 
-    text = lines.join('\n')
+    let text = lines.join('\n')
 
     if (!text.trim()) {
-      // Try alternative extraction: find all text in parentheses
       const simpleRegex = /\(([^)]+)\)/g
       const allText: string[] = []
       while ((match = simpleRegex.exec(raw)) !== null) {
@@ -194,11 +180,9 @@ export function matchTableByName(
 
   const normalized = tableName.trim().toLowerCase()
 
-  // Try exact name match
   const exact = tables.find((t) => t.name.trim().toLowerCase() === normalized)
   if (exact) return exact.id
 
-  // Try "Table N" format
   const tableNumMatch = normalized.match(/table\s*(\d+)/)
   if (tableNumMatch) {
     const num = parseInt(tableNumMatch[1], 10)
@@ -206,15 +190,15 @@ export function matchTableByName(
     if (byNum) return byNum.id
   }
 
-  // Try number match
   const num = parseInt(normalized, 10)
   if (!isNaN(num)) {
     const byNum = tables.find((t) => t.number === num)
     if (byNum) return byNum.id
   }
 
-  // Try partial name match
-  const partial = tables.find((t) => t.name.trim().toLowerCase().includes(normalized) || normalized.includes(t.name.trim().toLowerCase()))
+  const partial = tables.find(
+    (t) => t.name.trim().toLowerCase().includes(normalized) || normalized.includes(t.name.trim().toLowerCase())
+  )
   if (partial) return partial.id
 
   return null

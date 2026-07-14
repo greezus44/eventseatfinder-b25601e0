@@ -21,29 +21,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(data.session)
       setLoading(false)
     })
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession)
-    })
-
-    return () => {
-      listener.subscription.unsubscribe()
-    }
+    const { data: listener } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
+    return () => listener.subscription.unsubscribe()
   }, [])
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
   }
-
   const signUp = async (email: string, password: string) => {
     const { error } = await supabase.auth.signUp({ email, password })
     if (error) throw error
   }
-
-  const signOut = async () => {
-    await supabase.auth.signOut()
-  }
+  const signOut = async () => { await supabase.auth.signOut() }
 
   return (
     <AuthContext.Provider value={{ session, loading, signIn, signUp, signOut }}>

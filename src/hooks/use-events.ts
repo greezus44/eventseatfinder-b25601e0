@@ -33,9 +33,7 @@ export function useCreateEvent() {
       if (error) throw error
       return data as Event
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['events'] })
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['events'] }),
   })
 }
 
@@ -61,20 +59,14 @@ export function useDeleteEvent() {
       const { error } = await supabase.from('events').delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['events'] })
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['events'] }),
   })
 }
 
 export function useCheckSlugAvailability() {
   return useMutation({
     mutationFn: async ({ slug, eventId }: { slug: string; eventId?: string }) => {
-      const { data, error } = await supabase
-        .from('events')
-        .select('id')
-        .eq('slug', slug)
-        .maybeSingle()
+      const { data, error } = await supabase.from('events').select('id').eq('slug', slug).maybeSingle()
       if (error) throw error
       if (!data) return true
       if (eventId && data.id === eventId) return true
