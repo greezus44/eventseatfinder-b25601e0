@@ -1,203 +1,320 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { useEvent, useUpdateEvent } from '@/hooks/use-events';
-import { useRSVPs } from '@/hooks/use-rsvps';
+import { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { useEvent, useUpdateEvent, useDeleteEvent } from '@/hooks/use-events';
 import { useToast } from '@/providers/toast-provider';
-import type { RSVPStatus } from '@/types/rsvp';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 export function EventSettingsPage() {
-  const { eventId } = useParams<{ eventId: string }>();
-  const { data: event, isLoading, error } = useEvent(eventId ?? '');
-  const updateEvent = useUpdateEvent();
+  const eventId = useParams<{ eventId: string }>().eventId ?? '';
+  const { data: event, isLoading } = useEvent(eventId);
+  const updateEvent = useUpdateEvent(eventId);
+  const deleteEvent = useDeleteEvent();
   const { toast } = useToast();
 
   const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [venue, setVenue] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [coverUrl, setCoverUrl] = useState('');
+  const [accentColor, setAccentColor] = useState('#4f46e5');
   const [invitationEnabled, setInvitationEnabled] = useState(false);
 
-  const rsvpsQuery = useRSVPs(eventId ?? '');
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
+  // Populate form fields once the event has loaded
   useEffect(() => {
     if (event) {
-      setName(event.name);
-      setDate(event.date);
-      setTime(event.time);
-      setVenue(event.venue);
-      setInvitationEnabled(event.invitation_enabled);
+      setName(event.name ?? '');
+      setSlug(event.slug ?? '');
+      setDate(event.date ?? '');
+      setTime(event.time ?? '');
+      setVenue(event.venue ?? '');
+      setLogoUrl(event.logo_url ?? '');
+      setCoverUrl(event.cover_url ?? '');
+      setAccentColor(event.accent_color ?? '#4f46e5');
+      setInvitationEnabled(event.invitation_enabled ?? false);
     }
   }, [event]);
 
-  if (isLoading) return <div className="page">Loading...</div>;
-  if (error || !event) return <div className="page">Event not found.</div>;
+  const handleSave = async () => {
+    const trimmedName = name.trim();
+    const trimmedSlug = slug.trim();
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+    if (!trimmedName) {
+      toast('Please enter an event name', 'error');
+      return;
+    }
+    if (!trimmedSlug) {
+      toast('Please enter a slug', 'error');
+      return;
+    }
+
+    setSaving(true);
     try {
       await updateEvent.mutateAsync({
-        id: event.id,
-        name,
-        slug: event.slug,
+        name: trimmedName,
+        slug: trimmedSlug,
         date,
         time,
         venue,
+        logo_url: logoUrl || null,
+        cover_url: coverUrl || null,
+        accent_color: accentColor,
         invitation_enabled: invitationEnabled,
       });
       toast('Event settings saved', 'success');
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to save', 'error');
+    } catch {
+      toast('Failed to save event settings', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const rsvps = rsvpsQuery.data ?? [];
-  const attending = rsvps.filter((r) => r.status === 'attending');
-  const declined = rsvps.filter((r) => r.status === 'not_attending');
-  const pending = rsvps.filter((r) => r.status === 'maybe');
-
-  const statusLabel = (status: RSVPStatus) => {
-    if (status === 'attending') return 'Attending';
-    if (status === 'not_attending') return 'Not Attending';
-    return 'Maybe';
+  const handleDeleteConfirm = async () => {
+    if (!eventId) return;
+    try {
+      await deleteEvent.mutateAsync(eventId);
+      toast('Event deleted', 'success');
+      setIsDeleteOpen(false);
+    } catch {
+      toast('Failed to delete event', 'error');
+    }
   };
 
-  const statusClass = (status: RSVPStatus) => {
-    if (status === 'attending')
-      return 'rsvp-item__badge rsvp-item__badge--attending';
-    if (status === 'not_attending')
-      return 'rsvp-item__badge rsvp-item__badge--declined';
-    return 'rsvp-item__badge rsvp-item__badge--pending';
-  };
+  if (isLoading) {
+    return (
+      <div className="es-page">
+        <div className="es-loading">
+          <p className="es-loading-text">Loading event...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const publicUrl = `${window.location.origin}/invite/${event.slug}`;
+  if (!event) {
+    return (
+      <div className="es-page">
+        <div className="es-error">
+          <p className="es-error-text">Event not found.</p>
+          <Link to="/" className="es-back-link">
+            ← Back to Dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <h1>Event Settings</h1>
+    <div className="es-page">
+      <div className="es-container">
+        {/* Header */}
+        <div className="es-header">
+          <Link to={`/events/${eventId}`} className="es-back-link">
+            ← Back to event
+          </Link>
+          <h1 className="es-title">Event Settings</h1>
+          <p className="es-subtitle">Edit the details for "{event.name}"</p>
+        </div>
+
+        {/* Form */}
+        <div className="es-form">
+          <div className="es-form-section">
+            <h2 className="es-section-title">Basics</h2>
+
+            <div className="es-field">
+              <label className="es-label" htmlFor="es-name">
+                Event name
+              </label>
+              <input
+                id="es-name"
+                type="text"
+                className="es-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="My Awesome Event"
+              />
+            </div>
+
+            <div className="es-field">
+              <label className="es-label" htmlFor="es-slug">
+                Slug
+              </label>
+              <input
+                id="es-slug"
+                type="text"
+                className="es-input"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+                placeholder="my-awesome-event"
+              />
+              <span className="es-hint">
+                Public URL: /e/{slug || 'your-slug'}
+              </span>
+            </div>
+
+            <div className="es-field-row">
+              <div className="es-field">
+                <label className="es-label" htmlFor="es-date">
+                  Date
+                </label>
+                <input
+                  id="es-date"
+                  type="date"
+                  className="es-input"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+              </div>
+
+              <div className="es-field">
+                <label className="es-label" htmlFor="es-time">
+                  Time
+                </label>
+                <input
+                  id="es-time"
+                  type="time"
+                  className="es-input"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="es-field">
+              <label className="es-label" htmlFor="es-venue">
+                Venue
+              </label>
+              <input
+                id="es-venue"
+                type="text"
+                className="es-input"
+                value={venue}
+                onChange={(e) => setVenue(e.target.value)}
+                placeholder="123 Main Street, City"
+              />
+            </div>
+          </div>
+
+          <div className="es-form-section">
+            <h2 className="es-section-title">Branding</h2>
+
+            <div className="es-field">
+              <label className="es-label" htmlFor="es-logo-url">
+                Logo URL
+              </label>
+              <input
+                id="es-logo-url"
+                type="text"
+                className="es-input"
+                value={logoUrl}
+                onChange={(e) => setLogoUrl(e.target.value)}
+                placeholder="https://example.com/logo.png"
+              />
+            </div>
+
+            <div className="es-field">
+              <label className="es-label" htmlFor="es-cover-url">
+                Cover image URL
+              </label>
+              <input
+                id="es-cover-url"
+                type="text"
+                className="es-input"
+                value={coverUrl}
+                onChange={(e) => setCoverUrl(e.target.value)}
+                placeholder="https://example.com/cover.jpg"
+              />
+            </div>
+
+            <div className="es-field">
+              <label className="es-label" htmlFor="es-accent-color">
+                Accent color
+              </label>
+              <div className="es-color-row">
+                <input
+                  id="es-accent-color"
+                  type="color"
+                  className="es-color-picker"
+                  value={accentColor}
+                  onChange={(e) => setAccentColor(e.target.value)}
+                />
+                <input
+                  type="text"
+                  className="es-input es-color-text"
+                  value={accentColor}
+                  onChange={(e) => setAccentColor(e.target.value)}
+                  placeholder="#4f46e5"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="es-form-section">
+            <h2 className="es-section-title">Invitation</h2>
+
+            <div className="es-field es-checkbox-field">
+              <label className="es-checkbox-label">
+                <input
+                  type="checkbox"
+                  className="es-checkbox"
+                  checked={invitationEnabled}
+                  onChange={(e) => setInvitationEnabled(e.target.checked)}
+                />
+                <span>Enable public invitation page</span>
+              </label>
+              <span className="es-hint">
+                When enabled, guests can view the invitation at /i/{slug || 'your-slug'}
+              </span>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="es-actions">
+            <button
+              className="es-btn es-btn-primary"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? 'Saving...' : 'Save changes'}
+            </button>
+            <Link to={`/events/${eventId}`} className="es-btn es-btn-ghost">
+              Cancel
+            </Link>
+          </div>
+        </div>
+
+        {/* Danger zone */}
+        <div className="es-danger-zone">
+          <h2 className="es-section-title es-danger-title">Danger zone</h2>
+          <div className="es-danger-card">
+            <div className="es-danger-content">
+              <span className="es-danger-label">Delete this event</span>
+              <span className="es-danger-desc">
+                Permanently delete the event along with all guests, tables, RSVPs, and check-ins. This cannot be undone.
+              </span>
+            </div>
+            <button
+              className="es-btn es-btn-danger"
+              onClick={() => setIsDeleteOpen(true)}
+            >
+              Delete event
+            </button>
+          </div>
+        </div>
       </div>
 
-      <form className="card" onSubmit={handleSave}>
-        <div className="form-field">
-          <label className="form-field__label" htmlFor="name">
-            Event Name
-          </label>
-          <input
-            id="name"
-            className="input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
-
-        <div className="form-row">
-          <div className="form-field">
-            <label className="form-field__label" htmlFor="date">
-              Date
-            </label>
-            <input
-              id="date"
-              className="input"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </div>
-          <div className="form-field">
-            <label className="form-field__label" htmlFor="time">
-              Time
-            </label>
-            <input
-              id="time"
-              className="input"
-              type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="form-field">
-          <label className="form-field__label" htmlFor="venue">
-            Venue
-          </label>
-          <input
-            id="venue"
-            className="input"
-            value={venue}
-            onChange={(e) => setVenue(e.target.value)}
-          />
-        </div>
-
-        <div className="form-field">
-          <label className="invite-toggle">
-            <input
-              type="checkbox"
-              checked={invitationEnabled}
-              onChange={(e) => setInvitationEnabled(e.target.checked)}
-            />
-            Enable guest RSVP invitations
-          </label>
-        </div>
-
-        {invitationEnabled && (
-          <div className="form-field">
-            <label className="form-field__label">Public Invitation Link</label>
-            <div className="public-link">
-              <span className="public-link__url">{publicUrl}</span>
-            </div>
-          </div>
-        )}
-
-        <button
-          type="submit"
-          className="btn btn--primary"
-          disabled={updateEvent.isPending}
-        >
-          {updateEvent.isPending ? 'Saving...' : 'Save Changes'}
-        </button>
-      </form>
-
-      {invitationEnabled && (
-        <div className="card" style={{ marginTop: 24 }}>
-          <h2 style={{ marginBottom: 16 }}>RSVP Tracking</h2>
-
-          <div className="rsvp-stats">
-            <div className="rsvp-stat rsvp-stat--attending">
-              <span className="rsvp-stat__number">{attending.length}</span>
-              <span className="rsvp-stat__label">Attending</span>
-            </div>
-            <div className="rsvp-stat rsvp-stat--declined">
-              <span className="rsvp-stat__number">{declined.length}</span>
-              <span className="rsvp-stat__label">Declined</span>
-            </div>
-            <div className="rsvp-stat rsvp-stat--pending">
-              <span className="rsvp-stat__number">{pending.length}</span>
-              <span className="rsvp-stat__label">Pending</span>
-            </div>
-          </div>
-
-          {rsvps.length > 0 && (
-            <div className="rsvp-list">
-              {rsvps.map((rsvp) => (
-                <div key={rsvp.id} className="rsvp-item">
-                  <span className="rsvp-item__name">
-                    {rsvp.guest.first_name} {rsvp.guest.last_name}
-                  </span>
-                  <span className={statusClass(rsvp.status)}>
-                    {statusLabel(rsvp.status)}
-                  </span>
-                  {rsvp.plus_ones > 0 && (
-                    <span className="rsvp-item__plus-ones">
-                      +{rsvp.plus_ones} guest{rsvp.plus_ones > 1 ? 's' : ''}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Delete confirm dialog */}
+      <ConfirmDialog
+        open={isDeleteOpen}
+        title="Delete event"
+        message={`Are you sure you want to delete "${event.name}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setIsDeleteOpen(false)}
+      />
     </div>
   );
 }

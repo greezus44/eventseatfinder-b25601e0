@@ -1,252 +1,326 @@
-import { useCallback, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { useEvent } from '@/hooks/use-events';
-import { useGuests, useUpdateGuest } from '@/hooks/use-guests';
-import { useTables, useUpdateTablePosition } from '@/hooks/use-tables';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { useTables, useCreateTable, useDeleteTable, useUpdateTablePosition } from '@/hooks/use-tables';
+import { useGuests } from '@/hooks/use-guests';
 import { useToast } from '@/providers/toast-provider';
+import { ConfirmDialog, Modal } from '@/components/ui/confirm-dialog';
 import type { Table } from '@/types/table';
-import type { GuestWithTable } from '@/types/guest';
+
+const CANVAS_WIDTH = 1000;
+const CARD_WIDTH = 180;
+const CARD_HEIGHT = 140;
+
+interface DragState {
+  id: string;
+  offsetX: number;
+  offsetY: number;
+}
+
+interface NewTableForm {
+  name: string;
+  number: string;
+  capacity: string;
+}
 
 export function SeatingArrangementPage() {
-  const { eventId } = useParams<{ eventId: string }>();
-  const eid = eventId ?? '';
-  const { data: event, isLoading } = useEvent(eid);
-  const { data: guests } = useGuests(eid);
-  const { data: tables } = useTables(eid);
-  const updateTablePosition = useUpdateTablePosition(eid);
-  const updateGuest = useUpdateGuest(eid);
+  const eventId = useParams<{ eventId: string }>().eventId ?? '';
+
+  const { data: fetchedTables = [], isLoading } = useTables(eventId);
+  const { mutateAsync: createTable } = useCreateTable(eventId);
+  const { mutateAsync: deleteTable } = useDeleteTable(eventId);
+  const { mutateAsync: updateTablePosition } = useUpdateTablePosition(eventId);
+
+  const { data: guests = [] } = useGuests(eventId);
   const { toast } = useToast();
 
-  const [draggingTable, setDraggingTable] = useState<Table | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [draggingGuest, setDraggingGuest] = useState<GuestWithTable | null>(
-    null,
-  );
-  const [saving, setSaving] = useState(false);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<DragState | null>(null);
 
-  const handleTableMouseDown = useCallback(
-    (e: React.MouseEvent, table: Table) => {
+  // Local copy of tables for smooth dragging without waiting on server round-trips.
+  const [tables, setTables] = useState<Table[]>([]);
+  const [dragging, setDragging] = useState<DragState | null>(null);
+
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [form, setForm] = useState<NewTableForm>({ name: '', number: '', capacity: '' });
+
+  const [deleteTarget, setDeleteTarget] = useState<Table | null>(null);
+
+
+  // Sync fetched tables into local state when not actively dragging.
+  useEffect(() => {
+    if (!dragRef.current) {
+      setTables(fetchedTables);
+    }
+  }, [fetchedTables]);
+
+  const guestCountByTable = useCallback(() => {
+    const counts = new Map<string, number>();
+    for (const guest of guests) {
+      if (guest.table_id) {
+        counts.set(guest.table_id, (counts.get(guest.table_id) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [guests]);
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>, table: Table) => {
       e.preventDefault();
-      setDraggingTable(table);
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      setDragOffset({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
-      });
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left - (table.position_x ?? 0);
+      const offsetY = e.clientY - rect.top - (table.position_y ?? 0);
+
+      const next: DragState = { id: table.id, offsetX, offsetY };
+      dragRef.current = next;
+      setDragging(next);
     },
     [],
   );
 
   const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (!draggingTable) return;
-      const canvas = e.currentTarget as HTMLElement;
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left - dragOffset.x;
-      const y = e.clientY - rect.top - dragOffset.y;
-      const clampedX = Math.max(0, Math.min(x, rect.width - 180));
-      const clampedY = Math.max(0, Math.min(y, rect.height - 140));
-      setDragOffset((prev) => ({ ...prev, x: clampedX, y: clampedY }));
-    },
-    [draggingTable, dragOffset],
-  );
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const current = dragRef.current;
+      if (!current) return;
 
-  const handleTableDrop = useCallback(
-    async (e: React.MouseEvent) => {
-      if (!draggingTable) return;
-      const canvas = e.currentTarget as HTMLElement;
-      const rect = canvas.getBoundingClientRect();
-      const x = Math.max(
-        0,
-        Math.min(e.clientX - rect.left - dragOffset.x, rect.width - 180),
-      );
-      const y = Math.max(
-        0,
-        Math.min(e.clientY - rect.top - dragOffset.y, rect.height - 140),
-      );
-      setSaving(true);
-      try {
-        await updateTablePosition.mutateAsync({
-          id: draggingTable.id,
-          position_x: x,
-          position_y: y,
-        });
-      } catch (err) {
-        toast(
-          err instanceof Error ? err.message : 'Failed to save position',
-          'error',
-        );
-      } finally {
-        setSaving(false);
-        setDraggingTable(null);
-      }
-    },
-    [draggingTable, dragOffset, eid, updateTablePosition, toast],
-  );
+      const canvas = canvasRef.current;
+      if (!canvas) return;
 
-  const handleGuestDragStart = useCallback(
-    (e: React.DragEvent, guest: GuestWithTable) => {
-      setDraggingGuest(guest);
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', guest.id);
+      const rect = canvas.getBoundingClientRect();
+      let x = e.clientX - rect.left - current.offsetX;
+      let y = e.clientY - rect.top - current.offsetY;
+
+      x = Math.max(0, Math.min(x, CANVAS_WIDTH - CARD_WIDTH));
+      y = Math.max(0, Math.min(y, rect.height - CARD_HEIGHT));
+
+      setTables((prev) =>
+        prev.map((t) => (t.id === current.id ? { ...t, position_x: x, position_y: y } : t)),
+      );
     },
     [],
   );
 
-  const handleTableDropGuest = useCallback(
-    async (e: React.DragEvent, tableId: string) => {
+  const handleMouseUp = useCallback(() => {
+    const current = dragRef.current;
+    dragRef.current = null;
+    setDragging(null);
+
+    if (!current || !eventId) return;
+
+    const table = tables.find((t) => t.id === current.id);
+    if (!table) return;
+
+    updateTablePosition({
+      id: current.id,
+      position_x: table.position_x ?? 0,
+      position_y: table.position_y ?? 0,
+    }).catch((err) => {
+      console.error('Failed to persist table position', err);
+      toast('Failed to save position', 'error');
+    });
+  }, [tables, updateTablePosition, eventId, toast]);
+
+  const handleAddSubmit = useCallback(
+    async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!draggingGuest) return;
-      if (draggingGuest.table_id === tableId) {
-        setDraggingGuest(null);
+      if (!eventId) return;
+
+      const name = form.name.trim();
+      const number = Number(form.number);
+      const capacity = Number(form.capacity);
+
+      if (!name) {
+        toast('Name is required', 'error');
         return;
       }
-      try {
-        await updateGuest.mutateAsync({
-          id: draggingGuest.id,
-          name: draggingGuest.name,
-          table_id: tableId,
-        });
-        toast(`${draggingGuest.name} seated`, 'success');
-      } catch (err) {
-        toast(
-          err instanceof Error ? err.message : 'Failed to seat guest',
-          'error',
-        );
-      } finally {
-        setDraggingGuest(null);
-      }
-    },
-    [draggingGuest, updateGuest, toast],
-  );
-
-  const handleUnassignedDrop = useCallback(
-    async (e: React.DragEvent) => {
-      e.preventDefault();
-      if (!draggingGuest) return;
-      if (!draggingGuest.table_id) {
-        setDraggingGuest(null);
+      if (!Number.isFinite(number) || number < 1) {
+        toast('Table number must be a positive integer', 'error');
         return;
       }
+      if (!Number.isFinite(capacity) || capacity < 1) {
+        toast('Capacity must be a positive integer', 'error');
+        return;
+      }
+
+      setIsSubmitting(true);
       try {
-        await updateGuest.mutateAsync({
-          id: draggingGuest.id,
-          name: draggingGuest.name,
-          table_id: null,
-        });
-        toast('Guest unassigned', 'success');
+        await createTable({ name, number, capacity });
+        toast(`Table created: ${name} has been added.`, 'success');
+        setForm({ name: '', number: '', capacity: '' });
+        setIsAddModalOpen(false);
       } catch (err) {
-        toast(
-          err instanceof Error ? err.message : 'Failed to unassign',
-          'error',
-        );
+        console.error('Failed to create table', err);
+        toast('Failed to create table', 'error');
       } finally {
-        setDraggingGuest(null);
+        setIsSubmitting(false);
       }
     },
-    [draggingGuest, updateGuest, toast],
+    [form, createTable, toast, eventId],
   );
 
-  if (isLoading) return <div className="page">Loading...</div>;
-  if (!event) return <div className="page">Event not found.</div>;
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget || !eventId) return;
+    try {
+      await deleteTable(deleteTarget.id);
+      toast(`Table deleted: ${deleteTarget.name} has been removed.`, 'success');
+      setDeleteTarget(null);
+    } catch (err) {
+      console.error('Failed to delete table', err);
+      toast('Failed to delete table', 'error');
+    }
+  }, [deleteTarget, deleteTable, toast, eventId]);
 
-  const unassigned = (guests ?? []).filter((g) => !g.table_id);
+  if (!eventId) {
+    return (
+      <div className="sa-page">
+        <div className="sa-empty">
+          <p>No event selected.</p>
+          <Link to="/dashboard" className="sa-back-link">Back to dashboard</Link>
+        </div>
+      </div>
+    );
+  }
+
+  const counts = guestCountByTable();
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <h1>Seating Arrangement</h1>
-        {saving && <span className="seating-saving">Saving...</span>}
-      </div>
+    <div className="sa-page">
+      <header className="sa-header">
+        <div className="sa-header-left">
+          <Link to={`/events/${eventId}`} className="sa-back-link">← Back to event</Link>
+          <h1 className="sa-title">Seating Arrangement</h1>
+        </div>
+        <button type="button" className="sa-add-btn" onClick={() => setIsAddModalOpen(true)}>
+          + Add Table
+        </button>
+      </header>
 
-      <div className="seating-layout">
+      {isLoading ? (
+        <div className="sa-loading">Loading tables…</div>
+      ) : tables.length === 0 ? (
+        <div className="sa-empty">
+          <p>No tables yet. Add your first table to start arranging the seating.</p>
+          <button type="button" className="sa-add-btn" onClick={() => setIsAddModalOpen(true)}>
+            + Add Table
+          </button>
+        </div>
+      ) : (
         <div
-          className="seating-canvas"
+          ref={canvasRef}
+          className="sa-canvas"
           onMouseMove={handleMouseMove}
-          onMouseUp={handleTableDrop}
-          onMouseLeave={handleTableDrop}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
         >
-          {(!tables || tables.length === 0) && (
-            <div className="seating-canvas__empty">
-              <p>No tables yet. Add tables from the Guest Management page.</p>
-            </div>
-          )}
-
-          {tables?.map((table) => {
-            const tableGuests = (guests ?? []).filter(
-              (g) => g.table_id === table.id,
-            );
+          {tables.map((table) => {
+            const count = counts.get(table.id) ?? 0;
+            const isDragging = dragging?.id === table.id;
             return (
               <div
                 key={table.id}
-                className="seating-table"
+                className={`sa-table-card${isDragging ? ' sa-table-card--dragging' : ''}`}
                 style={{
-                  left: table.position_x,
-                  top: table.position_y,
-                  opacity: draggingTable?.id === table.id ? 0.5 : 1,
+                  left: `${table.position_x ?? 0}px`,
+                  top: `${table.position_y ?? 0}px`,
+                  width: `${CARD_WIDTH}px`,
+                  height: `${CARD_HEIGHT}px`,
                 }}
-                onMouseDown={(e) => handleTableMouseDown(e, table)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => handleTableDropGuest(e, table.id)}
+                onMouseDown={(e) => handleMouseDown(e, table)}
               >
-                <div className="seating-table__header">
-                  <span className="seating-table__name">{table.name}</span>
-                  <span className="seating-table__count">
-                    {tableGuests.length}/{table.capacity}
-                  </span>
+                <div className="sa-table-card-header">
+                  <span className="sa-table-number">#{table.number}</span>
+                  <button
+                    type="button"
+                    className="sa-delete-btn"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTarget(table);
+                    }}
+                    aria-label={`Delete ${table.name}`}
+                  >
+                    ✕
+                  </button>
                 </div>
-                <div className="seating-table__guests">
-                  {tableGuests.map((g) => (
-                    <div
-                      key={g.id}
-                      className="guest-chip guest-chip--assigned"
-                      draggable
-                      onDragStart={(e) => handleGuestDragStart(e, g)}
-                    >
-                      {g.name}
-                    </div>
-                  ))}
+                <h3 className="sa-table-name">{table.name}</h3>
+                <div className="sa-table-meta">
+                  <span className="sa-meta-item">Capacity: {table.capacity}</span>
+                  <span className="sa-meta-item">Guests: {count}</span>
                 </div>
               </div>
             );
           })}
         </div>
+      )}
 
-        <div className="seating-sidebar">
-          <div className="seating-tips">
-            <h3>Tips</h3>
-            <ul>
-              <li>Drag table cards to reposition them on the canvas.</li>
-              <li>Drag guest chips to assign or reassign tables.</li>
-              <li>
-                Drop a guest in the unassigned zone to remove them from a table.
-              </li>
-            </ul>
+      <Modal open={isAddModalOpen} onClose={() => !isSubmitting && setIsAddModalOpen(false)}>
+        <form className="sa-form" onSubmit={handleAddSubmit}>
+          <h2 className="sa-form-title">Add Table</h2>
+          <label className="sa-field">
+            <span className="sa-field-label">Name</span>
+            <input
+              className="sa-input"
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="e.g. Head Table"
+              autoFocus
+            />
+          </label>
+          <label className="sa-field">
+            <span className="sa-field-label">Table number</span>
+            <input
+              className="sa-input"
+              type="number"
+              min={1}
+              value={form.number}
+              onChange={(e) => setForm((f) => ({ ...f, number: e.target.value }))}
+              placeholder="1"
+            />
+          </label>
+          <label className="sa-field">
+            <span className="sa-field-label">Capacity</span>
+            <input
+              className="sa-input"
+              type="number"
+              min={1}
+              value={form.capacity}
+              onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value }))}
+              placeholder="8"
+            />
+          </label>
+          <div className="sa-form-actions">
+            <button
+              type="button"
+              className="sa-btn-secondary"
+              onClick={() => setIsAddModalOpen(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="sa-btn-primary" disabled={isSubmitting}>
+              {isSubmitting ? 'Creating…' : 'Create table'}
+            </button>
           </div>
+        </form>
+      </Modal>
 
-          <div
-            className={`unassigned-drop-zone${draggingGuest ? ' unassigned-drop-zone--active' : ''}`}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleUnassignedDrop}
-          >
-            <h3>Unassigned Guests</h3>
-            {unassigned.length === 0 ? (
-              <p className="unassigned-drop-zone__empty">All guests seated!</p>
-            ) : (
-              unassigned.map((g) => (
-                <div
-                  key={g.id}
-                  className="guest-chip guest-chip--unassigned"
-                  draggable
-                  onDragStart={(e) => handleGuestDragStart(e, g)}
-                >
-                  {g.name}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete table"
+        message={
+          deleteTarget
+            ? `Are you sure you want to delete "${deleteTarget.name}"? This action cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

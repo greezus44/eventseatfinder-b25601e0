@@ -1,20 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { RSVP, RSVPStatus, RSVPWithGuest } from '@/types/rsvp';
-
-const RSVPS_KEY = 'rsvps';
+import type { RSVP, RSVPInput } from '@/types/rsvp';
 
 export function useRSVPs(eventId: string) {
   return useQuery({
-    queryKey: [RSVPS_KEY, eventId],
+    queryKey: ['rsvps', eventId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rsvps')
-        .select('*, guest:guests(id,name)')
+        .select('*')
         .eq('event_id', eventId)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data as RSVPWithGuest[];
+      return data as RSVP[];
     },
     enabled: !!eventId,
   });
@@ -22,7 +20,7 @@ export function useRSVPs(eventId: string) {
 
 export function useRSVPByGuest(eventId: string, guestId: string) {
   return useQuery({
-    queryKey: [RSVPS_KEY, 'guest', eventId, guestId],
+    queryKey: ['rsvp', eventId, guestId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rsvps')
@@ -31,39 +29,26 @@ export function useRSVPByGuest(eventId: string, guestId: string) {
         .eq('guest_id', guestId)
         .maybeSingle();
       if (error) throw error;
-      return (data as RSVP | null) ?? null;
+      return data as RSVP | null;
     },
     enabled: !!eventId && !!guestId,
   });
 }
 
 export function useUpsertRSVP(eventId: string) {
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      guest_id,
-      status,
-      plus_ones,
-      message,
-    }: {
-      guest_id: string;
-      status: RSVPStatus;
-      plus_ones: number;
-      message?: string | null;
-    }) => {
+    mutationFn: async (input: RSVPInput) => {
       const { data, error } = await supabase
         .from('rsvps')
-        .upsert(
-          { event_id: eventId, guest_id, status, plus_ones, message },
-          { onConflict: 'event_id,guest_id' },
-        )
+        .upsert({ ...input, event_id: eventId })
         .select()
         .single();
       if (error) throw error;
       return data as RSVP;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [RSVPS_KEY, eventId] });
+      qc.invalidateQueries({ queryKey: ['rsvps', eventId] });
     },
   });
 }

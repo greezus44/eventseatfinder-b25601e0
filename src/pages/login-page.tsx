@@ -11,29 +11,54 @@ export function LoginPage() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const isSignUp = mode === 'signup';
+
+  const switchMode = () => {
+    setMode((m) => (m === 'signin' ? 'signup' : 'signin'));
+    setEmail('');
+    setPassword('');
+    setShowPassword(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+
+    if (!email.trim() || !password) {
+      toast('Please enter both email and password.', 'error');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      toast('Please enter a valid email address.', 'error');
+      return;
+    }
+
+    if (isSignUp && password.length < 6) {
+      toast('Password must be at least 6 characters long.', 'error');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      if (mode === 'signin') {
-        await signIn(email, password);
-        toast('Welcome back!', 'success');
+      if (isSignUp) {
+        await signUp(email.trim(), password);
+        toast('Account created successfully. Welcome to Seatly!', 'success');
       } else {
-        await signUp(email, password);
-        toast('Account created! Please sign in.', 'success');
-        setMode('signin');
-        setSubmitting(false);
-        return;
+        await signIn(email.trim(), password);
+        toast('Signed in. Welcome back to Seatly!', 'success');
       }
       navigate('/');
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Authentication failed';
-      setError(message);
+        err instanceof Error
+          ? err.message
+          : isSignUp
+            ? 'Sign up failed. Please try again.'
+            : 'Sign in failed. Please check your credentials.';
       toast(message, 'error');
     } finally {
       setSubmitting(false);
@@ -41,92 +66,126 @@ export function LoginPage() {
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <div className="auth-card__logo">Seatly</div>
-        <p className="auth-card__tagline">
-          Plan seating, manage guests, and run your event seamlessly.
-        </p>
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-brand">
+          <div className="login-logo" aria-hidden="true">
+            <svg
+              width="40"
+              height="40"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 18V14M4 14V6C4 5.44772 4.44772 5 5 5H19C19.5523 5 20 5.44772 20 6V14M4 14H20M20 14V18M6 18H18"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M8 9H16M8 11.5H13"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          </div>
+          <h1 className="login-title">Seatly</h1>
+          <p className="login-subtitle">
+            {isSignUp ? 'Create your account to get started' : 'Sign in to manage your events'}
+          </p>
+        </div>
 
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <div className="auth-form__field">
-            <label className="auth-form__label" htmlFor="email">
+        <div className="login-mode-toggle" role="tablist" aria-label="Authentication mode">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!isSignUp}
+            className={`login-mode-button ${!isSignUp ? 'login-mode-button--active' : ''}`}
+            onClick={() => !isSignUp || switchMode()}
+          >
+            Sign In
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={isSignUp}
+            className={`login-mode-button ${isSignUp ? 'login-mode-button--active' : ''}`}
+            onClick={() => isSignUp || switchMode()}
+          >
+            Sign Up
+          </button>
+        </div>
+
+        <form className="login-form" onSubmit={handleSubmit} noValidate>
+          <div className="login-field">
+            <label className="login-label" htmlFor="login-email">
               Email
             </label>
             <input
-              id="email"
-              className="input"
+              id="login-email"
+              className="login-input"
               type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              disabled={submitting}
               required
-              autoComplete="email"
             />
           </div>
 
-          <div className="auth-form__field">
-            <label className="auth-form__label" htmlFor="password">
+          <div className="login-field">
+            <label className="login-label" htmlFor="login-password">
               Password
             </label>
-            <input
-              id="password"
-              className="input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              autoComplete={
-                mode === 'signin' ? 'current-password' : 'new-password'
-              }
-            />
+            <div className="login-password-wrapper">
+              <input
+                id="login-password"
+                className="login-input login-input--with-action"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                placeholder={isSignUp ? 'At least 6 characters' : 'Enter your password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={submitting}
+                required
+              />
+              <button
+                type="button"
+                className="login-password-toggle"
+                onClick={() => setShowPassword((s) => !s)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                tabIndex={-1}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </div>
-
-          {error && <p className="auth-form__error">{error}</p>}
 
           <button
             type="submit"
-            className="btn btn--primary"
+            className="login-submit"
             disabled={submitting}
           >
             {submitting
-              ? 'Please wait...'
-              : mode === 'signin'
-                ? 'Sign In'
-                : 'Sign Up'}
+              ? isSignUp ? 'Creating account…' : 'Signing in…'
+              : isSignUp ? 'Create account' : 'Sign in'}
           </button>
         </form>
 
-        <div className="auth-form__toggle">
-          {mode === 'signin' ? (
-            <>
-              Don't have an account?{' '}
-              <button
-                className="btn btn--secondary"
-                onClick={() => {
-                  setMode('signup');
-                  setError(null);
-                }}
-              >
-                Sign Up
-              </button>
-            </>
-          ) : (
-            <>
-              Already have an account?{' '}
-              <button
-                className="btn btn--secondary"
-                onClick={() => {
-                  setMode('signin');
-                  setError(null);
-                }}
-              >
-                Sign In
-              </button>
-            </>
-          )}
-        </div>
+        <p className="login-switch-prompt">
+          {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+          <button
+            type="button"
+            className="login-switch-link"
+            onClick={switchMode}
+          >
+            {isSignUp ? 'Sign in' : 'Sign up'}
+          </button>
+        </p>
       </div>
     </div>
   );

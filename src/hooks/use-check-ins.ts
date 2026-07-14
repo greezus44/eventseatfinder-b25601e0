@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { CheckIn } from '@/types/check-in';
+import type { CheckIn, CheckInInput } from '@/types/check-in';
 
 export function useCheckIns(eventId: string) {
   return useQuery({
@@ -21,22 +21,15 @@ export function useCheckIns(eventId: string) {
 export function useToggleCheckIn(eventId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      guest_id,
-      check_in,
-      plus_ones_actual = 0,
-    }: {
-      guest_id: string;
-      check_in: boolean;
-      plus_ones_actual?: number;
-    }) => {
-      if (check_in) {
+    mutationFn: async (input: CheckInInput) => {
+      if (input.check_in) {
         const { data, error } = await supabase
           .from('check_ins')
-          .upsert(
-            { event_id: eventId, guest_id, plus_ones_actual },
-            { onConflict: 'event_id,guest_id' },
-          )
+          .upsert({
+            event_id: eventId,
+            guest_id: input.guest_id,
+            plus_ones_actual: input.plus_ones_actual ?? 0,
+          })
           .select()
           .single();
         if (error) throw error;
@@ -46,7 +39,7 @@ export function useToggleCheckIn(eventId: string) {
           .from('check_ins')
           .delete()
           .eq('event_id', eventId)
-          .eq('guest_id', guest_id);
+          .eq('guest_id', input.guest_id);
         if (error) throw error;
         return null;
       }
@@ -67,15 +60,12 @@ export function useUpdateCheckInPlusOnes(eventId: string) {
       guest_id: string;
       plus_ones_actual: number;
     }) => {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('check_ins')
         .update({ plus_ones_actual })
         .eq('event_id', eventId)
-        .eq('guest_id', guest_id)
-        .select()
-        .single();
+        .eq('guest_id', guest_id);
       if (error) throw error;
-      return data as CheckIn;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['check-ins', eventId] });

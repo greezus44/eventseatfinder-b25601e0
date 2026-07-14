@@ -20,42 +20,25 @@ export function Router() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/e/:eventSlug" element={<FindYourSeatPage />} />
-        <Route path="/invite/:eventSlug" element={<InvitationPage />} />
-        <Route element={<ProtectedLayout />}>
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/events/:eventId" element={<EventSettingsPage />} />
-            <Route
-              path="/events/:eventId/guests"
-              element={<GuestManagementPage />}
-            />
-            <Route
-              path="/events/:eventId/seating"
-              element={<SeatingArrangementPage />}
-            />
-            <Route
-              path="/events/:eventId/overview"
-              element={<EventOverviewPage />}
-            />
-            <Route path="/events/:eventId/check-in" element={<CheckInPage />} />
-            <Route
-              path="/events/:eventId/analytics"
-              element={<AnalyticsPage />}
-            />
-            <Route
-              path="/events/:eventId/guest-page"
-              element={<GuestPageEditor />}
-            />
-            <Route
-              path="/events/:eventId/print"
-              element={<PrintSeatingChartPage />}
-            />
-            <Route
-              path="/events/:eventId/print/guest-list"
-              element={<PrintGuestListPage />}
-            />
-          </Route>
+        <Route path="/e/:slug" element={<FindYourSeatPage />} />
+        <Route path="/invite/:slug" element={<InvitationPage />} />
+        <Route
+          element={
+            <ProtectedLayout>
+              <AppLayout />
+            </ProtectedLayout>
+          }
+        >
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/events/:eventId" element={<EventOverviewPage />} />
+          <Route path="/events/:eventId/guests" element={<GuestManagementPage />} />
+          <Route path="/events/:eventId/seating" element={<SeatingArrangementPage />} />
+          <Route path="/events/:eventId/settings" element={<EventSettingsPage />} />
+          <Route path="/events/:eventId/check-in" element={<CheckInPage />} />
+          <Route path="/events/:eventId/analytics" element={<AnalyticsPage />} />
+          <Route path="/events/:eventId/guest-page" element={<GuestPageEditor />} />
+          <Route path="/events/:eventId/print/seating" element={<PrintSeatingChartPage />} />
+          <Route path="/events/:eventId/print/guests" element={<PrintGuestListPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

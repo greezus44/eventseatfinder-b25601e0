@@ -1,265 +1,145 @@
-import { useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { useEvent } from '@/hooks/use-events';
-import { useRSVPs } from '@/hooks/use-rsvps';
+import { useState, useMemo } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { useGuests } from '@/hooks/use-guests';
-import {
-  useCheckIns,
-  useToggleCheckIn,
-  useUpdateCheckInPlusOnes,
-} from '@/hooks/use-check-ins';
+import { useCheckIns, useToggleCheckIn, useUpdateCheckInPlusOnes } from '@/hooks/use-check-ins';
 import { useToast } from '@/providers/toast-provider';
-import type { GuestWithTable } from '@/types/guest';
-import type { RSVPStatus } from '@/types/rsvp';
-import type { CheckIn } from '@/types/check-in';
-
-type FilterTab = 'all' | 'checked-in' | 'not-checked-in';
 
 export function CheckInPage() {
   const { eventId } = useParams<{ eventId: string }>();
-  const eid = eventId ?? '';
-  const { data: event, isLoading, error } = useEvent(eid);
-  const { data: guests } = useGuests(eid);
-  const { data: rsvps } = useRSVPs(eid);
-  const { data: checkIns } = useCheckIns(eid);
-  const toggleCheckIn = useToggleCheckIn(eid);
-  const updatePlusOnes = useUpdateCheckInPlusOnes(eid);
   const { toast } = useToast();
 
+  const { data: guests, isLoading } = useGuests(eventId ?? '');
+  const { data: checkIns } = useCheckIns(eventId ?? '');
+  const toggleCheckIn = useToggleCheckIn(eventId ?? '');
+  const updatePlusOnes = useUpdateCheckInPlusOnes(eventId ?? '');
+
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<FilterTab>('all');
 
-  const rsvpMap = useMemo(
-    () => new Map((rsvps ?? []).map((r) => [r.guest_id, r.status])),
-    [rsvps],
-  );
-
-  const checkInMap = useMemo(
-    () => new Map((checkIns ?? []).map((c) => [c.guest_id, c])),
-    [checkIns],
-  );
-
-  if (isLoading) return <div className="page">Loading...</div>;
-  if (error || !event) return <div className="page">Event not found.</div>;
-
-  const totalGuests = guests?.length ?? 0;
-  const checkedInCount = (checkIns ?? []).filter((c) => c.checked_in).length;
-  const checkInPct = totalGuests > 0 ? (checkedInCount / totalGuests) * 100 : 0;
-
-  const rsvpBadgeClass = (status: RSVPStatus | undefined) => {
-    if (status === 'attending')
-      return 'checkin__rsvp-badge checkin__rsvp-badge--attending';
-    if (status === 'not_attending')
-      return 'checkin__rsvp-badge checkin__rsvp-badge--declined';
-    return 'checkin__rsvp-badge checkin__rsvp-badge--pending';
-  };
-
-  const rsvpLabel = (status: RSVPStatus | undefined) => {
-    if (status === 'attending') return 'Attending';
-    if (status === 'not_attending') return 'Declined';
-    if (status === 'maybe') return 'Maybe';
-    return 'No RSVP';
-  };
-
-  const tableBadgeClass = (table: GuestWithTable['table']) => {
-    if (!table) return 'checkin__table-badge checkin__table-badge--none';
-    return 'checkin__table-badge';
-  };
-
-  const formatTime = (iso: string | null) => {
-    if (!iso) return '';
-    try {
-      return new Date(iso).toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-      });
-    } catch {
-      return '';
+  const checkInByGuestId = useMemo(() => {
+    const map = new Map<string, typeof checkIns extends (infer T)[] | undefined ? T : never>();
+    if (!checkIns) return map;
+    for (const ci of checkIns) {
+      map.set(ci.guest_id, ci);
     }
-  };
+    return map;
+  }, [checkIns]);
 
-  const handleToggle = async (guest: GuestWithTable) => {
-    const existing = checkInMap.get(guest.id);
-    const newState = !(existing?.checked_in ?? false);
+  const filteredGuests = useMemo(() => {
+    if (!guests) return [];
+    const q = search.trim().toLowerCase();
+    if (!q) return guests;
+    return guests.filter((g) => g.name.toLowerCase().includes(q));
+  }, [guests, search]);
+
+  const checkedInCount = checkIns ? checkIns.length : 0;
+  const totalGuests = guests ? guests.length : 0;
+
+  async function handleToggle(guestId: string, currentlyCheckedIn: boolean) {
     try {
       await toggleCheckIn.mutateAsync({
-        guest_id: guest.id,
-        check_in: newState,
+        guest_id: guestId,
+        check_in: !currentlyCheckedIn,
       });
-      toast(
-        newState ? `${guest.name} checked in` : `${guest.name} checked out`,
-        'success',
-      );
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to toggle', 'error');
+      toast(currentlyCheckedIn ? 'Checked out' : 'Checked in', 'success');
+    } catch {
+      toast('Could not update check-in status', 'error');
     }
-  };
+  }
 
-  const handlePlusOnesChange = async (guest: GuestWithTable, value: number) => {
+  async function handlePlusOnesChange(guestId: string, current: number, delta: number) {
+    const next = Math.max(0, current + delta);
+    if (next === current) return;
     try {
-      await updatePlusOnes.mutateAsync({
-        guest_id: guest.id,
-        plus_ones_actual: Math.max(0, value),
-      });
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to update', 'error');
+      await updatePlusOnes.mutateAsync({ guest_id: guestId, plus_ones_actual: next });
+    } catch {
+      toast('Could not update plus-ones count', 'error');
     }
-  };
-
-  const filteredGuests = (guests ?? []).filter((g) => {
-    const fullName = g.name.toLowerCase();
-    const matchesSearch = !search || fullName.includes(search.toLowerCase());
-    const checkIn = checkInMap.get(g.id);
-    const isCheckedIn = checkIn?.checked_in ?? false;
-    const matchesFilter =
-      filter === 'all' ||
-      (filter === 'checked-in' && isCheckedIn) ||
-      (filter === 'not-checked-in' && !isCheckedIn);
-    return matchesSearch && matchesFilter;
-  });
+  }
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <h1>Check-in — {event.name}</h1>
+    <div className="ci-page">
+      <header className="ci-header">
+        <Link to={`/events/${eventId}`} className="ci-back-link">← Back to event</Link>
+        <h1 className="ci-title">Check-in</h1>
+      </header>
+
+      <section className="ci-stats">
+        <div className="ci-stat">
+          <span className="ci-stat-value">{checkedInCount}</span>
+          <span className="ci-stat-label">Checked in</span>
+        </div>
+        <div className="ci-stat-divider" />
+        <div className="ci-stat">
+          <span className="ci-stat-value">{totalGuests}</span>
+          <span className="ci-stat-label">Total guests</span>
+        </div>
+      </section>
+
+      <div className="ci-search-wrap">
+        <input
+          type="text"
+          className="ci-search-input"
+          placeholder="Search guests by name…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
 
-      <div className="card">
-        <div className="checkin__stats">
-          <div className="checkin__stat checkin__stat--total">
-            <span className="checkin__stat__number">{totalGuests}</span>
-            <span className="checkin__stat__label">Total</span>
+      <div className="ci-guest-list">
+        {isLoading ? (
+          <div className="ci-loading">Loading guests…</div>
+        ) : filteredGuests.length === 0 ? (
+          <div className="ci-empty">
+            {search.trim() ? 'No guests match your search.' : 'No guests have been added to this event yet.'}
           </div>
-          <div className="checkin__stat checkin__stat--checked-in">
-            <span className="checkin__stat__number">{checkedInCount}</span>
-            <span className="checkin__stat__label">Checked In</span>
-          </div>
-          <div className="checkin__stat checkin__stat--remaining">
-            <span className="checkin__stat__number">
-              {totalGuests - checkedInCount}
-            </span>
-            <span className="checkin__stat__label">Remaining</span>
-          </div>
-        </div>
+        ) : (
+          filteredGuests.map((guest) => {
+            const checkIn = checkInByGuestId.get(guest.id);
+            const isCheckedIn = Boolean(checkIn);
+            const plusOnesActual = checkIn?.plus_ones_actual ?? 0;
 
-        <div className="checkin__progress-bar">
-          <div
-            className="checkin__progress-fill"
-            style={{ width: `${checkInPct}%` }}
-          />
-        </div>
-      </div>
+            return (
+              <div key={guest.id} className={`ci-guest-row ${isCheckedIn ? 'ci-guest-row--checked' : ''}`}>
+                <div className="ci-guest-info">
+                  <span className="ci-guest-name">{guest.name}</span>
+                  {guest.table && (
+                    <span className="ci-guest-table">
+                      Table {guest.table.number}{guest.table.name ? ` · ${guest.table.name}` : ''}
+                    </span>
+                  )}
+                </div>
 
-      <div className="card" style={{ marginTop: 16 }}>
-        <div className="checkin__controls">
-          <input
-            className="checkin__search input"
-            type="text"
-            placeholder="Search guests..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <div className="checkin__filters">
-            <button
-              className={`btn btn--ghost btn--sm${filter === 'all' ? ' btn--primary' : ''}`}
-              onClick={() => setFilter('all')}
-            >
-              All
-            </button>
-            <button
-              className={`btn btn--ghost btn--sm${filter === 'checked-in' ? ' btn--primary' : ''}`}
-              onClick={() => setFilter('checked-in')}
-            >
-              Checked In
-            </button>
-            <button
-              className={`btn btn--ghost btn--sm${filter === 'not-checked-in' ? ' btn--primary' : ''}`}
-              onClick={() => setFilter('not-checked-in')}
-            >
-              Not Checked In
-            </button>
-          </div>
-        </div>
-
-        <div className="checkin__list-card">
-          {filteredGuests.length === 0 ? (
-            <div className="checkin__empty">
-              <p>No guests found.</p>
-            </div>
-          ) : (
-            <div className="checkin__list">
-              {filteredGuests.map((guest) => {
-                const checkIn = checkInMap.get(guest.id) as CheckIn | undefined;
-                const isCheckedIn = checkIn?.checked_in ?? false;
-                const rsvpStatus = rsvpMap.get(guest.id);
-                return (
-                  <div
-                    key={guest.id}
-                    className={`checkin__row${isCheckedIn ? ' checkin__row--checked' : ''}`}
-                  >
-                    <button
-                      className={`checkin__toggle${isCheckedIn ? ' checkin__toggle--on' : ' checkin__toggle--off'}`}
-                      onClick={() => handleToggle(guest)}
-                    >
-                      {isCheckedIn ? '✓' : ''}
-                    </button>
-                    <div className="checkin__guest-info">
-                      <span className="checkin__guest-name">{guest.name}</span>
-                      <div className="checkin__guest-meta">
-                        <span className={tableBadgeClass(guest.table)}>
-                          {guest.table ? guest.table.name : 'No table'}
-                        </span>
-                        <span className={rsvpBadgeClass(rsvpStatus)}>
-                          {rsvpLabel(rsvpStatus)}
-                        </span>
-                        {isCheckedIn && checkIn?.checked_in_at && (
-                          <span className="checkin__time">
-                            {formatTime(checkIn.checked_in_at)}
-                          </span>
-                        )}
-                      </div>
+                <div className="ci-guest-actions">
+                  {isCheckedIn && (
+                    <div className="ci-plus-ones">
+                      <button
+                        type="button"
+                        className="ci-plus-ones-btn"
+                        onClick={() => handlePlusOnesChange(guest.id, plusOnesActual, -1)}
+                        disabled={updatePlusOnes.isPending}
+                      >−</button>
+                      <span className="ci-plus-ones-count">+{plusOnesActual}</span>
+                      <button
+                        type="button"
+                        className="ci-plus-ones-btn"
+                        onClick={() => handlePlusOnesChange(guest.id, plusOnesActual, 1)}
+                        disabled={updatePlusOnes.isPending}
+                      >+</button>
                     </div>
-                    {isCheckedIn &&
-                      (checkIn?.plus_ones_checked_in ?? 0) > 0 && (
-                        <div className="checkin__plus-ones">
-                          <span className="checkin__plus-ones__label">
-                            Plus Ones
-                          </span>
-                          <div className="checkin__plus-ones__controls">
-                            <button
-                              className="btn btn--ghost btn--sm"
-                              onClick={() =>
-                                handlePlusOnesChange(
-                                  guest,
-                                  (checkIn?.plus_ones_checked_in ?? 0) - 1,
-                                )
-                              }
-                            >
-                              −
-                            </button>
-                            <span className="checkin__plus-ones__count">
-                              {checkIn?.plus_ones_checked_in ?? 0}
-                            </span>
-                            <button
-                              className="btn btn--ghost btn--sm"
-                              onClick={() =>
-                                handlePlusOnesChange(
-                                  guest,
-                                  (checkIn?.plus_ones_checked_in ?? 0) + 1,
-                                )
-                              }
-                            >
-                              +
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                  )}
+                  <button
+                    type="button"
+                    className={`ci-checkin-btn ${isCheckedIn ? 'ci-checkin-btn--checked' : ''}`}
+                    onClick={() => handleToggle(guest.id, isCheckedIn)}
+                    disabled={toggleCheckIn.isPending}
+                  >
+                    {isCheckedIn ? 'Checked in' : 'Check in'}
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

@@ -1,385 +1,335 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
-import {
-  useGuests,
-  useCreateGuest,
-  useBulkCreateGuests,
-  useUpdateGuest,
-  useDeleteGuest,
-} from '@/hooks/use-guests';
-import { useTables, useCreateTable, useDeleteTable } from '@/hooks/use-tables';
+import { useParams, Link } from 'react-router-dom';
+import { useGuests, useCreateGuest, useBulkCreateGuests, useUpdateGuest, useDeleteGuest } from '@/hooks/use-guests';
+import { useTables } from '@/hooks/use-tables';
 import { useToast } from '@/providers/toast-provider';
+import { ConfirmDialog, Modal } from '@/components/ui/confirm-dialog';
 import type { GuestWithTable } from '@/types/guest';
 
 export function GuestManagementPage() {
-  const { eventId } = useParams<{ eventId: string }>();
-  const eid = eventId ?? '';
-  const { data: guests, isLoading } = useGuests(eid);
-  const { data: tables } = useTables(eid);
-  const createGuest = useCreateGuest(eid);
-  const bulkCreateGuests = useBulkCreateGuests(eid);
-  const updateGuest = useUpdateGuest(eid);
-  const deleteGuest = useDeleteGuest(eid);
-  const createTable = useCreateTable(eid);
-  const deleteTable = useDeleteTable(eid);
+  const eventId = useParams<{ eventId: string }>().eventId ?? '';
+
+  const { data: guests, isLoading } = useGuests(eventId);
+  const { data: tables } = useTables(eventId);
   const { toast } = useToast();
 
-  const [newFirstName, setNewFirstName] = useState('');
-  const [newLastName, setNewLastName] = useState('');
-  const [newEmail, setNewEmail] = useState('');
-  const [newTableId, setNewTableId] = useState('');
-  const [newPlusOnes, setNewPlusOnes] = useState(0);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editFirstName, setEditFirstName] = useState('');
-  const [editLastName, setEditLastName] = useState('');
-  const [editEmail, setEditEmail] = useState('');
-  const [editTableId, setEditTableId] = useState('');
-  const [editPlusOnes, setEditPlusOnes] = useState(0);
-  const [bulkText, setBulkText] = useState('');
-  const [showBulk, setShowBulk] = useState(false);
-  const [newTableName, setNewTableName] = useState('');
-  const [newTableCapacity, setNewTableCapacity] = useState(8);
+  const createGuest = useCreateGuest(eventId);
+  const bulkCreateGuests = useBulkCreateGuests(eventId);
+  const updateGuest = useUpdateGuest(eventId);
+  const deleteGuest = useDeleteGuest(eventId);
 
-  const handleAddGuest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newFirstName.trim()) {
-      toast('Name is required', 'error');
+  const [search, setSearch] = useState('');
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
+  const [editingGuest, setEditingGuest] = useState<GuestWithTable | null>(null);
+  const [deletingGuest, setDeletingGuest] = useState<GuestWithTable | null>(null);
+
+  // Add form state
+  const [addName, setAddName] = useState('');
+  const [addTableId, setAddTableId] = useState<string>('');
+
+  // Bulk form state
+  const [bulkText, setBulkText] = useState('');
+  const [bulkTableId, setBulkTableId] = useState<string>('');
+
+  // Edit form state
+  const [editName, setEditName] = useState('');
+  const [editTableId, setEditTableId] = useState<string>('');
+
+  const filteredGuests = (guests ?? []).filter((g) =>
+    g.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const resetAddForm = () => {
+    setAddName('');
+    setAddTableId('');
+  };
+
+  const resetBulkForm = () => {
+    setBulkText('');
+    setBulkTableId('');
+  };
+
+  const handleOpenAdd = () => {
+    resetAddForm();
+    setIsAddOpen(true);
+  };
+
+  const handleOpenBulk = () => {
+    resetBulkForm();
+    setIsBulkOpen(true);
+  };
+
+  const handleOpenEdit = (guest: GuestWithTable) => {
+    setEditingGuest(guest);
+    setEditName(guest.name);
+    setEditTableId(guest.table_id ?? '');
+  };
+
+  const handleAddSubmit = async () => {
+    const name = addName.trim();
+    if (!name) {
+      toast('Please enter a guest name', 'error');
       return;
     }
     try {
       await createGuest.mutateAsync({
-        name: `${newFirstName}${newLastName ? ` ${newLastName}` : ''}`,
-        table_id: newTableId || null,
+        name,
+        table_id: addTableId || null,
       });
-      toast('Guest added', 'success');
-      setNewFirstName('');
-      setNewLastName('');
-      setNewEmail('');
-      setNewTableId('');
-      setNewPlusOnes(0);
-    } catch (err) {
-      toast(
-        err instanceof Error ? err.message : 'Failed to add guest',
-        'error',
-      );
+      toast('Guest added successfully', 'success');
+      resetAddForm();
+      setIsAddOpen(false);
+    } catch {
+      toast('Failed to add guest', 'error');
     }
   };
 
-  const handleBulkImport = async () => {
-    const lines = bulkText
+  const handleBulkSubmit = async () => {
+    const names = bulkText
       .split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean);
-    if (lines.length === 0) {
-      toast('Enter at least one guest', 'error');
+      .map((n) => n.trim())
+      .filter((n) => n.length > 0);
+
+    if (names.length === 0) {
+      toast('Please enter at least one guest name', 'error');
       return;
     }
-    const inputs = lines.map((line) => {
-      const parts = line.split(',').map((p) => p.trim());
-      const first = parts[0] ?? '';
-      const last = parts[1] ?? '';
-      return {
-        name: `${first}${last ? ` ${last}` : ''}`,
-      };
-    });
+
     try {
-      await bulkCreateGuests.mutateAsync(inputs);
-      toast(`${inputs.length} guests imported`, 'success');
-      setBulkText('');
-      setShowBulk(false);
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Bulk import failed', 'error');
+      await bulkCreateGuests.mutateAsync(
+        names.map((name) => ({
+          name,
+          table_id: bulkTableId || null,
+        }))
+      );
+      toast(`${names.length} guest${names.length === 1 ? '' : 's'} added successfully`, 'success');
+      resetBulkForm();
+      setIsBulkOpen(false);
+    } catch {
+      toast('Failed to add guests', 'error');
     }
   };
 
-  const startEdit = (guest: GuestWithTable) => {
-    setEditingId(guest.id);
-    const parts = (guest.name ?? '').split(' ');
-    setEditFirstName(parts[0] ?? '');
-    setEditLastName(parts.slice(1).join(' '));
-    setEditTableId(guest.table_id ?? '');
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editingId) return;
+  const handleEditSubmit = async () => {
+    if (!editingGuest) return;
+    const name = editName.trim();
+    if (!name) {
+      toast('Please enter a guest name', 'error');
+      return;
+    }
     try {
       await updateGuest.mutateAsync({
-        id: editingId,
-        name: `${editFirstName}${editLastName ? ` ${editLastName}` : ''}`,
+        id: editingGuest.id,
+        name,
         table_id: editTableId || null,
       });
-      toast('Guest updated', 'success');
-      setEditingId(null);
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to update', 'error');
+      toast('Guest updated successfully', 'success');
+      setEditingGuest(null);
+    } catch {
+      toast('Failed to update guest', 'error');
     }
   };
 
-  const handleDeleteGuest = async (id: string) => {
+  const handleDeleteConfirm = async () => {
+    if (!deletingGuest) return;
     try {
-      await deleteGuest.mutateAsync(id);
-      toast('Guest removed', 'success');
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to remove', 'error');
+      await deleteGuest.mutateAsync(deletingGuest.id);
+      toast('Guest deleted successfully', 'success');
+      setDeletingGuest(null);
+    } catch {
+      toast('Failed to delete guest', 'error');
     }
   };
-
-  const handleAddTable = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTableName.trim()) {
-      toast('Table name is required', 'error');
-      return;
-    }
-    try {
-      await createTable.mutateAsync({
-        event_id: eid,
-        name: newTableName,
-        number: (tables?.length ?? 0) + 1,
-        capacity: newTableCapacity,
-        position_x: 100,
-        position_y: 100,
-      });
-      toast('Table added', 'success');
-      setNewTableName('');
-      setNewTableCapacity(8);
-    } catch (err) {
-      toast(
-        err instanceof Error ? err.message : 'Failed to add table',
-        'error',
-      );
-    }
-  };
-
-  const handleDeleteTable = async (id: string) => {
-    try {
-      await deleteTable.mutateAsync(id);
-      toast('Table removed', 'success');
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to remove', 'error');
-    }
-  };
-
-  if (isLoading) return <div className="page">Loading...</div>;
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <h1>Guest Management</h1>
-        <button
-          className="btn btn--secondary"
-          onClick={() => setShowBulk((v) => !v)}
-        >
-          {showBulk ? 'Close Bulk' : 'Bulk Import'}
-        </button>
-      </div>
-
-      {showBulk && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <p style={{ marginBottom: 8, fontSize: 13, color: '#64748b' }}>
-            One per line: First, Last, Email, PlusOnes
-          </p>
-          <textarea
-            className="input"
-            rows={6}
-            value={bulkText}
-            onChange={(e) => setBulkText(e.target.value)}
-            placeholder={'Jane,Smith,jane@example.com,0\nJohn,Doe,,1'}
-          />
-          <button
-            className="btn btn--primary"
-            style={{ marginTop: 12 }}
-            onClick={handleBulkImport}
-          >
-            Import Guests
-          </button>
+    <div className="gm-page">
+      <div className="gm-container">
+        {/* Header */}
+        <div className="gm-header">
+          <Link to={`/events/${eventId}`} className="gm-back-link">
+            ← Back to event
+          </Link>
+          <div className="gm-header-titles">
+            <h1 className="gm-title">Guests</h1>
+            <p className="gm-subtitle">Manage guests for this event</p>
+          </div>
         </div>
-      )}
 
-      <div className="guest-mgmt__layout">
-        <div className="guest-mgmt__main">
-          <form className="guest-add-row" onSubmit={handleAddGuest}>
-            <input
-              className="input"
-              placeholder="First name"
-              value={newFirstName}
-              onChange={(e) => setNewFirstName(e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Last name"
-              value={newLastName}
-              onChange={(e) => setNewLastName(e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Email"
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-            />
-            <select
-              className="input"
-              value={newTableId}
-              onChange={(e) => setNewTableId(e.target.value)}
-            >
-              <option value="">No table</option>
-              {tables?.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-            <input
-              className="input"
-              type="number"
-              min={0}
-              value={newPlusOnes}
-              onChange={(e) =>
-                setNewPlusOnes(Math.max(0, Number(e.target.value)))
-              }
-              style={{ width: 70 }}
-            />
-            <button type="submit" className="btn btn--primary">
-              Add
+        {/* Toolbar */}
+        <div className="gm-toolbar">
+          <input
+            type="text"
+            className="gm-search"
+            placeholder="Search guests by name..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div className="gm-toolbar-actions">
+            <button className="gm-btn gm-btn-secondary" onClick={handleOpenBulk}>
+              Bulk add
             </button>
-          </form>
+            <button className="gm-btn gm-btn-primary" onClick={handleOpenAdd}>
+              Add guest
+            </button>
+          </div>
+        </div>
 
-          <div className="guest-list">
-            {guests?.map((guest) => (
-              <div key={guest.id} className="guest-row">
-                {editingId === guest.id ? (
-                  <div className="guest-row__edit">
-                    <input
-                      className="input"
-                      value={editFirstName}
-                      onChange={(e) => setEditFirstName(e.target.value)}
-                    />
-                    <input
-                      className="input"
-                      value={editLastName}
-                      onChange={(e) => setEditLastName(e.target.value)}
-                    />
-                    <input
-                      className="input"
-                      value={editEmail}
-                      onChange={(e) => setEditEmail(e.target.value)}
-                    />
-                    <select
-                      className="input"
-                      value={editTableId}
-                      onChange={(e) => setEditTableId(e.target.value)}
-                    >
-                      <option value="">No table</option>
-                      {tables?.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      className="input"
-                      type="number"
-                      min={0}
-                      value={editPlusOnes}
-                      onChange={(e) =>
-                        setEditPlusOnes(Math.max(0, Number(e.target.value)))
-                      }
-                      style={{ width: 70 }}
-                    />
-                    <button
-                      className="btn btn--primary btn--sm"
-                      onClick={handleSaveEdit}
-                    >
-                      Save
-                    </button>
-                    <button
-                      className="btn btn--ghost btn--sm"
-                      onClick={() => setEditingId(null)}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <div className="guest-row__display">
-                    <span className="guest-row__name">{guest.name}</span>
-                    {guest.table && (
-                      <span className="badge">{guest.table.name}</span>
-                    )}
-                    <div className="guest-row__actions">
+        {/* Guest list */}
+        {isLoading ? (
+          <div className="gm-loading">Loading guests...</div>
+        ) : filteredGuests.length === 0 ? (
+          <div className="gm-empty">
+            {search
+              ? 'No guests match your search.'
+              : 'No guests yet. Click "Add guest" to get started.'}
+          </div>
+        ) : (
+          <div className="gm-table-wrapper">
+            <table className="gm-table">
+              <thead>
+                <tr>
+                  <th className="gm-th">Name</th>
+                  <th className="gm-th">Table</th>
+                  <th className="gm-th gm-th-actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredGuests.map((guest) => (
+                  <tr key={guest.id} className="gm-tr">
+                    <td className="gm-td gm-td-name">{guest.name}</td>
+                    <td className="gm-td gm-td-table">
+                      {guest.table ? `${guest.table.name}` : '—'}
+                    </td>
+                    <td className="gm-td gm-td-actions">
                       <button
-                        className="btn btn--ghost btn--sm"
-                        onClick={() => startEdit(guest)}
+                        className="gm-btn gm-btn-icon"
+                        onClick={() => handleOpenEdit(guest)}
+                        aria-label={`Edit ${guest.name}`}
                       >
                         Edit
                       </button>
                       <button
-                        className="btn btn--ghost btn--sm"
-                        onClick={() => handleDeleteGuest(guest.id)}
+                        className="gm-btn gm-btn-icon gm-btn-danger"
+                        onClick={() => setDeletingGuest(guest)}
+                        aria-label={`Delete ${guest.name}`}
                       >
                         Delete
                       </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
-
-        <div className="guest-mgmt__sidebar">
-          <div className="card">
-            <h2 style={{ marginBottom: 12 }}>Tables</h2>
-            <form
-              onSubmit={handleAddTable}
-              style={{ display: 'flex', gap: 8, marginBottom: 16 }}
-            >
-              <input
-                className="input"
-                placeholder="Table name"
-                value={newTableName}
-                onChange={(e) => setNewTableName(e.target.value)}
-              />
-              <input
-                className="input"
-                type="number"
-                min={1}
-                value={newTableCapacity}
-                onChange={(e) =>
-                  setNewTableCapacity(Math.max(1, Number(e.target.value)))
-                }
-                style={{ width: 80 }}
-              />
-              <button type="submit" className="btn btn--primary">
-                Add
-              </button>
-            </form>
-
-            <div className="table-list">
-              {tables?.map((table) => {
-                const count = guests?.filter(
-                  (g) => g.table_id === table.id,
-                ).length;
-                return (
-                  <div key={table.id} className="table-row">
-                    <span className="table-row__name">{table.name}</span>
-                    <span className="table-row__count">
-                      {count}/{table.capacity}
-                    </span>
-                    <button
-                      className="btn btn--ghost btn--sm"
-                      onClick={() => handleDeleteTable(table.id)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                );
-              })}
-              {(!tables || tables.length === 0) && (
-                <p style={{ fontSize: 13, color: '#64748b' }}>No tables yet.</p>
-              )}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
+
+      {/* Add modal */}
+      <Modal open={isAddOpen} title="Add guest" onClose={() => setIsAddOpen(false)}>
+        <form className="gm-form" onSubmit={(e) => { e.preventDefault(); handleAddSubmit(); }}>
+          <label className="gm-label">Name</label>
+          <input
+            type="text"
+            className="gm-input"
+            value={addName}
+            onChange={(e) => setAddName(e.target.value)}
+            placeholder="Guest name"
+            autoFocus
+          />
+          <label className="gm-label">Table</label>
+          <select
+            className="gm-select"
+            value={addTableId}
+            onChange={(e) => setAddTableId(e.target.value)}
+          >
+            <option value="">No table</option>
+            {(tables ?? []).map((table) => (
+              <option key={table.id} value={table.id}>
+                {table.name}
+              </option>
+            ))}
+          </select>
+          <div className="gm-form__actions">
+            <button type="button" className="btn btn--ghost" onClick={() => setIsAddOpen(false)}>Cancel</button>
+            <button type="submit" className="btn btn--primary">Add</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Bulk add modal */}
+      <Modal open={isBulkOpen} title="Bulk add guests" onClose={() => setIsBulkOpen(false)}>
+        <form className="gm-form" onSubmit={(e) => { e.preventDefault(); handleBulkSubmit(); }}>
+          <label className="gm-label">Guest names (one per line)</label>
+          <textarea
+            className="gm-textarea"
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+            placeholder={'Alice\nBob\nCharlie'}
+            rows={8}
+            autoFocus
+          />
+          <label className="gm-label">Table (optional)</label>
+          <select
+            className="gm-select"
+            value={bulkTableId}
+            onChange={(e) => setBulkTableId(e.target.value)}
+          >
+            <option value="">No table</option>
+            {(tables ?? []).map((table) => (
+              <option key={table.id} value={table.id}>
+                {table.name}
+              </option>
+            ))}
+          </select>
+          <div className="gm-form__actions">
+            <button type="button" className="btn btn--ghost" onClick={() => setIsBulkOpen(false)}>Cancel</button>
+            <button type="submit" className="btn btn--primary">Add all</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit modal */}
+      <Modal open={!!editingGuest} title="Edit guest" onClose={() => setEditingGuest(null)}>
+        <form className="gm-form" onSubmit={(e) => { e.preventDefault(); handleEditSubmit(); }}>
+          <label className="gm-label">Name</label>
+          <input
+            type="text"
+            className="gm-input"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            placeholder="Guest name"
+            autoFocus
+          />
+          <label className="gm-label">Table</label>
+          <select
+            className="gm-select"
+            value={editTableId}
+            onChange={(e) => setEditTableId(e.target.value)}
+          >
+            <option value="">No table</option>
+            {(tables ?? []).map((table) => (
+              <option key={table.id} value={table.id}>
+                {table.name}
+              </option>
+            ))}
+          </select>
+          <div className="gm-form__actions">
+            <button type="button" className="btn btn--ghost" onClick={() => setEditingGuest(null)}>Cancel</button>
+            <button type="submit" className="btn btn--primary">Save</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Delete confirm dialog */}
+      <ConfirmDialog
+        open={!!deletingGuest}
+        title="Delete guest"
+        message={`Are you sure you want to delete "${deletingGuest?.name ?? ''}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        onCancel={() => setDeletingGuest(null)}
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   );
 }

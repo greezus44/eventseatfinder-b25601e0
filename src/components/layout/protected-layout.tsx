@@ -1,17 +1,17 @@
-import { Navigate, Outlet } from 'react-router-dom';
+import { type ReactNode } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/providers/auth-provider';
-import { LoadingScreen } from '@/components/ui/feedback';
 
-export function ProtectedLayout() {
+export function ProtectedLayout({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth();
 
   if (loading) {
-    return <LoadingScreen />;
+    return <div className="loading-screen">Loading...</div>;
   }
 
   if (!session) {
     return <Navigate to="/login" replace />;
   }
 
-  return <Outlet />;
+  return <>{children}</>;
 }
